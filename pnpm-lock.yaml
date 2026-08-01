@@ -43,6 +43,22 @@ importers:
         specifier: ^4.1.0
         version: 4.1.10(vite@8.2.0(esbuild@0.27.7))
 
+  packages/adapter-windows:
+    dependencies:
+      '@lastfm-scrobbler/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+    devDependencies:
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(postcss@8.5.25)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.10(vite@8.2.0(esbuild@0.27.7))
+
   packages/core:
     devDependencies:
       tsup:
