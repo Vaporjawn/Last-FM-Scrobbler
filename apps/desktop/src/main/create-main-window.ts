@@ -13,6 +13,12 @@ const { BrowserWindow, shell } = electron;
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
 
+/** This window's real minimum height (see the `minHeight` usage below for why 480
+ * specifically). Exported so `main/index.ts`'s aspect-ratio change handler can clamp
+ * its own immediate resize to the same real constraint, rather than duplicating the
+ * number and risking the two drifting apart. */
+export const MIN_WINDOW_HEIGHT = 480;
+
 export interface CreateMainWindowOptions {
   /** `undefined` on platforms without a working adapter yet — see
    * `playback/create-platform-playback-source.ts`. */
@@ -67,7 +73,7 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
     // existing sidebar-collapse control already covers reclaiming space below that
     // for users who want it.
     minWidth: 680,
-    minHeight: 480,
+    minHeight: MIN_WINDOW_HEIGHT,
     ...(iconPath ? { icon: iconPath } : {}),
     // Don't paint the window until the renderer has produced its first frame —
     // avoids the blank/white-flash window Electron otherwise shows immediately, and

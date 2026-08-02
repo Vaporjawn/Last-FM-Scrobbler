@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import electron from "electron";
 import { LastfmClient, Logger, ScrobbleQueue } from "@lastfm-scrobbler/core";
 import { wireAppInfo } from "./app-info/wire-app-info.js";
-import { createMainWindow, type CreateMainWindowOptions } from "./create-main-window.js";
+import {
+  createMainWindow,
+  MIN_WINDOW_HEIGHT,
+  type CreateMainWindowOptions,
+} from "./create-main-window.js";
 import { createPlatformPlaybackSource } from "./playback/create-platform-playback-source.js";
 import { createAppCredentialsStore } from "./lastfm/create-app-credentials-store.js";
 import { resolveLastfmCredentials } from "./lastfm/resolve-lastfm-credentials.js";
@@ -27,6 +31,7 @@ import { createUpdaterClient } from "./updates/create-updater-client.js";
 import { showRestartPrompt } from "./updates/show-restart-prompt.js";
 import { wireUpdates } from "./updates/wire-updates.js";
 import { bringAppToForeground } from "./window/bring-app-to-foreground.js";
+import { computeResizedHeight } from "./window/compute-resized-height.js";
 import { persistWindowBounds } from "./window/persist-window-bounds.js";
 import { resolveAspectRatioValue } from "./window/resolve-aspect-ratio.js";
 
@@ -366,7 +371,26 @@ void app.whenReady().then(async () => {
     // live `mainWindow` binding below, not a stale reference, so this keeps working
     // correctly after the `activate` handler further down replaces it.
     onAspectRatioChange: (aspectRatio) => {
-      mainWindow.setAspectRatio(resolveAspectRatioValue(aspectRatio));
+      const aspectRatioValue = resolveAspectRatioValue(aspectRatio);
+      mainWindow.setAspectRatio(aspectRatioValue);
+      // setAspectRatio() alone only *constrains future manual resizing* — it doesn't
+      // itself resize the window (Electron's own docs: "This will not resize the
+      // window"), which without this next line would make picking a ratio visually
+      // do nothing until the user happened to drag an edge, reading as broken even
+      // though it already applied. Snaps to the new ratio right now instead, keeping
+      // the current width fixed and deriving height from it (see
+      // computeResizedHeight's docstring) — a no-op when `aspectRatioValue` is 0
+      // ("free"), which correctly leaves the current size alone.
+      const bounds = mainWindow.getBounds();
+      const resizedHeight = computeResizedHeight(
+        bounds.width,
+        bounds.height,
+        aspectRatioValue,
+        MIN_WINDOW_HEIGHT,
+      );
+      if (resizedHeight !== bounds.height) {
+        mainWindow.setSize(bounds.width, resizedHeight);
+      }
     },
   });
 
