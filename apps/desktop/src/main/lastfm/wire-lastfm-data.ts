@@ -1,5 +1,13 @@
 import electron from "electron";
-import type { Friend, LastfmClient, RecentTrack, TopArtist } from "@lastfm-scrobbler/core";
+import type {
+  ArtistInfo,
+  Friend,
+  LastfmClient,
+  RecentTrack,
+  SimilarArtist,
+  TopArtist,
+  UserProfile,
+} from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
@@ -11,6 +19,9 @@ export interface LastfmDataClient {
   getRecentTracks: LastfmClient["getRecentTracks"];
   getTopArtists: LastfmClient["getTopArtists"];
   getFriends: LastfmClient["getFriends"];
+  getUserInfo: LastfmClient["getUserInfo"];
+  getArtistInfo: LastfmClient["getArtistInfo"];
+  getSimilarArtists: LastfmClient["getSimilarArtists"];
 }
 
 export interface WireLastfmDataOptions {
@@ -26,7 +37,8 @@ const NOT_CONFIGURED_MESSAGE =
  * Wires the read-only Last.fm data IPC surface (see `shared/lastfm-api.ts`) to a
  * `LastfmClient`. These are all public, unsigned endpoints — no session key or active
  * account is needed, just a username (typically the active account's, chosen by the
- * renderer).
+ * renderer) or, for the artist endpoints, just an artist name. Signed, account-specific
+ * actions (love/unlove/addTags) live in `wire-track-actions.ts` instead.
  */
 export function wireLastfmData(options: WireLastfmDataOptions): () => void {
   const { client } = options;
@@ -67,9 +79,45 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
+  ipcMain.handle(
+    IPC_CHANNELS.lastfmGetUserInfo,
+    (_event, user: unknown): Promise<UserProfile> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      return client.getUserInfo({ user: String(user) });
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.lastfmGetArtistInfo,
+    (_event, artist: unknown): Promise<ArtistInfo> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      return client.getArtistInfo({ artist: String(artist) });
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.lastfmGetSimilarArtists,
+    (_event, artist: unknown, limit?: unknown): Promise<readonly SimilarArtist[]> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      return client.getSimilarArtists({
+        artist: String(artist),
+        ...(limit !== undefined ? { limit: Number(limit) } : {}),
+      });
+    },
+  );
+
   return () => {
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetRecentTracks);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopArtists);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetFriends);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetUserInfo);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetArtistInfo);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetSimilarArtists);
   };
 }

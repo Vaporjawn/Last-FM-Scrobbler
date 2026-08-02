@@ -29,6 +29,7 @@ export type {
   SimilarArtist,
   TopArtist,
   TrackRef,
+  UserProfile,
 } from "./lastfm-api/types.js";
 export { AccountStore } from "./auth/account-store.js";
 export type { StoredAccount } from "./auth/account-store.js";

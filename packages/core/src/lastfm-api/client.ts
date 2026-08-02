@@ -12,6 +12,7 @@ import type {
   SimilarArtist,
   TopArtist,
   TrackRef,
+  UserProfile,
 } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://ws.audioscrobbler.com/2.0/";
@@ -242,7 +243,10 @@ export class LastfmClient {
     readonly user: string;
     readonly limit?: number;
   }): Promise<RecentTrack[]> {
-    const params: Record<string, string> = { user: options.user };
+    // extended=1 is what makes Last.fm include `loved` and real per-track artwork on
+    // this endpoint at all — see RecentTrackJson's docstring for the response-shape
+    // trade-off it brings (the `artist` field changes shape under extended mode).
+    const params: Record<string, string> = { user: options.user, extended: "1" };
     if (options.limit !== undefined) {
       params.limit = String(options.limit);
     }
@@ -255,12 +259,15 @@ export class LastfmClient {
     const items: readonly RecentTrackJson[] = Array.isArray(raw) ? raw : [raw];
     return items.map((item) => {
       const nowPlaying = item["@attr"]?.nowplaying === "true";
+      const imageUrl = pickLargestImageUrl(item.image);
       return {
-        artist: item.artist["#text"],
+        artist: item.artist.name ?? item.artist["#text"] ?? "",
         track: item.name,
         ...(item.album?.["#text"] ? { album: item.album["#text"] } : {}),
         nowPlaying,
         ...(nowPlaying ? {} : { timestamp: Number(item.date?.uts) }),
+        ...(imageUrl ? { imageUrl } : {}),
+        loved: item.loved === "1",
       };
     });
   }
@@ -294,10 +301,30 @@ export class LastfmClient {
 
     const raw = result.friends.user;
     const items: readonly FriendJson[] = Array.isArray(raw) ? raw : [raw];
-    return items.map((item) => ({
-      username: item.name,
-      ...(item.realname ? { realName: item.realname } : {}),
-    }));
+    return items.map((item) => {
+      const avatarUrl = pickLargestImageUrl(item.image);
+      return {
+        username: item.name,
+        ...(item.realname ? { realName: item.realname } : {}),
+        ...(avatarUrl ? { avatarUrl } : {}),
+      };
+    });
+  }
+
+  /** Fetches a user's profile, including their real avatar photo when they have one
+   * set — see `UserProfile.avatarUrl`'s docstring for why this (unlike artist images
+   * elsewhere in this client) is trustworthy. */
+  async getUserInfo(options: { readonly user: string }): Promise<UserProfile> {
+    const result = await this.request<{
+      user: { name: string; realname?: string; image?: readonly LastfmImageJson[] };
+    }>("user.getInfo", { user: options.user }, { httpMethod: "GET", signed: false });
+
+    const avatarUrl = pickLargestImageUrl(result.user.image);
+    return {
+      username: result.user.name,
+      ...(result.user.realname ? { realName: result.user.realname } : {}),
+      ...(avatarUrl ? { avatarUrl } : {}),
+    };
   }
 
   async getArtistInfo(options: { readonly artist: string }): Promise<ArtistInfo> {
@@ -337,11 +364,18 @@ export class LastfmClient {
 }
 
 interface RecentTrackJson {
-  readonly artist: { readonly "#text": string };
+  /** `extended=1` (always requested by `getRecentTracks` — see there) reshapes this
+   * from the bare `{ "#text": ... }` used everywhere else in this client into an
+   * object with `name`; both are read defensively here in case that ever changes. */
+  readonly artist: { readonly name?: string; readonly "#text"?: string };
   readonly name: string;
   readonly album?: { readonly "#text": string };
   readonly date?: { readonly uts: string };
   readonly "@attr"?: { readonly nowplaying?: string };
+  readonly image?: readonly LastfmImageJson[];
+  /** Only present under `extended=1` — `"1"` when the requested user has loved this
+   * track, `"0"` otherwise. */
+  readonly loved?: string;
 }
 
 interface ScrobbleResponseItemJson {
@@ -357,6 +391,32 @@ interface TopArtistJson {
 interface FriendJson {
   readonly name: string;
   readonly realname?: string;
+  readonly image?: readonly LastfmImageJson[];
+}
+
+interface LastfmImageJson {
+  readonly size: string;
+  readonly "#text": string;
+}
+
+/** Picks the largest non-empty image URL out of a Last.fm `image` array. Last.fm
+ * returns an empty `#text` (not a missing entry) for every size when there's no real
+ * image to serve, so this has to check for that rather than just taking the first
+ * entry — an empty string is still "present". `undefined` if every size is empty, the
+ * array is empty, or missing entirely. */
+function pickLargestImageUrl(images: readonly LastfmImageJson[] | undefined): string | undefined {
+  if (!images) {
+    return undefined;
+  }
+  const bySize = new Map(images.map((image) => [image.size, image["#text"]]));
+  for (const size of ["mega", "extralarge", "large", "medium", "small"]) {
+    const url = bySize.get(size);
+    if (url) {
+      return url;
+    }
+  }
+  // Fallback for any size label not in the list above, in case Last.fm ever adds one.
+  return images.find((image) => image["#text"])?.["#text"];
 }
 
 interface SimilarArtistJson {

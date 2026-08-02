@@ -2,6 +2,8 @@ import type { AuthApi } from "../../../shared/auth-api.js";
 import type { BugReportApi } from "../../../shared/bug-report-api.js";
 import type { LastfmDataApi } from "../../../shared/lastfm-api.js";
 import type { NowPlayingApi } from "../../../shared/now-playing-api.js";
+import type { SettingsApi } from "../../../shared/settings-api.js";
+import type { UpdatesApi } from "../../../shared/updates-api.js";
 
 declare global {
   interface Window {
@@ -12,6 +14,11 @@ declare global {
     readonly auth?: AuthApi;
     readonly lastfm?: LastfmDataApi;
     readonly bugReport?: BugReportApi;
+    readonly settings?: SettingsApi;
+    readonly updates?: UpdatesApi;
+    /** `process.platform`, exposed as a plain value — see `preload/index.ts`. Optional
+     * for the same reason as the APIs above (absent outside a real Electron renderer). */
+    readonly platform?: NodeJS.Platform;
   }
 }
 

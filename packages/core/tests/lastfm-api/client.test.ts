@@ -211,12 +211,20 @@ describe("LastfmClient", () => {
           recenttracks: {
             track: [
               {
-                artist: { "#text": "Radiohead" },
+                // extended=1 shape: artist.name, plus image + loved.
+                artist: { name: "Radiohead" },
                 name: "Idioteque",
                 album: { "#text": "Kid A" },
                 "@attr": { nowplaying: "true" },
+                image: [
+                  { size: "small", "#text": "" },
+                  { size: "large", "#text": "https://lastfm.freetls.fastly.net/i/u/174s/idioteque.png" },
+                ],
+                loved: "1",
               },
               {
+                // Non-extended fallback shape (artist["#text"]) and no image/loved at
+                // all — both should be handled defensively, defaulting loved to false.
                 artist: { "#text": "Radiohead" },
                 name: "Nude",
                 album: { "#text": "In Rainbows" },
@@ -230,15 +238,32 @@ describe("LastfmClient", () => {
       const result = await client.getRecentTracks({ user: "someuser" });
 
       expect(result).toEqual([
-        { artist: "Radiohead", track: "Idioteque", album: "Kid A", nowPlaying: true },
+        {
+          artist: "Radiohead",
+          track: "Idioteque",
+          album: "Kid A",
+          nowPlaying: true,
+          imageUrl: "https://lastfm.freetls.fastly.net/i/u/174s/idioteque.png",
+          loved: true,
+        },
         {
           artist: "Radiohead",
           track: "Nude",
           album: "In Rainbows",
           nowPlaying: false,
           timestamp: 1_700_000_000,
+          loved: false,
         },
       ]);
+    });
+
+    it("requests user.getRecentTracks with extended=1, so loved status and real artwork are included", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ recenttracks: { track: [] } }));
+
+      await client.getRecentTracks({ user: "someuser" });
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(new URL(url).searchParams.get("extended")).toBe("1");
     });
 
     it("parses user.getTopArtists", async () => {
@@ -259,6 +284,83 @@ describe("LastfmClient", () => {
       );
       const result = await client.getFriends({ user: "someuser" });
       expect(result).toEqual([{ username: "afriend", realName: "A Friend" }]);
+    });
+
+    it("parses each friend's own avatar photo out of user.getFriends", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          friends: {
+            user: [
+              {
+                name: "afriend",
+                image: [
+                  { size: "small", "#text": "https://example.com/34s.png" },
+                  { size: "extralarge", "#text": "https://example.com/300x300.png" },
+                ],
+              },
+              {
+                name: "nophoto",
+                image: [
+                  { size: "small", "#text": "" },
+                  { size: "extralarge", "#text": "" },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+      const result = await client.getFriends({ user: "someuser" });
+      expect(result).toEqual([
+        { username: "afriend", avatarUrl: "https://example.com/300x300.png" },
+        { username: "nophoto" },
+      ]);
+    });
+
+    it("parses user.getInfo, preferring the largest available avatar size", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          user: {
+            name: "someuser",
+            realname: "Some User",
+            image: [
+              { size: "small", "#text": "https://example.com/34s.png" },
+              { size: "medium", "#text": "https://example.com/64s.png" },
+              { size: "large", "#text": "https://example.com/174s.png" },
+              { size: "extralarge", "#text": "https://example.com/300x300.png" },
+            ],
+          },
+        }),
+      );
+      const result = await client.getUserInfo({ user: "someuser" });
+      expect(result).toEqual({
+        username: "someuser",
+        realName: "Some User",
+        avatarUrl: "https://example.com/300x300.png",
+      });
+    });
+
+    it("user.getInfo omits avatarUrl when every image size is blank (no photo set)", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          user: {
+            name: "someuser",
+            image: [
+              { size: "small", "#text": "" },
+              { size: "medium", "#text": "" },
+              { size: "large", "#text": "" },
+              { size: "extralarge", "#text": "" },
+            ],
+          },
+        }),
+      );
+      const result = await client.getUserInfo({ user: "someuser" });
+      expect(result).toEqual({ username: "someuser" });
+    });
+
+    it("user.getInfo omits avatarUrl when the image array is missing entirely", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ user: { name: "someuser" } }));
+      const result = await client.getUserInfo({ user: "someuser" });
+      expect(result).toEqual({ username: "someuser" });
     });
 
     it("parses artist.getInfo", async () => {

@@ -4,8 +4,20 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lastfm.freetls.fastly.net"
     />
+    <!--
+      img-src explicitly allows Last.fm's real image CDN (confirmed live via curl
+      against the actual API — user avatars, and technically artist/album art too,
+      though see docs/modules/core.md's "Known limitation: artist images" for why
+      artist photos never actually differ from a placeholder in practice) — without
+      this, `default-src 'self'` silently blocks every one of those images at the
+      browser level with a CSP violation in the console, which is exactly what
+      happened here: the whole data/IPC/render pipeline worked correctly end to end,
+      real image URLs reached a real <img src>, and the browser blocked the request
+      anyway. `data:` covers any inline/base64 image content (icons, etc.).
+    -->
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Last.fm Scrobbler</title>
   </head>
