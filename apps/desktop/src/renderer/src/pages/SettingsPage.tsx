@@ -27,7 +27,7 @@ import { SettingsSectionCard } from "../components/SettingsSectionCard.js";
 import { useAccountAvatars } from "../hooks/use-account-avatars.js";
 import { useAppVersion } from "../hooks/use-app-version.js";
 import { useAuth } from "../hooks/use-auth.js";
-import { useSettings } from "../hooks/use-settings.js";
+import { useSettings } from "../contexts/settings-context.js";
 import { useUpdates } from "../hooks/use-updates.js";
 import type { PageProps } from "./page-props.js";
 import type { AspectRatioOption } from "../../../shared/settings-api.js";
