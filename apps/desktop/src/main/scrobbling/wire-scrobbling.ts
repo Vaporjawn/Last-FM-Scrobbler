@@ -2,6 +2,18 @@ import type { AccountStore, LastfmClient, ScrobbleEligibleEvent, ScrobbleQueue }
 
 const DEFAULT_DRAIN_INTERVAL_MS = 60_000;
 const DRAIN_BATCH_SIZE = 50;
+/** Notify only once submission has failed this many *consecutive* drain cycles
+ * (roughly this many minutes of being unable to reach Last.fm, at the default
+ * interval) — not on every single retry, which would spam a notification every
+ * `drainIntervalMs` for as long as an outage lasts. */
+const FAILURE_NOTIFICATION_THRESHOLD = 3;
+
+/** A scrobble that was actually accepted by Last.fm in a drain batch — enough
+ * identifying info for a "Scrobbled: …" notification, see `onScrobbled` below. */
+export interface ScrobbledTrack {
+  readonly artist: string;
+  readonly track: string;
+}
 
 /** The subset of `LastfmClient` this module needs — kept narrow for easy testing. */
 export interface ScrobblingClient {
@@ -16,6 +28,19 @@ export interface WireScrobblingOptions {
    * session-keyed `LastfmClient` around outside of a drain cycle. */
   readonly createSessionClient: (sessionKey: string) => ScrobblingClient;
   readonly drainIntervalMs?: number;
+  /** Called once per drain batch that accepts at least one scrobble — e.g. to show a
+   * native "Scrobbled: …" notification (see `main/index.ts`). This is a background
+   * process with no other user-visible feedback otherwise, unlike the renderer's
+   * love/unlove/addTags actions (see `NowPlayingPage`'s snackbars) — those are
+   * user-initiated with the window necessarily open; scrobbling happens unattended,
+   * often with the window hidden (see docs/modules/desktop.md's "Background app"
+   * section), which is exactly what a native OS notification is for. Optional —
+   * defaults to a no-op. */
+  readonly onScrobbled?: (items: readonly ScrobbledTrack[]) => void;
+  /** Called once submission has failed `FAILURE_NOTIFICATION_THRESHOLD` consecutive
+   * drain cycles in a row (not every single retry — see that constant's comment).
+   * Optional — defaults to a no-op. */
+  readonly onScrobbleFailed?: (reason: string) => void;
 }
 
 export interface ScrobblingHandle {
@@ -36,7 +61,8 @@ export interface ScrobblingHandle {
  * docs/adr/0006-offline-queue-persistence.md) until the user logs in.
  */
 export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle {
-  const { queue, accountStore, createSessionClient } = options;
+  const { queue, accountStore, createSessionClient, onScrobbled, onScrobbleFailed } = options;
+  let consecutiveFailures = 0;
 
   function onScrobbleEligible(event: ScrobbleEligibleEvent): void {
     queue.enqueue({
@@ -74,10 +100,12 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
         })),
       );
 
+      const accepted: ScrobbledTrack[] = [];
       batch.forEach((item, index) => {
         const itemResult = result.results[index];
         if (!itemResult || itemResult.ignoredCode === 0) {
           queue.remove([item.id]);
+          accepted.push({ artist: item.artist, track: item.track });
         } else {
           queue.recordFailure(item.id, {
             retryable: itemResult.retryable,
@@ -85,12 +113,23 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
           });
         }
       });
+
+      // A batch that reached Last.fm at all (even if every item was individually
+      // ignored) means connectivity is fine — any ongoing outage has recovered.
+      consecutiveFailures = 0;
+      if (accepted.length > 0) {
+        onScrobbled?.(accepted);
+      }
     } catch (error) {
       // Whole-batch failure (network error, Last.fm outage, rate limit, ...) — every
       // item in this batch gets the same treatment: keep it, note why, try again later.
       const reason = error instanceof Error ? error.message : String(error);
       for (const item of batch) {
         queue.recordFailure(item.id, { retryable: true, reason });
+      }
+      consecutiveFailures += 1;
+      if (consecutiveFailures === FAILURE_NOTIFICATION_THRESHOLD) {
+        onScrobbleFailed?.(reason);
       }
     }
   }
