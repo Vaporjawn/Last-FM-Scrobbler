@@ -2,7 +2,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 import type { PlaybackSource } from "@lastfm-scrobbler/shared-types";
-import type { ScrobbleEligibleEvent } from "@lastfm-scrobbler/core";
+import type { ScrobbleEligibleEvent, TrackChangedEvent } from "@lastfm-scrobbler/core";
+import type { WindowBounds } from "../shared/settings-api.js";
+import { isSafeExternalUrl } from "./window/is-safe-external-url.js";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
@@ -11,26 +13,61 @@ const { BrowserWindow, shell } = electron;
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
 
+export interface CreateMainWindowOptions {
+  /** `undefined` on platforms without a working adapter yet — see
+   * `playback/create-platform-playback-source.ts`. */
+  readonly playbackSource: PlaybackSource | undefined;
+  /** Receives every play that crosses the scrobble threshold — see
+   * `main/scrobbling/wire-scrobbling.ts` for what a real caller passes. */
+  readonly onScrobbleEligible?: (event: ScrobbleEligibleEvent) => void;
+  /** Receives every new distinct track, immediately (not gated on the scrobble
+   * threshold) — see `main/scrobbling/wire-scrobbling.ts`'s `onTrackChanged` for what
+   * a real caller passes (a real-time Last.fm "now playing" update). */
+  readonly onTrackChanged?: (event: TrackChangedEvent) => void;
+  /** Dev mode only (see `resolve-app-icon-path.ts`) — sets the window/taskbar icon on
+   * Windows/Linux. A packaged build's icon comes from `electron-builder.yml` instead,
+   * baked into the app bundle, so this is a no-op to omit there. Has no effect on
+   * macOS's Dock icon specifically — see `main/index.ts`'s separate
+   * `app.dock.setIcon()` call for that. */
+  readonly iconPath?: string;
+  /** Restores the window to its size/position from the end of the last session (see
+   * `main/window/persist-window-bounds.ts` and `AppSettings.windowBounds`) — omit to
+   * fall back to this function's own built-in default (1100x720, centered). */
+  readonly initialBounds?: WindowBounds;
+  /** Locks the window's resize aspect ratio (width/height) — `0` or omitted means free
+   * resizing, Electron's own default. See `main/window/resolve-aspect-ratio.ts` for
+   * how a Settings selection becomes this number. */
+  readonly initialAspectRatio?: number;
+}
+
 /**
  * Creates and shows the app's main window, wiring up now-playing IPC against it when a
- * platform playback source is available (`playbackSource` is `undefined` on platforms
- * without a working adapter yet — see `playback/create-platform-playback-source.ts`).
- * `onScrobbleEligible`, when provided, receives every play that crosses the scrobble
- * threshold — see `main/scrobbling/wire-scrobbling.ts` for what a real caller passes.
- * `iconPath`, when provided (dev mode only — see `resolve-app-icon-path.ts`), sets the
- * window/taskbar icon on Windows/Linux; a packaged build's icon comes from
- * `electron-builder.yml` instead, baked into the app bundle itself, so this is a no-op
- * to omit there. Has no effect on macOS's Dock icon specifically — see
- * `main/index.ts`'s separate `app.dock.setIcon()` call for that.
+ * platform playback source is available. See `CreateMainWindowOptions` for what each
+ * option controls.
  */
-export function createMainWindow(
-  playbackSource: PlaybackSource | undefined,
-  onScrobbleEligible?: (event: ScrobbleEligibleEvent) => void,
-  iconPath?: string,
-): Electron.BrowserWindow {
+export function createMainWindow(options: CreateMainWindowOptions): Electron.BrowserWindow {
+  const { playbackSource, onScrobbleEligible, onTrackChanged, iconPath, initialBounds, initialAspectRatio } =
+    options;
+
   const mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 720,
+    // `initialBounds` (a prior session's real size/position) takes precedence over
+    // these hardcoded defaults, which now only matter on first launch or if nothing
+    // was ever saved — see `main/window/persist-window-bounds.ts`.
+    width: initialBounds?.width ?? 1100,
+    height: initialBounds?.height ?? 720,
+    ...(initialBounds ? { x: initialBounds.x, y: initialBounds.y } : {}),
+    // No app-level breakpoints reflow the fixed-width sidebar + content layout below
+    // this — live-testing every page down from 1100 wide (Playwright, resized in
+    // steps) showed content was still fully readable at 680x480 but visibly degraded
+    // by 450 wide (body text wrapping to two or three words per line) and broke
+    // outright by 360 (one word per line, switches overlapping wrapped labels).
+    // Flooring the window here, rather than trying to make the layout fluid all the
+    // way down to phone widths, matches how desktop apps in this genre (and the
+    // official Last.fm client this project's UI is modeled on) handle it — the
+    // existing sidebar-collapse control already covers reclaiming space below that
+    // for users who want it.
+    minWidth: 680,
+    minHeight: 480,
     ...(iconPath ? { icon: iconPath } : {}),
     // Don't paint the window until the renderer has produced its first frame —
     // avoids the blank/white-flash window Electron otherwise shows immediately, and
@@ -49,7 +86,7 @@ export function createMainWindow(
       // preload fails to load, `contextBridge.exposeInMainWorld` never runs, so every
       // `window.*` API (`window.auth`, `window.settings`, etc.) is silently
       // `undefined` in the renderer — which is why every hook's "outside a real
-      // Electron renderer" fallback kicked in (e.g. Preferences' Accounts section
+      // Electron renderer" fallback kicked in (e.g. Settings' Accounts section
       // spinning forever, since `useAuth`'s initial fetch just returns early with
       // `isConfigured` stuck at its loading value). Disabling the *preload* sandbox
       // here routes preload loading through Electron's regular Node-based loader
@@ -66,6 +103,10 @@ export function createMainWindow(
     },
   });
 
+  if (initialAspectRatio) {
+    mainWindow.setAspectRatio(initialAspectRatio);
+  }
+
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
   });
@@ -78,16 +119,26 @@ export function createMainWindow(
   // `AuthFlow`'s `openUrl` already does for the Last.fm authorization step (see
   // `main/index.ts`'s `wireAuth` call) — this makes every other external link in the
   // app behave the same way without each one needing its own IPC plumbing.
+  //
+  // `isSafeExternalUrl` gates this before it ever reaches `shell.openExternal`:
+  // several renderer links (NowPlayingPage's/ScrobbleDetailPage's `trackDetail.url`,
+  // BugReportDialog's `issueUrl`) are built from external, unsanitized data — a Last.fm
+  // API response, a relay's HTTP response — not something this app controls. Electron's
+  // security checklist warns against handing `openExternal` untrusted content, since a
+  // crafted `file:`/`javascript:`/custom-protocol URL can trigger unintended local
+  // behavior depending on platform and what's registered as a handler for it.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
     return { action: "deny" };
   });
 
   if (playbackSource) {
     if (onScrobbleEligible) {
-      wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible);
+      wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible, onTrackChanged);
     } else {
-      wireNowPlaying(playbackSource, mainWindow);
+      wireNowPlaying(playbackSource, mainWindow, undefined, onTrackChanged);
     }
   }
 

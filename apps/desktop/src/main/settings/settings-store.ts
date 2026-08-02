@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "../../shared/settings-api.js";
 
@@ -18,7 +18,7 @@ export interface SettingsStore {
  * Persists user-configurable settings (see `shared/settings-api.ts`) as a plain JSON
  * file — unlike `ElectronSecretStorage`, nothing here is sensitive, so no encryption is
  * involved. The file is the source of truth and is re-read on every `get()`, mirroring
- * `ElectronSecretStorage`'s approach; settings reads/writes are infrequent (Preferences
+ * `ElectronSecretStorage`'s approach; settings reads/writes are infrequent (Settings
  * toggles, app startup), so there's no need for an in-memory cache.
  */
 export function createSettingsStore(options: SettingsStoreOptions): SettingsStore {
@@ -40,8 +40,14 @@ export function createSettingsStore(options: SettingsStoreOptions): SettingsStor
   }
 
   function writeSettings(settings: AppSettings): void {
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, JSON.stringify(settings, null, 2), "utf8");
+    // Same owner-only-permissions treatment as `ElectronSecretStorage`'s writeFile —
+    // this file holds no secrets, but there's no reason to leave it more permissive
+    // than that on a shared/multi-user machine either. `chmodSync` after the write
+    // (not just `mode` on mkdirSync/writeFileSync, which only applies at creation)
+    // tightens permissions even on a file left over from before this hardening.
+    mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
+    writeFileSync(filePath, JSON.stringify(settings, null, 2), { encoding: "utf8", mode: 0o600 });
+    chmodSync(filePath, 0o600);
   }
 
   return {

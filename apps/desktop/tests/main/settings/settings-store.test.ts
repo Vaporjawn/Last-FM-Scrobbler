@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -67,4 +67,23 @@ describe("createSettingsStore", () => {
 
     expect(JSON.parse(readFileSync(nestedPath, "utf8"))).toMatchObject({ closeToTray: false });
   });
+
+  // Mode bits aren't meaningful on Windows the way they are on POSIX systems — skip
+  // there, matching the same platform-specific skip used for this exact assertion in
+  // tests/main/secret-storage/electron-secret-storage.test.ts.
+  it.skipIf(process.platform === "win32")(
+    "restricts settings.json to owner-only read/write (0o600), even on an existing file with looser permissions",
+    () => {
+      const store = createSettingsStore({ filePath });
+      store.set({ closeToTray: false });
+      // Simulate a file left over from before this fix, with the old (looser)
+      // default permissions — set() must tighten these on every write.
+      chmodSync(filePath, 0o644);
+
+      store.set({ autoUpdateEnabled: false });
+
+      const mode = statSync(filePath).mode & 0o777;
+      expect(mode).toBe(0o600);
+    },
+  );
 });
