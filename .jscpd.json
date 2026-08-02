@@ -1,0 +1,23 @@
+{
+  "threshold": 3,
+  "reporters": ["console", "json", "badge"],
+  "output": ".jscpd-report",
+  "absolute": false,
+  "gitignore": true,
+  "format": ["typescript", "tsx", "javascript", "jsx"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/out/**",
+    "**/release/**",
+    "**/native-build/**",
+    "**/coverage/**",
+    "**/.jscpd-report/**",
+    "**/vendor/**",
+    "**/*.d.ts",
+    "**/tests/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ],
+  "ignorePattern": ["**/*.min.js"]
+}

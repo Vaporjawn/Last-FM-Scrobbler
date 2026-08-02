@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened runtime entitlements for the packaged Electron app itself — this is about
+  Electron/Chromium's own requirements (V8 JIT, unsigned executable memory at
+  startup), not about MediaRemote access. `createMacosPlaybackSource()` gets its
+  MediaRemote data by spawning `/usr/bin/perl` as a wholly separate, already-entitled
+  system process (see docs/adr/0008-macos-mediaremote-entitlement.md) — that trick
+  works regardless of this app's own signing identity or entitlements, so nothing
+  MediaRemote-specific belongs in this file.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>

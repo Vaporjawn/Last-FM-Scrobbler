@@ -1,8 +1,19 @@
+# Prettier (3.x) automatically also excludes everything in .gitignore, so build output,
+# node_modules, coverage, native-build artifacts, etc. are already covered there and
+# don't need to be repeated here. This file is only for paths that ARE tracked in git
+# but should never be reformatted.
+
+# Belt-and-suspenders duplicates of the .gitignore entries above, kept explicit in case
+# this file is ever run with --ignore-path pointed only at itself.
 dist/
 out/
 node_modules/
 coverage/
 .wrangler/
+
+# Package-manager lockfiles: machine-generated, exact-format-sensitive, and tracked (per
+# docs/adr/0007-package-manager-agnostic.md) for all three supported package managers —
+# reformatting any of these would corrupt them.
 pnpm-lock.yaml
 package-lock.json
 bun.lock

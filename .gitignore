@@ -4,14 +4,23 @@ node_modules/
 # Build output
 dist/
 out/
-build/
 native-build/
 release/
 *.tsbuildinfo
+# NOTE: deliberately no bare `build/` entry here. electron-builder's own convention
+# (see apps/desktop/electron-builder.yml's `buildResources: build`) uses a *source*
+# directory literally named build/ for tracked packaging assets (app icons,
+# entitlements.mac.plist) — apps/desktop/build/ is the only build/ directory in this
+# repo, and a bare pattern would (and, until this fix, silently did) make git treat
+# those required-for-packaging files as untracked/ignored forever. If a real generated
+# build/ output directory is ever introduced elsewhere, scope its ignore entry to that
+# exact path instead of reintroducing a bare `build/`.
 
-# .NET build output (packages/adapter-windows/native/SmtcHelper)
-bin/
-obj/
+# .NET build output — scoped to this exact path. A bare `bin/`/`obj/` pattern would
+# also swallow the tracked, vendored packages/adapter-macos/vendor/mediaremote-adapter/bin/
+# script (and any future package's legitimate bin/ directory, e.g. an npm "bin" entry).
+packages/adapter-windows/native/SmtcHelper/bin/
+packages/adapter-windows/native/SmtcHelper/obj/
 
 # Test/coverage
 coverage/
