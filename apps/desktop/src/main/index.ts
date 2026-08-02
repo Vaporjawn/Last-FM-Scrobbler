@@ -25,6 +25,7 @@ import { showNotification } from "./notifications/show-notification.js";
 import { resolveAppIconPath } from "./resolve-app-icon-path.js";
 import { resolveExpectedRendererOrigin } from "./resolve-expected-renderer-origin.js";
 import { createTray } from "./tray/create-tray.js";
+import { createTrayPopoverWindow, resolvePopoverScreenBounds } from "./tray/create-tray-popover-window.js";
 import { resolveTrayIconPath } from "./tray/resolve-tray-icon-path.js";
 import { wireCloseToTray } from "./tray/wire-close-to-tray.js";
 import { createUpdaterClient } from "./updates/create-updater-client.js";
@@ -361,9 +362,19 @@ void app.whenReady().then(async () => {
     return window;
   }
 
-  wireAppInfo({ getVersion: () => app.getVersion() });
-
   let mainWindow = createAndWireMainWindow();
+
+  wireAppInfo({
+    getVersion: () => app.getVersion(),
+    // Reads the live `mainWindow` binding, not a stale reference, matching
+    // `wireSettings`'s own `onAspectRatioChange` right below — keeps working
+    // correctly after the `activate` handler further down replaces it.
+    onShowMainWindow: () => {
+      mainWindow.show();
+      mainWindow.focus();
+    },
+  });
+
   wireSettings({
     store: settingsStore,
     // Applies a Settings → Window aspect-ratio change to the already-open window
@@ -421,8 +432,16 @@ void app.whenReady().then(async () => {
     },
   });
 
+  // Created hidden, up front — see create-tray-popover-window.ts. Not tied to
+  // mainWindow's own lifecycle (recreated in the "activate" handler below); the
+  // popover is cheap to leave alive for the whole app session and doesn't need to be
+  // recreated just because the main window was.
+  const trayPopover = createTrayPopoverWindow();
+
   tray = createTray({
     iconPath: resolveTrayIconPath(resourcePathOptions),
+    popover: trayPopover,
+    resolvePopoverScreenBounds,
     onShow: () => {
       mainWindow.show();
       mainWindow.focus();

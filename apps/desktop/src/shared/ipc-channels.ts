@@ -39,6 +39,9 @@ export const IPC_CHANNELS = {
   /** The running app's own version (`app.getVersion()`, from `package.json`/
    * electron-builder's packaged metadata) — shown in Settings → General. */
   appGetVersion: "app:get-version",
+  /** Brings the main window to the front — the tray mini-player popover's "Open
+   * Last.fm Scrobbler" button. */
+  appShowMainWindow: "app:show-main-window",
 
   /** `user.getRecentTracks` for a given username. */
   lastfmGetRecentTracks: "lastfm:get-recent-tracks",

@@ -185,6 +185,9 @@ const appInfoApi: AppInfoApi = {
   getVersion() {
     return ipcRenderer.invoke(IPC_CHANNELS.appGetVersion) as Promise<string>;
   },
+  showMainWindow() {
+    return ipcRenderer.invoke(IPC_CHANNELS.appShowMainWindow) as Promise<void>;
+  },
 };
 
 contextBridge.exposeInMainWorld("nowPlaying", nowPlayingApi);

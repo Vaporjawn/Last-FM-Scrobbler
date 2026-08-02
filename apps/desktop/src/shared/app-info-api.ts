@@ -5,4 +5,7 @@ export interface AppInfoApi {
    * `apps/desktop/package.json`'s `version` field in dev, or electron-builder's
    * packaged metadata once built). */
   getVersion(): Promise<string>;
+  /** Brings the main window to the front — called from the tray mini-player
+   * popover's "Open Last.fm Scrobbler" button (see `TrayPopover.tsx`). */
+  showMainWindow(): Promise<void>;
 }

@@ -38,4 +38,28 @@ describe("wireAppInfo", () => {
 
     expect(ipcMainHandlers.has(IPC_CHANNELS.appGetVersion)).toBe(false);
   });
+
+  it("showMainWindow calls the injected onShowMainWindow callback", async () => {
+    const onShowMainWindow = vi.fn();
+    wireAppInfo({ getVersion: () => "1.2.3", onShowMainWindow });
+
+    await invoke(IPC_CHANNELS.appShowMainWindow);
+
+    expect(onShowMainWindow).toHaveBeenCalledOnce();
+  });
+
+  it("showMainWindow doesn't throw when no onShowMainWindow callback was given", async () => {
+    wireAppInfo({ getVersion: () => "1.2.3" });
+
+    await expect(invoke(IPC_CHANNELS.appShowMainWindow)).resolves.toBeUndefined();
+  });
+
+  it("removes both handlers when the returned cleanup function is called", () => {
+    const stop = wireAppInfo({ getVersion: () => "1.2.3" });
+    expect(ipcMainHandlers.has(IPC_CHANNELS.appShowMainWindow)).toBe(true);
+
+    stop();
+
+    expect(ipcMainHandlers.has(IPC_CHANNELS.appShowMainWindow)).toBe(false);
+  });
 });
