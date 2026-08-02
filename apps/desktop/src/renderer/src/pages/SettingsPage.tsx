@@ -464,8 +464,8 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                                   src={avatarsByUsername[username]}
                                   alt={username}
                                   sx={{
-                                    width: 32,
-                                    height: 32,
+                                    width: 48,
+                                    height: 48,
                                     bgcolor: "action.selected",
                                     color: "text.secondary",
                                   }}

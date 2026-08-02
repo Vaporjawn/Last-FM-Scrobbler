@@ -10,7 +10,7 @@ import { stripHtml } from "../utils/strip-html.js";
 import { ArtistAvatar } from "./ArtistAvatar.js";
 import { AsyncState } from "./AsyncState.js";
 
-const SIMILAR_ARTIST_AVATAR_SIZE = 64;
+const SIMILAR_ARTIST_AVATAR_SIZE = 72;
 
 export interface ArtistInfoPanelProps {
   readonly artistName: string;

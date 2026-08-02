@@ -49,7 +49,7 @@ export function ProfilePage({ onNavigateToSettings }: PageProps): JSX.Element {
           <Avatar
             src={profile?.avatarUrl}
             alt={activeAccount}
-            sx={{ width: 56, height: 56, bgcolor: "primary.main" }}
+            sx={{ width: 80, height: 80, fontSize: 32, bgcolor: "primary.main" }}
           >
             {activeAccount.slice(0, 1).toUpperCase()}
           </Avatar>
