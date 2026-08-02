@@ -1,19 +1,13 @@
 import type { JSX } from "react";
-import Chip from "@mui/material/Chip";
 import ListItem from "@mui/material/ListItem";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
-import { ScrobblingIndicator } from "./ScrobblingIndicator.js";
+import { PlaybackStatusChip } from "./shared/PlaybackStatusChip.js";
 import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
 import { TrackLoveTagControls } from "./shared/TrackLoveTagControls.js";
-
-function formatTimestamp(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
-}
 
 /** Row avatar size — bumped up from MUI's 40px default so real album art actually
  * reads at list scale instead of looking like a favicon. */
@@ -88,19 +82,12 @@ export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JS
           tagPopoverAnchorHorizontal="right"
         />
 
-        {track.nowPlaying ? (
-          <Chip
-            icon={<ScrobblingIndicator />}
-            label="Now Playing"
-            size="small"
-            color="primary"
-            sx={{ ml: 1 }}
-          />
-        ) : track.timestamp !== undefined ? (
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap", ml: 1 }}>
-            {formatTimestamp(track.timestamp)}
-          </Typography>
-        ) : null}
+        <PlaybackStatusChip
+          nowPlaying={track.nowPlaying}
+          timestamp={track.timestamp}
+          nowPlayingLabel="Now Playing"
+          sx={{ ml: 1 }}
+        />
       </Stack>
     </ListItem>
   );

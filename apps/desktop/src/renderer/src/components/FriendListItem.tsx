@@ -3,7 +3,6 @@ import StarIcon from "@mui/icons-material/Star";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
-import Chip from "@mui/material/Chip";
 import ListItem from "@mui/material/ListItem";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
 import ListItemText from "@mui/material/ListItemText";
@@ -12,12 +11,8 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { Friend, RecentTrack } from "@lastfm-scrobbler/core";
 import type { FriendActivityState } from "../hooks/use-friends-activity.js";
-import { ScrobblingIndicator } from "./ScrobblingIndicator.js";
+import { PlaybackStatusChip } from "./shared/PlaybackStatusChip.js";
 import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
-
-function formatTimestamp(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
-}
 
 /** Friend avatar size — bumped up from MUI's 40px default so real Last.fm photos
  * actually read at list scale; matches `ScrobbleListItem`'s row avatar for a
@@ -137,19 +132,12 @@ export function FriendListItem({ friend, activity, onSelectTrack }: FriendListIt
               flexShrink
             />
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              {track.nowPlaying ? (
-                <Chip
-                  icon={<ScrobblingIndicator />}
-                  label="Scrobbling now"
-                  size="small"
-                  color="primary"
-                  sx={{ mb: 0.5 }}
-                />
-              ) : track.timestamp !== undefined ? (
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                  {formatTimestamp(track.timestamp)}
-                </Typography>
-              ) : null}
+              <PlaybackStatusChip
+                nowPlaying={track.nowPlaying}
+                timestamp={track.timestamp}
+                nowPlayingLabel="Scrobbling now"
+                sx={{ mb: 0.5 }}
+              />
               <Typography variant="body2" noWrap>
                 {track.track}
                 <Typography component="span" variant="body2" color="text.secondary">
