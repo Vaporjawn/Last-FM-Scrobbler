@@ -2,15 +2,6 @@ import electronUpdater from "electron-updater";
 import type { Logger } from "@lastfm-scrobbler/core";
 import type { UpdaterClient } from "./updater-client.js";
 
-// electron-updater is CJS with the same non-standard export shape as `electron`
-// itself (see main/index.ts's comment on that) — Node's static ESM/CJS interop can't
-// reliably detect `autoUpdater` as a named export, which surfaces at runtime (not at
-// typecheck time, since the package's .d.ts still declares the named export) as
-// `SyntaxError: Named export 'autoUpdater' not found` and crashes the whole main
-// process on startup. Importing the default and destructuring at runtime sidesteps it,
-// identically to the `electron` import elsewhere. See docs/modules/desktop.md.
-const { autoUpdater } = electronUpdater;
-
 export interface CreateUpdaterClientOptions {
   /** Forwarded to electron-updater's own `.logger` — never logs credentials (there
    * aren't any involved here), just check/download progress and errors. */
@@ -26,6 +17,23 @@ export interface CreateUpdaterClientOptions {
  */
 export function createUpdaterClient(options: CreateUpdaterClientOptions): UpdaterClient {
   const { logger } = options;
+
+  // electron-updater is CJS with the same non-standard export shape as `electron`
+  // itself (see main/index.ts's comment on that), but unlike `electron`'s own named
+  // exports — plain data properties, already populated by the time any of this
+  // project's code runs — `autoUpdater` is a *lazy getter with real side effects*
+  // (verified directly against electron-updater 6.8.9's own source, `out/main.js`):
+  // merely reading `.autoUpdater` runs `doLoadAutoUpdater()`, which constructs the
+  // platform-specific updater (`MacUpdater` on macOS), whose constructor chain reads
+  // `electron.app` via `ElectronAppAdapter`'s `require("electron").app` default
+  // param. Destructuring this at module top level (this file's previous approach,
+  // mirroring the safe `electron` pattern) ran that side effect during ES module
+  // static import evaluation — before `main/index.ts` (this function's only caller)
+  // ever reaches `app.whenReady()` — so `electron.app` wasn't a real, ready app yet,
+  // and crashed with "Cannot read properties of undefined (reading 'getVersion')".
+  // Reading it here instead, inside the function body this project only ever calls
+  // after the app is ready, defers that side effect to a point where it's safe.
+  const { autoUpdater } = electronUpdater;
 
   autoUpdater.autoDownload = true;
   // wire-updates.ts prompts the user and calls quitAndInstall() itself once a download

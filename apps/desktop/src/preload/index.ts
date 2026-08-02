@@ -6,9 +6,12 @@ import type {
   RecentTrack,
   SimilarArtist,
   TopArtist,
+  TrackDetail,
   UserProfile,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../shared/ipc-channels.js";
+import type { AppInfoApi } from "../shared/app-info-api.js";
+import type { ArtistImageApi } from "../shared/artist-image-api.js";
 import type { AuthApi } from "../shared/auth-api.js";
 import type { BugReportApi } from "../shared/bug-report-api.js";
 import type { LastfmDataApi } from "../shared/lastfm-api.js";
@@ -102,13 +105,24 @@ const lastfmApi: LastfmDataApi = {
   getUserInfo(user) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetUserInfo, user) as Promise<UserProfile>;
   },
-  getArtistInfo(artist) {
-    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetArtistInfo, artist) as Promise<ArtistInfo>;
+  getArtistInfo(artist, username) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetArtistInfo, artist, username) as Promise<ArtistInfo>;
   },
   getSimilarArtists(artist, limit) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetSimilarArtists, artist, limit) as Promise<
       readonly SimilarArtist[]
     >;
+  },
+  getTopTags(artist) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetTopTags, artist) as Promise<readonly string[]>;
+  },
+  getTrackInfo(artist, track, username) {
+    return ipcRenderer.invoke(
+      IPC_CHANNELS.lastfmGetTrackInfo,
+      artist,
+      track,
+      username,
+    ) as Promise<TrackDetail>;
   },
   loveTrack(artist, track) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmLoveTrack, artist, track) as Promise<void>;
@@ -118,6 +132,14 @@ const lastfmApi: LastfmDataApi = {
   },
   addTags(artist, track, tags) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmAddTags, artist, track, tags) as Promise<void>;
+  },
+};
+
+const artistImageApi: ArtistImageApi = {
+  getUrl(artistName) {
+    return ipcRenderer.invoke(IPC_CHANNELS.artistImageGetUrl, artistName) as Promise<
+      string | undefined
+    >;
   },
 };
 
@@ -159,12 +181,20 @@ const updatesApi: UpdatesApi = {
   },
 };
 
+const appInfoApi: AppInfoApi = {
+  getVersion() {
+    return ipcRenderer.invoke(IPC_CHANNELS.appGetVersion) as Promise<string>;
+  },
+};
+
 contextBridge.exposeInMainWorld("nowPlaying", nowPlayingApi);
 contextBridge.exposeInMainWorld("auth", authApi);
 contextBridge.exposeInMainWorld("lastfm", lastfmApi);
+contextBridge.exposeInMainWorld("artistImage", artistImageApi);
 contextBridge.exposeInMainWorld("bugReport", bugReportApi);
 contextBridge.exposeInMainWorld("settings", settingsApi);
 contextBridge.exposeInMainWorld("updates", updatesApi);
+contextBridge.exposeInMainWorld("appInfo", appInfoApi);
 // A plain value (not an async API) so the renderer can pick OS-appropriate copy (e.g.
-// "Close to tray" vs. "Close to menu bar") without a round trip — see PreferencesPage.
+// "Close to tray" vs. "Close to menu bar") without a round trip — see SettingsPage.
 contextBridge.exposeInMainWorld("platform", process.platform);

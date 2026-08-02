@@ -1,13 +1,16 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import electron from "electron";
 import { LastfmClient, Logger, ScrobbleQueue } from "@lastfm-scrobbler/core";
-import { createMainWindow } from "./create-main-window.js";
+import { wireAppInfo } from "./app-info/wire-app-info.js";
+import { createMainWindow, type CreateMainWindowOptions } from "./create-main-window.js";
 import { createPlatformPlaybackSource } from "./playback/create-platform-playback-source.js";
 import { createAppCredentialsStore } from "./lastfm/create-app-credentials-store.js";
 import { resolveLastfmCredentials } from "./lastfm/resolve-lastfm-credentials.js";
 import { wireLastfmData } from "./lastfm/wire-lastfm-data.js";
 import { wireTrackActions } from "./lastfm/wire-track-actions.js";
+import { wireArtistImage } from "./artist-images/wire-artist-image.js";
 import { createAccountStore } from "./auth/create-account-store.js";
 import { wireAuth } from "./auth/wire-auth.js";
 import { wireScrobbling } from "./scrobbling/wire-scrobbling.js";
@@ -16,6 +19,7 @@ import { createSettingsStore } from "./settings/settings-store.js";
 import { wireSettings } from "./settings/wire-settings.js";
 import { showNotification } from "./notifications/show-notification.js";
 import { resolveAppIconPath } from "./resolve-app-icon-path.js";
+import { resolveExpectedRendererOrigin } from "./resolve-expected-renderer-origin.js";
 import { createTray } from "./tray/create-tray.js";
 import { resolveTrayIconPath } from "./tray/resolve-tray-icon-path.js";
 import { wireCloseToTray } from "./tray/wire-close-to-tray.js";
@@ -23,6 +27,8 @@ import { createUpdaterClient } from "./updates/create-updater-client.js";
 import { showRestartPrompt } from "./updates/show-restart-prompt.js";
 import { wireUpdates } from "./updates/wire-updates.js";
 import { bringAppToForeground } from "./window/bring-app-to-foreground.js";
+import { persistWindowBounds } from "./window/persist-window-bounds.js";
+import { resolveAspectRatioValue } from "./window/resolve-aspect-ratio.js";
 
 // Electron's main-process module is CJS with a non-standard export shape that Node's
 // static ESM/CJS interop can't always detect named exports from (some properties are
@@ -31,24 +37,19 @@ import { bringAppToForeground } from "./window/bring-app-to-foreground.js";
 // this fixes if reverted.
 const { app, BrowserWindow, safeStorage, shell } = electron;
 
-// Local dev convenience: a git-ignored `apps/desktop/.env` file (already covered by
-// the repo's root .gitignore) lets LASTFM_API_KEY/LASTFM_API_SECRET/
-// BUG_REPORT_RELAY_URL persist across `npm run dev` launches instead of needing to be
-// re-exported in the shell every time — set them once, they just keep working. Dev
-// only: a packaged build has no reason to read a loose text file for secrets, and
-// `app.getAppPath()` wouldn't point at a useful location for one anyway once
-// packaged (see resolve-app-icon-path.ts's docstring on the same asar distinction).
-// This project still never *generates* or hardcodes a real key anywhere — getting one
-// from Last.fm is still on whoever runs this, same as always (see docs/modules/
-// desktop.md); this only makes *using* one less repetitive once you have it.
-// `process.loadEnvFile` is a built-in Node API (stable since Node 22.21/24.10,
-// available since 20.12) — no new dependency needed for this.
-if (!app.isPackaged) {
-  const envFilePath = join(app.getAppPath(), ".env");
-  if (existsSync(envFilePath)) {
-    process.loadEnvFile(envFilePath);
-  }
-}
+// Mirrors create-main-window.ts's own `dirname` — both files live in `src/main/`, so
+// the same "one level up into renderer/" relative resolution
+// `resolveExpectedRendererOrigin` does lands on the exact same file `createMainWindow`
+// itself loads via `loadFile`. Computed once at module scope (matching
+// create-main-window.ts's own `dirname` — this doesn't change over the app's
+// lifetime) and passed to `wireAuth`/`wireTrackActions` below so their handlers can
+// verify a call's `senderFrame` genuinely is this app's own renderer, not some other
+// page (see validate-ipc-sender.ts).
+const dirname = fileURLToPath(new URL(".", import.meta.url));
+const expectedRendererOrigin = resolveExpectedRendererOrigin(
+  dirname,
+  process.env.ELECTRON_RENDERER_URL,
+);
 
 // Bounded ring buffer of recent log lines, attached to bug reports as diagnostics (see
 // wireBugReport below) — never logs credentials (session keys, API secrets), only
@@ -75,6 +76,34 @@ let isQuitting = false;
 let tray: Electron.Tray | undefined;
 
 void app.whenReady().then(async () => {
+  // Local dev convenience: a git-ignored `apps/desktop/.env` file (already covered by
+  // the repo's root .gitignore) lets LASTFM_API_KEY/LASTFM_API_SECRET/
+  // BUG_REPORT_RELAY_URL persist across `npm run dev` launches instead of needing to
+  // be re-exported in the shell every time — set them once, they just keep working.
+  // Dev only: a packaged build has no reason to read a loose text file for secrets,
+  // and `app.getAppPath()` wouldn't point at a useful location for one anyway once
+  // packaged (see resolve-app-icon-path.ts's docstring on the same asar distinction).
+  // This project still never *generates* or hardcodes a real key anywhere — getting
+  // one from Last.fm is still on whoever runs this, same as always (see
+  // docs/modules/desktop.md); this only makes *using* one less repetitive once you
+  // have it. `process.loadEnvFile` is a built-in Node API (stable since Node
+  // 22.21/24.10, available since 20.12) — no new dependency needed for this.
+  //
+  // Deliberately placed here, inside `whenReady()`, rather than at module top level
+  // (its original location, moved as part of the same fix documented in
+  // create-updater-client.ts): this project's ESM main-process entry point loads via
+  // Node's async ESM entry-point runner, which — verified live, this exact crash —
+  // does not guarantee `electron.app`'s properties are populated yet at module
+  // top-level evaluation time, only by the time `whenReady()` actually resolves.
+  // Every other `app.*` access in this file already correctly waits for this same
+  // callback; this one just hadn't been exercised by a genuine cold start before.
+  if (!app.isPackaged) {
+    const envFilePath = join(app.getAppPath(), ".env");
+    if (existsSync(envFilePath)) {
+      process.loadEnvFile(envFilePath);
+    }
+  }
+
   const userDataDir = app.getPath("userData");
 
   // Shared by every `resources/`-relative lookup below (tray icon, app icon) — see
@@ -100,7 +129,6 @@ void app.whenReady().then(async () => {
   const notificationIconOption = appIconPath ? { icon: appIconPath } : {};
 
   const settingsStore = createSettingsStore({ filePath: join(userDataDir, "settings.json") });
-  wireSettings({ store: settingsStore });
 
   const accountStore = createAccountStore({
     filePath: join(userDataDir, "secrets.json"),
@@ -121,7 +149,7 @@ void app.whenReady().then(async () => {
   }
 
   // LASTFM_API_KEY/LASTFM_API_SECRET (baked into this build) take precedence, falling
-  // back to a key the end user saved themselves via Preferences → Accounts. undefined
+  // back to a key the end user saved themselves via Settings → Accounts. undefined
   // when neither is available — the app still launches; login and Last.fm data views
   // just report "not configured". See main/lastfm/resolve-lastfm-credentials.ts.
   const resolvedCredentials = await resolveLastfmCredentials({ appCredentialsStore });
@@ -136,6 +164,7 @@ void app.whenReady().then(async () => {
   }
 
   wireAuth({
+    expectedOrigin: expectedRendererOrigin,
     accountStore,
     client: lastfmClient,
     openUrl: (url) => shell.openExternal(url),
@@ -149,7 +178,7 @@ void app.whenReady().then(async () => {
     onLoginSuccess: (username) => {
       // The user was just sent away to their own browser for Last.fm's "Allow
       // Access" step — bring the app back to the front so they land somewhere
-      // useful instead of alt-tabbing back to it themselves (PreferencesPage's
+      // useful instead of alt-tabbing back to it themselves (SettingsPage's
       // login handler switches the active view to Profile at the same time, so
       // what they see on return is confirmation of who they're now logged in as).
       // Looked up fresh via `getAllWindows()` (same approach as the `activate`
@@ -197,6 +226,10 @@ void app.whenReady().then(async () => {
     },
   });
   wireLastfmData({ client: lastfmClient });
+  // Unconditional, unlike wireLastfmData above — Deezer's public artist search (real
+  // artist photos; see wire-artist-image.ts) needs no Last.fm credentials at all, so
+  // it works even in a build with none configured.
+  wireArtistImage();
 
   // Shared by scrobble submission and the signed track actions (love/unlove/addTags)
   // below — both need a client signed with a *specific account's* session key, which
@@ -211,9 +244,10 @@ void app.whenReady().then(async () => {
         })
     : undefined;
 
-  wireTrackActions({ accountStore, createSessionClient });
+  wireTrackActions({ expectedOrigin: expectedRendererOrigin, accountStore, createSessionClient });
 
-  let onScrobbleEligible: Parameters<typeof createMainWindow>[1];
+  let onScrobbleEligible: CreateMainWindowOptions["onScrobbleEligible"];
+  let onTrackChanged: CreateMainWindowOptions["onTrackChanged"];
   if (accountStore && lastfmClient && createSessionClient) {
     const scrobbleQueue = new ScrobbleQueue({
       databasePath: join(userDataDir, "scrobble-queue.sqlite3"),
@@ -245,6 +279,12 @@ void app.whenReady().then(async () => {
       },
     });
     onScrobbleEligible = scrobbling.onScrobbleEligible;
+    // Pushes a real-time "now playing" update to Last.fm on every new track — see
+    // wire-scrobbling.ts's ScrobblingHandle.onTrackChanged docstring for why this is
+    // separate from onScrobbleEligible above (different timeline, best-effort).
+    onTrackChanged = (event) => {
+      void scrobbling.onTrackChanged(event);
+    };
   }
 
   wireBugReport({
@@ -276,12 +316,58 @@ void app.whenReady().then(async () => {
     });
   }
 
-  let mainWindow = createMainWindow(playbackSource, onScrobbleEligible, appIconPath);
-  wireCloseToTray({
-    window: mainWindow,
-    settingsStore,
-    isQuitting: () => isQuitting,
-    onHide: handleTrayHide,
+  // Consolidates the three calls every new main window needs (create + hide-to-tray +
+  // bounds persistence) — used both for the very first window below and for a
+  // replacement one in the `activate` handler further down (macOS re-opens the app via
+  // the dock after every window has been closed with closeToTray disabled).
+  function createAndWireMainWindow(): Electron.BrowserWindow {
+    const { windowBounds, aspectRatio } = settingsStore.get();
+    const window = createMainWindow({
+      playbackSource,
+      ...(onScrobbleEligible ? { onScrobbleEligible } : {}),
+      ...(onTrackChanged ? { onTrackChanged } : {}),
+      ...(appIconPath ? { iconPath: appIconPath } : {}),
+      ...(windowBounds ? { initialBounds: windowBounds } : {}),
+      initialAspectRatio: resolveAspectRatioValue(aspectRatio),
+    });
+    wireCloseToTray({
+      window,
+      settingsStore,
+      isQuitting: () => isQuitting,
+      onHide: handleTrayHide,
+    });
+    persistWindowBounds({
+      // Adapts the real `BrowserWindow`'s Node-`EventEmitter`-style `on(event,
+      // listener)` to `BoundsTrackedWindow`'s two separate methods — see that
+      // interface's docstring for why persist-window-bounds.ts doesn't just take a
+      // `BrowserWindow` directly.
+      window: {
+        onResize: (listener) => {
+          window.on("resize", listener);
+        },
+        onMove: (listener) => {
+          window.on("move", listener);
+        },
+        getBounds: () => window.getBounds(),
+        isDestroyed: () => window.isDestroyed(),
+      },
+      settingsStore,
+    });
+    return window;
+  }
+
+  wireAppInfo({ getVersion: () => app.getVersion() });
+
+  let mainWindow = createAndWireMainWindow();
+  wireSettings({
+    store: settingsStore,
+    // Applies a Settings → Window aspect-ratio change to the already-open window
+    // immediately, rather than waiting for the user to restart the app — reads the
+    // live `mainWindow` binding below, not a stale reference, so this keeps working
+    // correctly after the `activate` handler further down replaces it.
+    onAspectRatioChange: (aspectRatio) => {
+      mainWindow.setAspectRatio(resolveAspectRatioValue(aspectRatio));
+    },
   });
 
   // Wired once for the app's whole lifetime (not re-wired in "activate" below, unlike
@@ -331,13 +417,7 @@ void app.whenReady().then(async () => {
   app.on("activate", () => {
     const windows = BrowserWindow.getAllWindows();
     if (windows.length === 0) {
-      mainWindow = createMainWindow(playbackSource, onScrobbleEligible, appIconPath);
-      wireCloseToTray({
-        window: mainWindow,
-        settingsStore,
-        isQuitting: () => isQuitting,
-        onHide: handleTrayHide,
-      });
+      mainWindow = createAndWireMainWindow();
       return;
     }
     // A window already exists but may be hidden (closeToTray) — bring it back rather
