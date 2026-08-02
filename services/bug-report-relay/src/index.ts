@@ -13,9 +13,14 @@ export interface BugReportRequest {
 }
 
 export interface Env {
-  /** Fine-grained PAT scoped to `issues:write` on this one repo — see
-   * docs/adr/0004-anonymous-bug-report-relay.md. Set via `wrangler secret put GITHUB_PAT`,
-   * never committed and never shipped inside the distributed desktop app. */
+  /** Classic PAT with the `public_repo` scope (this repo's own explicit choice — see
+   * docs/adr/0004-anonymous-bug-report-relay.md; a fine-grained PAT scoped to just this
+   * repo's `issues:write` would be narrower, but classic is what's actually in use).
+   * `public_repo` itself already covers every public repo the token's owner can access,
+   * not just this one — narrower than full `repo` scope (which also reaches private
+   * repos), but broader than a repo-scoped fine-grained PAT would be. Set via
+   * `wrangler secret put GITHUB_PAT`, never committed and never shipped inside the
+   * distributed desktop app. */
   readonly GITHUB_PAT: string;
 }
 
@@ -94,9 +99,10 @@ export class GitHubIssueCreationError extends Error {
 
 /**
  * Creates a GitHub issue for `report` via the REST API, authenticated with the relay's
- * repo-scoped fine-grained PAT. Throws `GitHubIssueCreationError` on any non-2xx
- * response — the caller is responsible for not leaking `error.message` (which may echo
- * GitHub's own error detail) back to an anonymous, unauthenticated caller.
+ * classic, `public_repo`-scoped PAT (see `Env.GITHUB_PAT`'s docstring). Throws
+ * `GitHubIssueCreationError` on any non-2xx response — the caller is responsible for
+ * not leaking `error.message` (which may echo GitHub's own error detail) back to an
+ * anonymous, unauthenticated caller.
  */
 export async function createGitHubIssue(
   report: BugReportRequest,

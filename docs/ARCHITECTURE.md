@@ -34,7 +34,7 @@ flowchart LR
 | `packages/adapter-linux`    | MPRIS2 over D-Bus                                                                                            | [modules/adapter-linux.md](modules/adapter-linux.md)       |
 | `packages/adapter-windows`  | SMTC via a helper binary                                                                                     | [modules/adapter-windows.md](modules/adapter-windows.md)   |
 | `packages/adapter-macos`    | MediaRemote via a `perl`-hosted helper framework                                                             | [modules/adapter-macos.md](modules/adapter-macos.md)       |
-| `apps/desktop`              | Electron + React + MUI shell — Now Playing / Scrobbles / Profile / Friends / Preferences                     | [modules/desktop.md](modules/desktop.md)                   |
+| `apps/desktop`              | Electron + React + MUI shell — Now Playing / Scrobbles / Profile / Friends / Settings                     | [modules/desktop.md](modules/desktop.md)                   |
 | `services/bug-report-relay` | Anonymous bug report → GitHub issue, Cloudflare Worker                                                       | [modules/bug-report-relay.md](modules/bug-report-relay.md) |
 
 ## Key decisions

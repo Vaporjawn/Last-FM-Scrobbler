@@ -3,15 +3,18 @@
 ## Responsibility
 
 Cloudflare Worker. Receives a bug report from `apps/desktop`, validates it, and creates
-a GitHub issue via a relay-side, repo-scoped `issues:write` fine-grained PAT — so a
-reporter never needs a GitHub account and the credential never ships inside the
-distributed app. See ADR 0004.
+a GitHub issue via a relay-side, classic `public_repo`-scoped PAT — so a reporter never
+needs a GitHub account and the credential never ships inside the distributed app. See
+ADR 0004 for why classic (broader, reaches every public repo the token's owner can
+access) was chosen over a repo-scoped fine-grained PAT (narrower, this repo only) — a
+deliberate choice by this repo's owner, not an oversight.
 
 ## Setup: the `GITHUB_PAT` secret
 
-1. Create a fine-grained PAT at https://github.com/settings/personal-access-tokens/new,
-   scoped **only** to the `Vaporjawn/Last-FM-Scrobbler` repository, with **Issues:
-   write** repository permission (no other permissions needed).
+1. Create a classic PAT at https://github.com/settings/tokens/new with the
+   `public_repo` scope (write access to code/issues/PRs on public repos — this repo is
+   public, so this is the minimal classic scope that covers issue creation; the broader
+   `repo` scope, which also reaches private repos, isn't needed).
 2. `wrangler secret put GITHUB_PAT` from this directory, and paste the token when
    prompted. Never commit it, never put it in `wrangler.toml`, never log it.
 
@@ -112,19 +115,25 @@ automated (see "Deployment" above).
 Additionally verified with a real (not vitest-mocked) local run: `wrangler dev` started
 this Worker for real against `workerd` — the same runtime `wrangler deploy` uses, via
 the same `wrangler.toml` — and real `curl` requests confirmed, live: `405`/`400` for
-malformed requests, `503` with no `GITHUB_PAT` bound, a real outbound call to
-`https://api.github.com/repos/Vaporjawn/Last-FM-Scrobbler/issues` that 401s against a
-placeholder PAT and gets correctly wrapped into a non-leaking `502`, and `429` on the
-6th request from one IP within the rate-limit window. This is as far as this feature
-can be verified without a real Cloudflare account or a real fine-grained `GITHUB_PAT` —
-neither is available in this development environment, and this project never generates
-or hardcodes either (same reasoning as `LASTFM_API_KEY`).
+malformed requests, `503` with no `GITHUB_PAT` bound, `429` on the 6th request from one
+IP within the rate-limit window, and (first, against a placeholder PAT) a real outbound
+call to `https://api.github.com/repos/Vaporjawn/Last-FM-Scrobbler/issues` that 401s and
+gets correctly wrapped into a non-leaking `502`. Then, once this repo's owner supplied a
+real classic `public_repo`-scoped `GITHUB_PAT` (stored in this directory's gitignored
+`.dev.vars`, never committed), a real end-to-end request against that same locally
+running Worker actually filed a real issue —
+https://github.com/Vaporjawn/Last-FM-Scrobbler/issues/9, confirming the full path works
+for real, not just up to a credential boundary.
 
-Not actually deployed to Cloudflare's edge in this development environment — this
-repo's `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`/`GITHUB_PAT` secrets haven't been
-configured yet, so the deploy workflow above hasn't actually run for real. Until that
-happens, `apps/desktop` has no working `BUG_REPORT_RELAY_URL` to point at, and "Report
-a Bug" correctly (not a bug) shows "not configured" — see docs/modules/desktop.md.
+Not actually deployed to Cloudflare's edge, though — this repo's
+`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` secrets haven't been configured, and no
+Cloudflare account is authenticated in this development environment (`wrangler login`
+needs an interactive browser flow this environment can't run), so the deploy workflow
+above hasn't actually run for real yet. The verification above used `wrangler dev`
+(fully local, no Cloudflare auth needed) as the closest available substitute. Until a
+real deploy happens and `BUG_REPORT_RELAY_URL` is set to that deployment's URL,
+`apps/desktop` has no relay to point at by default, and "Report a Bug" correctly (not a
+bug) shows "not configured" — see docs/modules/desktop.md.
 
 A separate, real bug *was* found and fixed while verifying this: `apps/desktop`
 previously had no mechanism to actually bake a `BUG_REPORT_RELAY_URL` repo secret into
