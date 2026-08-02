@@ -30,6 +30,8 @@ function installFakeApis(options: {
       vi.fn().mockResolvedValue(options.activeAccount ? { username: options.activeAccount } : undefined),
     getArtistInfo: vi.fn(),
     getSimilarArtists: vi.fn(),
+    getTopTags: vi.fn(),
+    getTrackInfo: vi.fn(),
     loveTrack: vi.fn(),
     unloveTrack: vi.fn(),
     addTags: vi.fn(),
@@ -47,20 +49,20 @@ describe("ProfilePage", () => {
   it("prompts to log in when no account is active", async () => {
     installFakeApis({});
 
-    render(<ProfilePage onNavigateToPreferences={vi.fn()} />);
+    render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
-    expect(await screen.findByText(/log in.*preferences/i)).toBeInTheDocument();
+    expect(await screen.findByText(/log in.*settings/i)).toBeInTheDocument();
   });
 
-  it("takes the user to Preferences when the login prompt's button is clicked", async () => {
+  it("takes the user to Settings when the login prompt's button is clicked", async () => {
     installFakeApis({});
-    const onNavigateToPreferences = vi.fn();
+    const onNavigateToSettings = vi.fn();
 
-    render(<ProfilePage onNavigateToPreferences={onNavigateToPreferences} />);
+    render(<ProfilePage onNavigateToSettings={onNavigateToSettings} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /go to preferences/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /go to settings/i }));
 
-    expect(onNavigateToPreferences).toHaveBeenCalledOnce();
+    expect(onNavigateToSettings).toHaveBeenCalledOnce();
   });
 
   it("shows the active username and top artists", async () => {
@@ -72,7 +74,7 @@ describe("ProfilePage", () => {
       ]),
     });
 
-    render(<ProfilePage onNavigateToPreferences={vi.fn()} />);
+    render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
     expect(await screen.findByText("alice")).toBeInTheDocument();
     expect(await screen.findByText("Aphex Twin")).toBeInTheDocument();
@@ -88,7 +90,7 @@ describe("ProfilePage", () => {
       }),
     });
 
-    render(<ProfilePage onNavigateToPreferences={vi.fn()} />);
+    render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
     const avatarImg = await screen.findByRole("img", { name: "alice" });
     expect(avatarImg).toHaveAttribute(
@@ -103,7 +105,7 @@ describe("ProfilePage", () => {
       userInfo: vi.fn().mockResolvedValue({ username: "alice" }),
     });
 
-    render(<ProfilePage onNavigateToPreferences={vi.fn()} />);
+    render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
     // Username renders as soon as useAuth resolves, before the avatar fetch settles —
     // wait for that first so the fallback-letter assertion below isn't racing it.
@@ -118,7 +120,7 @@ describe("ProfilePage", () => {
       userInfo: vi.fn().mockRejectedValue(new Error("network error")),
     });
 
-    render(<ProfilePage onNavigateToPreferences={vi.fn()} />);
+    render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
     await screen.findByText("alice");
     expect(screen.queryByRole("img", { name: "alice" })).not.toBeInTheDocument();

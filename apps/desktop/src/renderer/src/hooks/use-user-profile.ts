@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import type { UserProfile } from "@lastfm-scrobbler/core";
+import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
 export interface UserProfileState {
   readonly profile: UserProfile | undefined;
@@ -7,7 +7,7 @@ export interface UserProfileState {
   readonly error: string | undefined;
 }
 
-const EMPTY: UserProfileState = { profile: undefined, loading: false, error: undefined };
+const EMPTY_PROFILE: UserProfile | undefined = undefined;
 
 /**
  * Fetches `user.getInfo` for `username` via `window.lastfm` (see
@@ -17,37 +17,8 @@ const EMPTY: UserProfileState = { profile: undefined, loading: false, error: und
  * same convention as `useTopArtists`.
  */
 export function useUserProfile(username: string | undefined): UserProfileState {
-  const [state, setState] = useState<UserProfileState>(EMPTY);
-
-  useEffect(() => {
-    if (!username || !window.lastfm) {
-      setState(EMPTY);
-      return;
-    }
-    let cancelled = false;
-    setState((previous) => ({ ...previous, loading: true, error: undefined }));
-
-    window.lastfm
-      .getUserInfo(username)
-      .then((profile) => {
-        if (!cancelled) {
-          setState({ profile, loading: false, error: undefined });
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({
-            profile: undefined,
-            loading: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [username]);
-
-  return state;
+  const lastfm = window.lastfm;
+  const call = username && lastfm ? () => lastfm.getUserInfo(username) : undefined;
+  const { data, loading, error } = useLastfmFetch(EMPTY_PROFILE, call, [username]);
+  return { profile: data, loading, error };
 }
