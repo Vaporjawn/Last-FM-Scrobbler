@@ -39,10 +39,19 @@ mocked HTTP (no Last.fm credentials needed) — you do not need a real Last.fm A
 run the test suite. A real key is only needed for manual end-to-end testing against the
 live API; ask a maintainer for a development key if you need one.
 
-## Commit conventions
+## Commit, issue, and branch naming conventions
 
-- Prefix every commit subject with one of `[BUG]:`, `[FEATURE]:`, `[TASK]:`, `[CHORE]:`
-  (e.g. `[FEATURE]: add MPRIS playback source`). Applies to GitHub issue titles too.
+One category set, applied consistently across three places:
+
+| Category | Commit subject | GitHub issue title | Branch name |
+|---|---|---|---|
+| Bug fix | `[BUG]: title` | `[BUG]: title` | `bug/title` |
+| New feature | `[FEATURE]: title` | `[FEATURE]: title` | `feature/title` |
+| Planned task / non-bug work item | `[TASK]: title` | `[TASK]: title` | `task/title` |
+| Tooling, infra, no user-facing behavior change | `[CHORE]: title` | `[CHORE]: title` | `chore/title` |
+
+Branch `title` segments are kebab-case (e.g. `feature/mpris-playback-source`).
+
 - Stage files by exact path (`git add path/to/file`) — never `git add -A` or `git add .`.
 - One commit per logically-complete change, not a giant commit for a whole session and
   not a flurry of micro-commits for one feature's sub-steps.
