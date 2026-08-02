@@ -26,7 +26,7 @@ export const IPC_CHANNELS = {
    * distinct from "no account logged in yet". */
   authIsConfigured: "auth:is-configured",
   /** Where the active Last.fm API key/secret came from: "environment" (baked into
-   * this build), "user-supplied" (saved via Preferences), or "none". */
+   * this build), "user-supplied" (saved via Settings), or "none". */
   authCredentialsSource: "auth:credentials-source",
   /** Saves a user-supplied Last.fm API key/secret pair (the "bring your own key"
    * alternative to a build with LASTFM_API_KEY/LASTFM_API_SECRET baked in). Takes
@@ -36,6 +36,9 @@ export const IPC_CHANNELS = {
   authClearAppCredentials: "auth:clear-app-credentials",
   /** Restarts the app so newly-saved credentials take effect. */
   appRelaunch: "app:relaunch",
+  /** The running app's own version (`app.getVersion()`, from `package.json`/
+   * electron-builder's packaged metadata) — shown in Settings → General. */
+  appGetVersion: "app:get-version",
 
   /** `user.getRecentTracks` for a given username. */
   lastfmGetRecentTracks: "lastfm:get-recent-tracks",
@@ -49,6 +52,10 @@ export const IPC_CHANNELS = {
   lastfmGetArtistInfo: "lastfm:get-artist-info",
   /** `artist.getSimilar` for an artist. */
   lastfmGetSimilarArtists: "lastfm:get-similar-artists",
+  /** `artist.getTopTags` for an artist. */
+  lastfmGetTopTags: "lastfm:get-top-tags",
+  /** `track.getInfo` for an artist+track pair. */
+  lastfmGetTrackInfo: "lastfm:get-track-info",
   /** `track.love`, signed as the currently-active account. */
   lastfmLoveTrack: "lastfm:love-track",
   /** `track.unlove`, signed as the currently-active account. */
@@ -75,4 +82,8 @@ export const IPC_CHANNELS = {
   updatesGetStatus: "updates:get-status",
   /** Triggers an update check immediately, regardless of `AppSettings.autoUpdateEnabled`. */
   updatesCheckNow: "updates:check-now",
+
+  /** Real per-artist photo lookup via Deezer — see `shared/artist-image-api.ts` and
+   * `packages/core`'s `fetchArtistImageUrl` for why this isn't a `lastfm:*` channel. */
+  artistImageGetUrl: "artist-image:get-url",
 } as const;

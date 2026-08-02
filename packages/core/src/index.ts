@@ -28,9 +28,11 @@ export type {
   ScrobbleSubmission,
   SimilarArtist,
   TopArtist,
+  TrackDetail,
   TrackRef,
   UserProfile,
 } from "./lastfm-api/types.js";
+export { fetchArtistImageUrl } from "./artist-images/fetch-artist-image-url.js";
 export { AccountStore } from "./auth/account-store.js";
 export type { StoredAccount } from "./auth/account-store.js";
 export { AppCredentialsStore } from "./auth/app-credentials-store.js";

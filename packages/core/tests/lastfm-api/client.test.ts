@@ -283,7 +283,7 @@ describe("LastfmClient", () => {
         jsonResponse({ friends: { user: [{ name: "afriend", realname: "A Friend" }] } }),
       );
       const result = await client.getFriends({ user: "someuser" });
-      expect(result).toEqual([{ username: "afriend", realName: "A Friend" }]);
+      expect(result).toEqual([{ username: "afriend", realName: "A Friend", isSubscriber: false }]);
     });
 
     it("parses each friend's own avatar photo out of user.getFriends", async () => {
@@ -311,8 +311,29 @@ describe("LastfmClient", () => {
       );
       const result = await client.getFriends({ user: "someuser" });
       expect(result).toEqual([
-        { username: "afriend", avatarUrl: "https://example.com/300x300.png" },
-        { username: "nophoto" },
+        { username: "afriend", avatarUrl: "https://example.com/300x300.png", isSubscriber: false },
+        { username: "nophoto", isSubscriber: false },
+      ]);
+    });
+
+    it("parses each friend's Last.fm Pro subscriber status out of user.getFriends", async () => {
+      // Verified live against the real API (user.getfriends, format=json): each user
+      // object in the response includes its own top-level "subscriber": "0"/"1" field
+      // directly — no separate per-friend lookup needed, same as avatarUrl above.
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          friends: {
+            user: [
+              { name: "prouser", subscriber: "1" },
+              { name: "freeuser", subscriber: "0" },
+            ],
+          },
+        }),
+      );
+      const result = await client.getFriends({ user: "someuser" });
+      expect(result).toEqual([
+        { username: "prouser", isSubscriber: true },
+        { username: "freeuser", isSubscriber: false },
       ]);
     });
 
@@ -388,6 +409,124 @@ describe("LastfmClient", () => {
       );
       const result = await client.getSimilarArtists({ artist: "Radiohead" });
       expect(result).toEqual([{ name: "Thom Yorke", match: 0.9 }]);
+    });
+
+    it("includes userPlayCount in artist.getInfo when a username is given", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          artist: {
+            name: "Radiohead",
+            stats: { listeners: "100", playcount: "200", userplaycount: "12" },
+          },
+        }),
+      );
+      const result = await client.getArtistInfo({ artist: "Radiohead", username: "someuser" });
+      expect(result).toEqual({ name: "Radiohead", listeners: 100, playCount: 200, userPlayCount: 12 });
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(new URL(url).searchParams.get("username")).toBe("someuser");
+    });
+
+    it("parses artist.getTopTags, most-used first", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          toptags: {
+            tag: [
+              { name: "psychedelic", count: 100 },
+              { name: "Canadian", count: 24 },
+            ],
+          },
+        }),
+      );
+      const result = await client.getTopTags({ artist: "Fleece" });
+      expect(result).toEqual(["psychedelic", "Canadian"]);
+    });
+
+    it("handles artist.getTopTags returning a single bare tag (not an array)", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ toptags: { tag: { name: "solo-genre", count: 1 } } }),
+      );
+      const result = await client.getTopTags({ artist: "Obscure Artist" });
+      expect(result).toEqual(["solo-genre"]);
+    });
+
+    it("parses track.getInfo, including real album art", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          track: {
+            name: "Under the Light",
+            url: "https://www.last.fm/music/Fleece/_/Under+the+Light",
+            listeners: "57398",
+            playcount: "303244",
+            artist: { name: "Fleece" },
+            album: {
+              title: "Voyager",
+              image: [
+                { size: "small", "#text": "" },
+                { size: "extralarge", "#text": "https://lastfm.example/voyager.png" },
+              ],
+            },
+          },
+        }),
+      );
+
+      const result = await client.getTrackInfo({ artist: "Fleece", track: "Under the Light" });
+
+      expect(result).toEqual({
+        artist: "Fleece",
+        track: "Under the Light",
+        album: "Voyager",
+        imageUrl: "https://lastfm.example/voyager.png",
+        listeners: 57398,
+        playCount: 303244,
+        loved: false,
+        url: "https://www.last.fm/music/Fleece/_/Under+the+Light",
+      });
+    });
+
+    it("includes userPlayCount/loved in track.getInfo when a username is given", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          track: {
+            name: "Under the Light",
+            url: "https://www.last.fm/music/Fleece/_/Under+the+Light",
+            listeners: "57398",
+            playcount: "303244",
+            userplaycount: "4",
+            userloved: "1",
+            artist: { name: "Fleece" },
+          },
+        }),
+      );
+
+      const result = await client.getTrackInfo({
+        artist: "Fleece",
+        track: "Under the Light",
+        username: "someuser",
+      });
+
+      expect(result).toMatchObject({ userPlayCount: 4, loved: true });
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(new URL(url).searchParams.get("username")).toBe("someuser");
+    });
+
+    it("track.getInfo omits album/imageUrl when the track has no album", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          track: {
+            name: "A Single",
+            url: "https://www.last.fm/music/Artist/_/A+Single",
+            listeners: "1",
+            playcount: "1",
+            artist: { name: "Artist" },
+          },
+        }),
+      );
+
+      const result = await client.getTrackInfo({ artist: "Artist", track: "A Single" });
+
+      expect(result.album).toBeUndefined();
+      expect(result.imageUrl).toBeUndefined();
     });
   });
 });

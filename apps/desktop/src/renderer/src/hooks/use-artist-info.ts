@@ -18,11 +18,20 @@ const EMPTY: ArtistInfoState = {
 /**
  * Fetches `artist.getInfo` + `artist.getSimilar` for `artistName` via `window.lastfm`
  * (see `src/shared/lastfm-api.ts`) — the bio/stats/similar-artists panel under Now
- * Playing. Both are public, unsigned endpoints, so this works regardless of whether an
- * account is logged in. Returns the inert empty state — never throws — when
- * `artistName` is undefined (nothing playing) or `window.lastfm` isn't present.
+ * Playing and on ScrobbleDetailPage. Both are public, unsigned endpoints, so this works
+ * regardless of whether an account is logged in. Returns the inert empty state — never
+ * throws — when `artistName` is undefined (nothing playing) or `window.lastfm` isn't
+ * present.
+ *
+ * @param username When given, `info.userPlayCount` is populated with this user's own
+ * play count for the artist (see `getArtistInfo`'s docstring) — NowPlayingPage omits
+ * this (no natural "which account" to attribute now-playing to), ScrobbleDetailPage
+ * passes the active account.
  */
-export function useArtistInfo(artistName: string | undefined): ArtistInfoState {
+export function useArtistInfo(
+  artistName: string | undefined,
+  username?: string,
+): ArtistInfoState {
   const [state, setState] = useState<ArtistInfoState>(EMPTY);
 
   useEffect(() => {
@@ -33,7 +42,10 @@ export function useArtistInfo(artistName: string | undefined): ArtistInfoState {
     let cancelled = false;
     setState((previous) => ({ ...previous, loading: true, error: undefined }));
 
-    Promise.all([window.lastfm.getArtistInfo(artistName), window.lastfm.getSimilarArtists(artistName, 4)])
+    Promise.all([
+      window.lastfm.getArtistInfo(artistName, username),
+      window.lastfm.getSimilarArtists(artistName, 4),
+    ])
       .then(([info, similarArtists]) => {
         if (!cancelled) {
           setState({ info, similarArtists, loading: false, error: undefined });
@@ -53,7 +65,7 @@ export function useArtistInfo(artistName: string | undefined): ArtistInfoState {
     return () => {
       cancelled = true;
     };
-  }, [artistName]);
+  }, [artistName, username]);
 
   return state;
 }

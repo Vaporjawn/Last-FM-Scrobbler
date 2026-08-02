@@ -11,6 +11,7 @@ import type {
   ScrobbleSubmission,
   SimilarArtist,
   TopArtist,
+  TrackDetail,
   TrackRef,
   UserProfile,
 } from "./types.js";
@@ -307,6 +308,7 @@ export class LastfmClient {
         username: item.name,
         ...(item.realname ? { realName: item.realname } : {}),
         ...(avatarUrl ? { avatarUrl } : {}),
+        isSubscriber: item.subscriber === "1",
       };
     });
   }
@@ -327,20 +329,37 @@ export class LastfmClient {
     };
   }
 
-  async getArtistInfo(options: { readonly artist: string }): Promise<ArtistInfo> {
+  /**
+   * @param options.username Adds `stats.userplaycount` to the response, surfaced here
+   * as `ArtistInfo.userPlayCount` — verified live (see that field's docstring). Public,
+   * unsigned endpoint even with a `username` passed — no session key needed, same as
+   * every other read method on this client.
+   */
+  async getArtistInfo(options: {
+    readonly artist: string;
+    readonly username?: string;
+  }): Promise<ArtistInfo> {
+    const params: Record<string, string> = { artist: options.artist };
+    if (options.username !== undefined) {
+      params.username = options.username;
+    }
+
     const result = await this.request<{
       artist: {
         name: string;
         bio?: { summary?: string };
-        stats: { listeners: string; playcount: string };
+        stats: { listeners: string; playcount: string; userplaycount?: string };
       };
-    }>("artist.getInfo", { artist: options.artist }, { httpMethod: "GET", signed: false });
+    }>("artist.getInfo", params, { httpMethod: "GET", signed: false });
 
     return {
       name: result.artist.name,
       ...(result.artist.bio?.summary ? { bioSummary: result.artist.bio.summary } : {}),
       listeners: Number(result.artist.stats.listeners),
       playCount: Number(result.artist.stats.playcount),
+      ...(result.artist.stats.userplaycount !== undefined
+        ? { userPlayCount: Number(result.artist.stats.userplaycount) }
+        : {}),
     };
   }
 
@@ -360,6 +379,65 @@ export class LastfmClient {
     const raw = result.similarartists.artist;
     const items: readonly SimilarArtistJson[] = Array.isArray(raw) ? raw : [raw];
     return items.map((item) => ({ name: item.name, match: Number(item.match) }));
+  }
+
+  /** Popular community tags for an artist (genre/scene/location, typically) — the
+   * "Popular tags" row on a track-detail view. Ordered by tag count, most-used first,
+   * same order Last.fm itself returns. */
+  async getTopTags(options: { readonly artist: string }): Promise<string[]> {
+    const result = await this.request<{
+      toptags: { tag: TopTagJson | readonly TopTagJson[] };
+    }>("artist.getTopTags", { artist: options.artist }, { httpMethod: "GET", signed: false });
+
+    const raw = result.toptags.tag;
+    const items: readonly TopTagJson[] = Array.isArray(raw) ? raw : [raw];
+    return items.map((item) => item.name);
+  }
+
+  /**
+   * @param options.username Adds `userplaycount`/`userloved` to the response, surfaced
+   * as `TrackDetail.userPlayCount`/`loved` — same pattern and same live-verified
+   * guarantee as `getArtistInfo`'s `username` option.
+   */
+  async getTrackInfo(options: {
+    readonly artist: string;
+    readonly track: string;
+    readonly username?: string;
+  }): Promise<TrackDetail> {
+    const params: Record<string, string> = { artist: options.artist, track: options.track };
+    if (options.username !== undefined) {
+      params.username = options.username;
+    }
+
+    const result = await this.request<{
+      track: {
+        name: string;
+        url: string;
+        listeners: string;
+        playcount: string;
+        userplaycount?: string;
+        userloved?: string;
+        artist: { name: string };
+        album?: { title: string; image?: readonly LastfmImageJson[] };
+      };
+    }>("track.getInfo", params, { httpMethod: "GET", signed: false });
+
+    const track = result.track;
+    const imageUrl = pickLargestImageUrl(track.album?.image);
+
+    return {
+      artist: track.artist.name,
+      track: track.name,
+      ...(track.album?.title ? { album: track.album.title } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+      listeners: Number(track.listeners),
+      playCount: Number(track.playcount),
+      ...(track.userplaycount !== undefined
+        ? { userPlayCount: Number(track.userplaycount) }
+        : {}),
+      loved: track.userloved === "1",
+      url: track.url,
+    };
   }
 }
 
@@ -392,6 +470,9 @@ interface FriendJson {
   readonly name: string;
   readonly realname?: string;
   readonly image?: readonly LastfmImageJson[];
+  /** `"0"`/`"1"` in the real API (verified live) — a string, same convention as the
+   * auth session response's `subscriber` field this client already parses elsewhere. */
+  readonly subscriber?: string;
 }
 
 interface LastfmImageJson {
@@ -422,4 +503,8 @@ function pickLargestImageUrl(images: readonly LastfmImageJson[] | undefined): st
 interface SimilarArtistJson {
   readonly name: string;
   readonly match: string;
+}
+
+interface TopTagJson {
+  readonly name: string;
 }

@@ -85,6 +85,12 @@ export interface Friend {
    * friends are Last.fm users too, and `user.getFriends` returns each one's own real
    * avatar directly in the same response, no separate per-friend lookup needed. */
   readonly avatarUrl?: string;
+  /** Whether this friend has an active Last.fm Pro subscription — verified live
+   * against the real API (`user.getfriends`, `format=json`): each user object in the
+   * response includes its own top-level `"subscriber": "0"/"1"` field directly, same
+   * as `avatarUrl` above, no separate per-friend lookup needed. Defaults to `false`
+   * for the (in practice, never observed) case where a response omits the field. */
+  readonly isSubscriber: boolean;
 }
 
 export interface ArtistInfo {
@@ -92,6 +98,12 @@ export interface ArtistInfo {
   readonly bioSummary?: string;
   readonly listeners: number;
   readonly playCount: number;
+  /** The *requesting user's* own play count for this artist — only present when
+   * `getArtistInfo` was called with a `username` (see that method's docstring).
+   * Verified live: `artist.getInfo`'s `stats.userplaycount` is real, personal data —
+   * unrelated to (and not affected by) the artist-photo placeholder issue below,
+   * which is specifically about the `image` array, not `stats`. */
+  readonly userPlayCount?: number;
   // Deliberately no `imageUrl` here (or on `TopArtist`/`SimilarArtist` below): verified
   // live against the real API that `artist.getInfo` and `user.getTopArtists` both
   // return an `image` array, but every size's `#text` points to the exact same generic
@@ -100,10 +112,30 @@ export interface ArtistInfo {
   // Last.fm's side (see e.g. their own API support forum), not something this client
   // can fix. Surfacing that URL would look like a real photo per artist when it's
   // actually the identical image for all of them. Contrast `UserProfile.avatarUrl`
-  // above, which comes from `user.getInfo` and *is* a real per-account photo.
+  // above, which comes from `user.getInfo` and *is* a real per-account photo. Real
+  // artist photos *are* available, just not from Last.fm — see
+  // `packages/core/src/artist-images/fetch-artist-image-url.ts`, which sources them
+  // from Deezer's public artist search instead.
 }
 
 export interface SimilarArtist {
   readonly name: string;
   readonly match: number;
+}
+
+export interface TrackDetail {
+  readonly artist: string;
+  readonly track: string;
+  readonly album?: string;
+  /** Real album/track art — same source and same guarantees as `RecentTrack.imageUrl`
+   * (this is not subject to the artist-photo placeholder issue; see `ArtistInfo`). */
+  readonly imageUrl?: string;
+  readonly listeners: number;
+  readonly playCount: number;
+  /** The requesting user's own play count for this exact track — only present when
+   * `getTrackInfo` was called with a `username`. */
+  readonly userPlayCount?: number;
+  readonly loved: boolean;
+  /** The track's own Last.fm page — for a "view on Last.fm" external link. */
+  readonly url: string;
 }
