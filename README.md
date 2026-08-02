@@ -12,10 +12,23 @@ required.
 
 ## Status
 
-Early scaffolding — no tagged releases or downloads yet. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [docs/adr/](docs/adr/)
-for the reasoning behind the major decisions, or the
-[project website](https://vaporjawn.dev/Last-FM-Scrobbler/) for a lighter-weight overview.
+Feature-complete, pre-release — no tagged releases or downloads yet, but every planned
+piece is implemented and tested: all three platform adapters, the full scrobbling
+engine, and a working desktop app (login, scrobble submission, scrobble history,
+profile/friends, and in-app bug reporting). See each package's linked doc below for
+exactly what's live-verified versus code-complete-but-unverified in this environment
+(mainly: real Windows hardware, and a real Last.fm/Cloudflare deployment, neither of
+which were available during development). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+for the full design and [docs/adr/](docs/adr/) for the reasoning behind the major
+decisions, or the [project website](https://vaporjawn.dev/Last-FM-Scrobbler/) for a
+lighter-weight overview.
+
+Still needed before a first tagged release: packaging/code signing for distribution
+(see [docs/modules/desktop.md](docs/modules/desktop.md)'s "Not yet built" section),
+your own `LASTFM_API_KEY`/`LASTFM_API_SECRET` (from
+https://www.last.fm/api/account/create) and a deployed
+[`services/bug-report-relay`](docs/modules/bug-report-relay.md) with its own
+`GITHUB_PAT`.
 
 ## Quick start
 
