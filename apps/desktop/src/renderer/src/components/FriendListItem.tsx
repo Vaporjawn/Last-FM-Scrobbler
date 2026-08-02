@@ -75,7 +75,12 @@ export function FriendListItem({ friend, activity, onSelectTrack }: FriendListIt
   return (
     <ListItem divider sx={{ display: "block", py: 1.5 }}>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        <ListItemAvatar>
+        {/* MUI's `ListItemAvatar` reserves a fixed 56px box sized for its own 40px
+            default avatar (40px avatar + 16px gap before the text) — since
+            AVATAR_SIZE is bigger than that default, the box needs to grow with it or
+            the avatar fills it completely and the text butts right up against the
+            image with no gap at all. */}
+        <ListItemAvatar sx={{ minWidth: AVATAR_SIZE + 16 }}>
           <Stack spacing={0.25} sx={{ alignItems: "center" }}>
             <Avatar
               src={friend.avatarUrl}

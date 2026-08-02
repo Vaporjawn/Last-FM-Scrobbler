@@ -37,7 +37,11 @@ export interface ScrobbleListItemProps {
  */
 export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JSX.Element {
   const avatar = (
-    <ListItemAvatar>
+    // MUI's `ListItemAvatar` reserves a fixed 56px box sized for its own 40px default
+    // avatar (40px avatar + 16px gap before the text) — since AVATAR_SIZE is bigger
+    // than that default, the box needs to grow with it or the avatar fills it
+    // completely and the text butts right up against the image with no gap at all.
+    <ListItemAvatar sx={{ minWidth: AVATAR_SIZE + 16 }}>
       <TrackArtworkAvatar
         imageUrl={track.imageUrl}
         title={track.track}
