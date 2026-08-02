@@ -3,7 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "description": "A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux.",
-  "keywords": ["lastfm", "scrobbler", "electron", "desktop", "cross-platform", "media-session"],
+  "keywords": [
+    "lastfm",
+    "scrobbler",
+    "electron",
+    "desktop",
+    "cross-platform",
+    "media-session"
+  ],
   "homepage": "https://github.com/Vaporjawn/lastfm-scrobbler#readme",
   "bugs": {
     "url": "https://github.com/Vaporjawn/lastfm-scrobbler/issues"
