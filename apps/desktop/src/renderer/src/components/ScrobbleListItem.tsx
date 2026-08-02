@@ -1,7 +1,4 @@
 import type { JSX } from "react";
-import MusicNoteIcon from "@mui/icons-material/MusicNote";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import Avatar from "@mui/material/Avatar";
 import Chip from "@mui/material/Chip";
 import ListItem from "@mui/material/ListItem";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
@@ -11,7 +8,8 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { ScrobblingIndicator } from "./ScrobblingIndicator.js";
-import { TrackLoveTagControls } from "./TrackLoveTagControls.js";
+import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
+import { TrackLoveTagControls } from "./shared/TrackLoveTagControls.js";
 
 function formatTimestamp(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
@@ -46,19 +44,12 @@ export interface ScrobbleListItemProps {
 export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JSX.Element {
   const avatar = (
     <ListItemAvatar>
-      <Avatar
-        variant="rounded"
-        src={track.imageUrl}
-        alt={track.track}
-        sx={{
-          width: AVATAR_SIZE,
-          height: AVATAR_SIZE,
-          bgcolor: track.nowPlaying ? "primary.main" : "action.selected",
-          color: track.nowPlaying ? "primary.contrastText" : "text.secondary",
-        }}
-      >
-        {track.nowPlaying ? <PlayArrowIcon fontSize="medium" /> : <MusicNoteIcon fontSize="medium" />}
-      </Avatar>
+      <TrackArtworkAvatar
+        imageUrl={track.imageUrl}
+        title={track.track}
+        nowPlaying={track.nowPlaying}
+        size={AVATAR_SIZE}
+      />
     </ListItemAvatar>
   );
   const text = (

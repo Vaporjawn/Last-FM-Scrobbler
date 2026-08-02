@@ -1,11 +1,21 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import List from "@mui/material/List";
-import type { Friend } from "@lastfm-scrobbler/core";
+import type { Friend, RecentTrack } from "@lastfm-scrobbler/core";
 import type { FriendActivityState } from "../../src/renderer/src/hooks/use-friends-activity.js";
 import { FriendListItem } from "../../src/renderer/src/components/FriendListItem.js";
 
 const EMPTY_ACTIVITY: FriendActivityState = { track: undefined, loading: false, error: undefined };
+
+const TRACK: RecentTrack = {
+  artist: "Fleece",
+  track: "Under the Light",
+  nowPlaying: false,
+  timestamp: 1_700_000_000,
+  loved: false,
+};
+
+const PLAYING_ACTIVITY: FriendActivityState = { track: TRACK, loading: false, error: undefined };
 
 function friend(overrides: Partial<Friend>): Friend {
   return { username: "someuser", isSubscriber: false, ...overrides };
@@ -54,5 +64,30 @@ describe("FriendListItem", () => {
 
     expect(screen.getByText("someuser")).toBeInTheDocument();
     expect(screen.queryByText("·")).not.toBeInTheDocument();
+  });
+
+  it("is not interactive when onSelectTrack is omitted", () => {
+    render(
+      <List>
+        <FriendListItem friend={friend({})} activity={PLAYING_ACTIVITY} />
+      </List>,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /view details for under the light/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onSelectTrack with the friend's track when the activity card is clicked", () => {
+    const onSelectTrack = vi.fn();
+    render(
+      <List>
+        <FriendListItem friend={friend({})} activity={PLAYING_ACTIVITY} onSelectTrack={onSelectTrack} />
+      </List>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /view details for under the light/i }));
+
+    expect(onSelectTrack).toHaveBeenCalledWith(TRACK);
   });
 });

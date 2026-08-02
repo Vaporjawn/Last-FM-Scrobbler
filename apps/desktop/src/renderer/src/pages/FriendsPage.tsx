@@ -27,7 +27,7 @@ function matchesSearch(friend: Friend, query: string): boolean {
   );
 }
 
-export function FriendsPage({ onNavigateToSettings }: PageProps): JSX.Element {
+export function FriendsPage({ onNavigateToSettings, onSelectScrobble }: PageProps): JSX.Element {
   const { activeAccount } = useAuth();
   const { friends, loading, error } = useFriends(activeAccount);
   const [searchQuery, setSearchQuery] = useState("");
@@ -128,6 +128,7 @@ export function FriendsPage({ onNavigateToSettings }: PageProps): JSX.Element {
                     key={friend.username}
                     friend={friend}
                     activity={friendActivityOrEmpty(activityByUsername, friend.username)}
+                    {...(onSelectScrobble ? { onSelectTrack: onSelectScrobble } : {})}
                   />
                 ))}
               </List>

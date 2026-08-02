@@ -14,7 +14,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
-import { TrackLoveTagControls } from "../components/TrackLoveTagControls.js";
+import { TrackLoveTagControls } from "../components/shared/TrackLoveTagControls.js";
 import { useArtistInfo } from "../hooks/use-artist-info.js";
 import { useArtistTopTags } from "../hooks/use-artist-top-tags.js";
 import { useTrackInfo } from "../hooks/use-track-info.js";
@@ -34,19 +34,29 @@ export interface ScrobbleDetailPageProps {
    * simply omitted without one. */
   readonly activeAccount: string | undefined;
   readonly onBack: () => void;
+  /** Which view's list this scrobble was actually clicked from ("Scrobbles",
+   * "Friends") — drives the back button's label ("Back to {backLabel}"). Defaults to
+   * "Scrobbles" (this page's original, only source) so existing callers that don't
+   * pass it keep exactly their previous label. `App.tsx` computes the real value from
+   * whichever view is currently active via `getViewLabel` — `onBack` itself always
+   * just reveals that same view again, so the label and the actual destination never
+   * drift apart. */
+  readonly backLabel?: string;
 }
 
 /**
  * A single past scrobble's full detail: real album art, listener/play stats, this
  * account's own play counts, popular tags, and the same artist-info panel
  * NowPlayingPage shows (bio, similar artists) — reached by clicking a row on
- * ScrobblesPage (see `ScrobbleListItem`'s `onSelect`). Love/tag actions work exactly
- * as they do everywhere else in this app (see `useTrackActions`).
+ * ScrobblesPage's list or a friend's activity card on FriendsPage (see
+ * `ScrobbleListItem`'s and `FriendListItem`'s own `onSelect`/`onSelectTrack`). Love/tag
+ * actions work exactly as they do everywhere else in this app (see `useTrackActions`).
  */
 export function ScrobbleDetailPage({
   track,
   activeAccount,
   onBack,
+  backLabel = "Scrobbles",
 }: ScrobbleDetailPageProps): JSX.Element {
   const { track: trackDetail } = useTrackInfo(track.artist, track.track, activeAccount);
   const {
@@ -82,7 +92,7 @@ export function ScrobbleDetailPage({
           startIcon={<ArrowBackIcon fontSize="small" />}
           onClick={onBack}
         >
-          Back to Scrobbles
+          Back to {backLabel}
         </Button>
       </Stack>
 

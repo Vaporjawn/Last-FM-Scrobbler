@@ -1,9 +1,8 @@
 import type { JSX } from "react";
-import MusicNoteIcon from "@mui/icons-material/MusicNote";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StarIcon from "@mui/icons-material/Star";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
+import ButtonBase from "@mui/material/ButtonBase";
 import Chip from "@mui/material/Chip";
 import ListItem from "@mui/material/ListItem";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
@@ -11,9 +10,10 @@ import ListItemText from "@mui/material/ListItemText";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import type { Friend } from "@lastfm-scrobbler/core";
+import type { Friend, RecentTrack } from "@lastfm-scrobbler/core";
 import type { FriendActivityState } from "../hooks/use-friends-activity.js";
 import { ScrobblingIndicator } from "./ScrobblingIndicator.js";
+import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
 
 function formatTimestamp(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
@@ -38,6 +38,13 @@ export interface FriendListItemProps {
    * loading, on failure, or if the friend has no scrobble history — `error` is
    * intentionally not surfaced here (see `FriendActivityState`'s docstring). */
   readonly activity: FriendActivityState;
+  /** Opens `ScrobbleDetailPage` for this friend's activity track when given — same
+   * prop shape and same "row becomes a real button" treatment as
+   * `ScrobbleListItem.onSelect` (see there), reusing that page for a friend's track
+   * instead of building a second one. Omitted entirely (activity card stays
+   * non-interactive) by any caller that doesn't have anywhere to navigate to, and
+   * has no effect when there's no `activity.track` to select in the first place. */
+  readonly onSelectTrack?: (track: RecentTrack) => void;
 }
 
 /**
@@ -53,7 +60,9 @@ export interface FriendListItemProps {
  * rendered as its own small nested `Paper` card (real album art — `track.imageUrl`,
  * the same real-image field `ScrobbleListItem` already renders for scrobble history,
  * falling back to a note/play icon the same way — plus the status chip/timestamp and
- * track/artist text), visually set apart from the friend's own row above it.
+ * track/artist text), visually set apart from the friend's own row above it, and —
+ * when `onSelectTrack` is given — clickable through to that track's
+ * `ScrobbleDetailPage`, the same drill-down `ScrobbleListItem`'s own row offers.
  */
 /** Combines `realName` and `location` onto ListItemText's one `secondary` line
  * ("Real Name · Location"), rather than adding a third text row for a single extra
@@ -65,7 +74,7 @@ function formatSecondaryLine(friend: Friend): string | undefined {
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
-export function FriendListItem({ friend, activity }: FriendListItemProps): JSX.Element {
+export function FriendListItem({ friend, activity, onSelectTrack }: FriendListItemProps): JSX.Element {
   const { track } = activity;
 
   return (
@@ -99,29 +108,34 @@ export function FriendListItem({ friend, activity }: FriendListItemProps): JSX.E
       {track ? (
         <Box sx={{ mt: 1.25, ml: `${AVATAR_SIZE + 12}px` }}>
           <Paper
+            {...(onSelectTrack
+              ? {
+                  component: ButtonBase,
+                  onClick: () => {
+                    onSelectTrack(track);
+                  },
+                }
+              : {})}
             variant="outlined"
+            {...(onSelectTrack ? { "aria-label": `View details for ${track.track}` } : {})}
             sx={{
               p: 1,
               display: "flex",
               alignItems: "center",
               gap: 1.25,
               bgcolor: "action.hover",
+              width: "100%",
+              textAlign: "left",
+              ...(onSelectTrack ? { cursor: "pointer" } : {}),
             }}
           >
-            <Avatar
-              variant="rounded"
-              src={track.imageUrl}
-              alt={track.track}
-              sx={{
-                width: ACTIVITY_AVATAR_SIZE,
-                height: ACTIVITY_AVATAR_SIZE,
-                flexShrink: 0,
-                bgcolor: track.nowPlaying ? "primary.main" : "action.selected",
-                color: track.nowPlaying ? "primary.contrastText" : "text.secondary",
-              }}
-            >
-              {track.nowPlaying ? <PlayArrowIcon fontSize="medium" /> : <MusicNoteIcon fontSize="medium" />}
-            </Avatar>
+            <TrackArtworkAvatar
+              imageUrl={track.imageUrl}
+              title={track.track}
+              nowPlaying={track.nowPlaying}
+              size={ACTIVITY_AVATAR_SIZE}
+              flexShrink
+            />
             <Box sx={{ minWidth: 0, flex: 1 }}>
               {track.nowPlaying ? (
                 <Chip

@@ -14,7 +14,8 @@ import type { PlaybackState } from "@lastfm-scrobbler/shared-types";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { ScrobblingIndicator } from "../components/ScrobblingIndicator.js";
-import { TrackLoveTagControls } from "../components/TrackLoveTagControls.js";
+import { StatBox } from "../components/shared/StatBox.js";
+import { TrackLoveTagControls } from "../components/shared/TrackLoveTagControls.js";
 import { useArtistInfo } from "../hooks/use-artist-info.js";
 import { useAuth } from "../hooks/use-auth.js";
 import { useNowPlaying } from "../hooks/use-now-playing.js";
@@ -164,22 +165,16 @@ export function NowPlayingPage(): JSX.Element {
             {trackDetail ? (
               <Box sx={{ mb: 1.5 }}>
                 <Stack direction="row" spacing={3}>
-                  <Box>
-                    <Typography variant="subtitle1">
-                      {trackDetail.listeners.toLocaleString()}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Track listener(s)
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="subtitle1">
-                      {trackDetail.playCount.toLocaleString()}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Track play(s)
-                    </Typography>
-                  </Box>
+                  <StatBox
+                    value={trackDetail.listeners.toLocaleString()}
+                    label="Track listener(s)"
+                    variant="subtitle1"
+                  />
+                  <StatBox
+                    value={trackDetail.playCount.toLocaleString()}
+                    label="Track play(s)"
+                    variant="subtitle1"
+                  />
                 </Stack>
                 <Link
                   href={trackDetail.url}

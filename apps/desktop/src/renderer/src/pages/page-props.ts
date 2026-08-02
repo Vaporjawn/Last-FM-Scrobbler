@@ -15,10 +15,11 @@ export interface PageProps {
    * `onNavigateToSettings` above) so pages that don't call it don't need to thread
    * it through their own test fakes. */
   readonly onNavigateToProfile?: () => void;
-  /** Opens `ScrobbleDetailPage` for a clicked scrobble — only `ScrobblesPage` actually
-   * offers anything to click. `App.tsx` holds "which track" as separate state from
-   * `activeView` (see there) rather than folding this into the `ViewId` union, since a
-   * detail view isn't a sidebar destination — it's a drill-down that always returns to
-   * Scrobbles. */
+  /** Opens `ScrobbleDetailPage` for a clicked scrobble — `ScrobblesPage`'s own list
+   * and `FriendsPage`'s per-friend activity card both offer something to click; other
+   * pages simply don't destructure this. `App.tsx` holds "which track" as separate
+   * state from `activeView` (see there) rather than folding this into the `ViewId`
+   * union, since a detail view isn't a sidebar destination — it's a drill-down that
+   * always returns to whichever page opened it. */
   readonly onSelectScrobble?: (track: RecentTrack) => void;
 }

@@ -9,6 +9,7 @@ import type { ArtistInfo, SimilarArtist } from "@lastfm-scrobbler/core";
 import { stripHtml } from "../utils/strip-html.js";
 import { ArtistAvatar } from "./ArtistAvatar.js";
 import { AsyncState } from "./AsyncState.js";
+import { StatBox } from "./shared/StatBox.js";
 
 const SIMILAR_ARTIST_AVATAR_SIZE = 72;
 
@@ -69,18 +70,8 @@ export function ArtistInfoPanel({
             </Link>
 
             <Stack direction="row" spacing={4} sx={{ mt: 2.5 }}>
-              <Box>
-                <Typography variant="h6">{info.listeners.toLocaleString()}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Listener(s)
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="h6">{info.playCount.toLocaleString()}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Play(s)
-                </Typography>
-              </Box>
+              <StatBox value={info.listeners.toLocaleString()} label="Listener(s)" />
+              <StatBox value={info.playCount.toLocaleString()} label="Play(s)" />
             </Stack>
 
             {topTags && topTags.length > 0 ? (

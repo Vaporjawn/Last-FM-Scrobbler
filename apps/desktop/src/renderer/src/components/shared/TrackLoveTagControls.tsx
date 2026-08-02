@@ -9,8 +9,8 @@ import Popover from "@mui/material/Popover";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
-import { useSnackbar } from "../contexts/snackbar-context.js";
-import { useTrackActions } from "../hooks/use-track-actions.js";
+import { useSnackbar } from "../../contexts/snackbar-context.js";
+import { useTrackActions } from "../../hooks/use-track-actions.js";
 
 export interface TrackLoveTagControlsProps {
   readonly artist: string;
@@ -36,8 +36,10 @@ export interface TrackLoveTagControlsProps {
  * The love/tag action pair every track-showing surface in this app offers
  * (`ScrobbleListItem`, `NowPlayingPage`, `ScrobbleDetailPage`) — a heart toggle and a
  * tag button that opens a small popover to submit comma-separated tags, both backed
- * by `useTrackActions`. Centralizes what was previously three near-identical copies
- * of the same local tag-popover state and success/failure snackbar wiring.
+ * by `useTrackActions`. Lives in `components/shared/` (see that folder's own note in
+ * `find-reusable-components`) because it centralizes what was previously three
+ * near-identical copies of the same local tag-popover state and success/failure
+ * snackbar wiring.
  *
  * Renders only the two buttons plus the (portal-rendered, so its position in this
  * tree doesn't matter) tag `Popover` — no wrapping `Stack`, since each call site lays

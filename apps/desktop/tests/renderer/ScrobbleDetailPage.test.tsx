@@ -49,7 +49,12 @@ function installFakeLastfmApi(overrides: Partial<LastfmDataApi> = {}): LastfmDat
 }
 
 function renderWithSnackbar(
-  props: Partial<{ track: RecentTrack; activeAccount: string | undefined; onBack: () => void }> = {},
+  props: Partial<{
+    track: RecentTrack;
+    activeAccount: string | undefined;
+    onBack: () => void;
+    backLabel: string;
+  }> = {},
 ): ReturnType<typeof render> {
   return render(
     <SnackbarProvider>
@@ -57,6 +62,7 @@ function renderWithSnackbar(
         track={props.track ?? TRACK}
         activeAccount={"activeAccount" in props ? props.activeAccount : "someuser"}
         onBack={props.onBack ?? vi.fn()}
+        {...(props.backLabel ? { backLabel: props.backLabel } : {})}
       />
     </SnackbarProvider>,
   );
@@ -86,6 +92,15 @@ describe("ScrobbleDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /back to scrobbles/i }));
 
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it("labels the back button with backLabel when given (e.g. reached from Friends)", () => {
+    installFakeLastfmApi();
+
+    renderWithSnackbar({ backLabel: "Friends" });
+
+    expect(screen.getByRole("button", { name: /back to friends/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /back to scrobbles/i })).not.toBeInTheDocument();
   });
 
   it("links 'View on Last.fm' to the real track URL once fetched", async () => {

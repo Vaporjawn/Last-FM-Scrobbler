@@ -4,7 +4,7 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { BugReportDialog } from "./components/BugReportDialog.js";
-import { NavigationSidebar, type ViewId } from "./components/NavigationSidebar.js";
+import { getViewLabel, NavigationSidebar, type ViewId } from "./components/NavigationSidebar.js";
 import { SnackbarProvider } from "./contexts/SnackbarProvider.js";
 import { useAuth } from "./hooks/use-auth.js";
 import { useSettings } from "./hooks/use-settings.js";
@@ -34,8 +34,10 @@ export function App(): JSX.Element {
   const [bugReportOpen, setBugReportOpen] = useState(false);
   // Deliberately separate from `activeView`/`PAGES` above rather than folded into the
   // `ViewId` union: a scrobble's detail view isn't a sidebar destination, it's a
-  // drill-down reached only via `ScrobblesPage` (see `ScrobbleListItem.onSelect`) that
-  // always returns to Scrobbles — see `ScrobbleDetailPage`'s docstring.
+  // drill-down reached from more than one view's list now (ScrobblesPage's rows,
+  // FriendsPage's activity cards — see `PageProps.onSelectScrobble`) that always
+  // returns to whichever view was active when it opened, not always Scrobbles — see
+  // `ScrobbleDetailPage`'s docstring and its `backLabel` prop below.
   const [selectedTrack, setSelectedTrack] = useState<RecentTrack | undefined>(undefined);
   const { activeAccount } = useAuth();
   const { settings } = useSettings();
@@ -78,6 +80,7 @@ export function App(): JSX.Element {
               <ScrobbleDetailPage
                 track={selectedTrack}
                 activeAccount={activeAccount}
+                backLabel={getViewLabel(activeView)}
                 onBack={() => {
                   setSelectedTrack(undefined);
                 }}
