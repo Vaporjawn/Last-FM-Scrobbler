@@ -5,6 +5,7 @@ node_modules/
 dist/
 out/
 build/
+native-build/
 release/
 *.tsbuildinfo
 
@@ -24,6 +25,9 @@ Thumbs.db
 # Editor
 .vscode/
 .idea/
+
+# Playwright MCP scratch output
+.playwright-mcp/
 
 # Env
 .env

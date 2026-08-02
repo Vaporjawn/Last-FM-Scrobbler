@@ -33,7 +33,7 @@ flowchart LR
 | `packages/core`             | Scrobble eligibility rules, offline queue, Last.fm API client, auth, exclusion filters, logging              | [modules/core.md](modules/core.md)                         |
 | `packages/adapter-linux`    | MPRIS2 over D-Bus                                                                                            | [modules/adapter-linux.md](modules/adapter-linux.md)       |
 | `packages/adapter-windows`  | SMTC via a helper binary                                                                                     | [modules/adapter-windows.md](modules/adapter-windows.md)   |
-| `packages/adapter-macos`    | MediaRemote via a helper binary                                                                              | [modules/adapter-macos.md](modules/adapter-macos.md)       |
+| `packages/adapter-macos`    | MediaRemote via a `perl`-hosted helper framework                                                             | [modules/adapter-macos.md](modules/adapter-macos.md)       |
 | `apps/desktop`              | Electron + React + MUI shell — Now Playing / Scrobbles / Profile / Friends / Preferences                     | [modules/desktop.md](modules/desktop.md)                   |
 | `services/bug-report-relay` | Anonymous bug report → GitHub issue, Cloudflare Worker                                                       | [modules/bug-report-relay.md](modules/bug-report-relay.md) |
 
@@ -48,3 +48,4 @@ See [docs/adr/](adr/) for the full reasoning behind each of these:
 5. [Multi-source and track-identity policy](adr/0005-multi-source-and-track-identity-policy.md)
 6. [Offline queue persistence](adr/0006-offline-queue-persistence.md)
 7. [Package-manager agnostic (pnpm, npm, Bun)](adr/0007-package-manager-agnostic.md)
+8. [macOS MediaRemote access via a `perl`-hosted helper framework](adr/0008-macos-mediaremote-entitlement.md)

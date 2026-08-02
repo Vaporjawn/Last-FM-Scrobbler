@@ -5,7 +5,14 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/out/**", "**/node_modules/**", "**/coverage/**", "**/.wrangler/**"],
+    ignores: [
+      "**/dist/**",
+      "**/out/**",
+      "**/node_modules/**",
+      "**/coverage/**",
+      "**/.wrangler/**",
+      "**/native-build/**",
+    ],
   },
   js.configs.recommended,
   {
@@ -46,7 +53,7 @@ export default tseslint.config(
     // Root-level tooling scripts and config files run directly under Node, not
     // bundled by Vite/tsup like package source does — they need Node's globals
     // (process, console, URL, ...) declared explicitly.
-    files: ["*.js", "*.mjs", "*.cjs", "scripts/**/*.mjs"],
+    files: ["*.js", "*.mjs", "*.cjs", "**/scripts/**/*.mjs"],
     languageOptions: {
       globals: globals.node,
     },

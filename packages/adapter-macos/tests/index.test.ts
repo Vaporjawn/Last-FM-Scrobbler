@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { createMacosPlaybackSource } from "../src/index.js";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("node:fs", () => ({
+  existsSync: vi.fn(() => false),
+}));
 
 describe("createMacosPlaybackSource", () => {
-  it("throws until the real MediaRemote implementation lands", () => {
+  it("throws a clear, actionable error when MediaRemoteAdapter.framework hasn't been built", async () => {
+    const { createMacosPlaybackSource } = await import("../src/index.js");
+
     expect(() => createMacosPlaybackSource()).toThrow(
-      "createMacosPlaybackSource is not implemented yet — see docs/modules/adapter-macos.md",
+      /MediaRemoteAdapter\.framework not found.*build-native\.mjs/s,
     );
   });
 });
