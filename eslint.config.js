@@ -34,6 +34,7 @@ export default tseslint.config(
         { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
       "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
       eqeqeq: ["error", "always"],
       curly: ["error", "all"],
       "no-var": "error",

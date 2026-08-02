@@ -6,3 +6,24 @@ export type {
   ScrobbleQueueOptions,
 } from "./queue/scrobble-queue.js";
 export { ScrobbleQueue } from "./queue/scrobble-queue.js";
+export { LastfmClient } from "./lastfm-api/client.js";
+export type { LastfmClientOptions } from "./lastfm-api/client.js";
+export {
+  LastfmApiError,
+  isRetryableApiErrorCode,
+  isRetryableScrobbleIgnoreCode,
+} from "./lastfm-api/lastfm-error.js";
+export { signRequest } from "./lastfm-api/sign-request.js";
+export type {
+  ArtistInfo,
+  Friend,
+  LastfmSession,
+  NowPlayingSubmission,
+  RecentTrack,
+  ScrobbleBatchResult,
+  ScrobbleResultItem,
+  ScrobbleSubmission,
+  SimilarArtist,
+  TopArtist,
+  TrackRef,
+} from "./lastfm-api/types.js";
