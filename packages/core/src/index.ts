@@ -32,6 +32,8 @@ export type {
 } from "./lastfm-api/types.js";
 export { AccountStore } from "./auth/account-store.js";
 export type { StoredAccount } from "./auth/account-store.js";
+export { AppCredentialsStore } from "./auth/app-credentials-store.js";
+export type { AppCredentials } from "./auth/app-credentials-store.js";
 export type { SecretStorage } from "./auth/secret-storage.js";
 export { AuthFlow, AuthTimeoutError } from "./auth/auth-flow.js";
 export type { AuthFlowClient, AuthFlowOptions } from "./auth/auth-flow.js";
