@@ -1,0 +1,104 @@
+# electron-builder config — see docs/modules/desktop.md's "Packaging & distribution"
+# section for the full story (why `asarUnpack` is shaped the way it is, how
+# signing/notarization are wired, and what's still unverified per platform).
+#
+# App icon (build/icon.icns/.ico/.png): derived from Last.fm's own apple-touch-icon
+# (https://www.last.fm/static/images/lastfm_avatar_applemusic*.png, 1024×1024 source)
+# via `sips`/`iconutil`/`imagemagick` — see docs/modules/desktop.md's "App icon"
+# section for exactly how, and for the trademark-attribution note (this is an
+# unofficial, fan-made Last.fm client, not affiliated with or endorsed by Last.fm).
+appId: dev.vaporjawn.lastfmscrobbler
+productName: Last.fm Scrobbler
+copyright: Copyright © 2026 Victor Williams
+
+directories:
+  output: release
+  buildResources: build
+
+# electron-vite's own build output, plus the manifest electron-builder needs to read
+# `main`/`name`/`version` from. Everything else (src/, tests/, electron.vite.config.ts,
+# tsconfig*.json) is deliberately excluded — it's not needed at runtime.
+files:
+  - out/**/*
+  - package.json
+
+# Tray/menu-bar icon PNGs (see main/tray/resolve-tray-icon-path.ts and
+# docs/modules/desktop.md's "Background app" section) — not picked up by `files` above
+# since they live outside `out/`.
+extraResources:
+  - from: resources
+    to: resources
+
+# asar stays enabled (the default, and the better-performing/standard choice), but
+# three things must be unpacked to real files on disk rather than sealed into the
+# archive:
+#   - **/*.node — any native Node addon (covers better-sqlite3's compiled binary;
+#     Node's dlopen/require can't load a native addon from inside an asar archive).
+#   - **/native-build/** — @lastfm-scrobbler/adapter-macos's compiled
+#     MediaRemoteAdapter.framework and @lastfm-scrobbler/adapter-windows's compiled
+#     SmtcHelper.exe, each resolved by the adapter at runtime relative to its own
+#     package root (see packages/adapter-macos/src/index.ts and
+#     packages/adapter-windows/src/smtc/resolve-helper-path.ts) and `spawn()`-ed as a
+#     real child process — that needs a real path on disk, not a virtual asar entry.
+#   - **/vendor/mediaremote-adapter/** — the vendored `mediaremote-adapter.pl` script
+#     adapter-macos passes as a literal file path argument to the spawned `perl`
+#     process, same reasoning.
+# (Tried plain `asar: false` first — electron-builder's raw node_modules file-copier
+# choked trying to recreate MediaRemoteAdapter.framework's internal
+# Versions/Current symlinks; asarUnpack's copier handles it correctly.)
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "**/native-build/**"
+  - "**/vendor/mediaremote-adapter/**"
+
+mac:
+  category: public.app-category.music
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarization needs APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID (or the
+  # APPLE_API_KEY/APPLE_API_KEY_ID/APPLE_API_ISSUER API-key form) in the environment —
+  # electron-builder (via @electron/notarize) only actually attempts it when those are
+  # present, so this is a no-op for anyone packaging locally without Apple Developer
+  # credentials.
+  notarize: true
+
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+    - portable
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+    - deb
+  category: AudioVideo
+  maintainer: Victor Williams <victor.williams.dev@gmail.com>
+
+# Where to publish to (GitHub Releases) *and* where the packaged app's own
+# electron-updater instance looks for new versions at runtime (baked into the app as
+# resources/app-update.yml at package time) — see main/updates/create-updater.ts and
+# docs/modules/desktop.md's "Auto-update" section. Explicit owner/repo rather than
+# relying on package.json's "repository" field: apps/desktop/package.json doesn't have
+# one (only the workspace root's does).
+#
+# Whether a given `npm run package*` invocation actually *uploads* anything is
+# controlled separately, per-invocation, by `--publish never`/`--publish always` (see
+# each package.json script and .github/workflows/release.yml) — this block only
+# supplies the provider/owner/repo those flags need, and what gets embedded for
+# electron-updater to read later.
+publish:
+  provider: github
+  owner: Vaporjawn
+  repo: Last-FM-Scrobbler

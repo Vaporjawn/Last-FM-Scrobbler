@@ -10,7 +10,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "lint": "eslint src tests"
+    "lint": "eslint src tests",
+    "package": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false node scripts/package.mjs --publish never",
+    "package:dir": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false node scripts/package.mjs --dir --publish never",
+    "package:mac": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false node scripts/package.mjs --mac --publish never",
+    "package:win": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false node scripts/package.mjs --win --publish never",
+    "package:linux": "electron-vite build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false node scripts/package.mjs --linux --publish never"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -22,6 +27,7 @@
     "@lastfm-scrobbler/shared-types": "0.0.0",
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
+    "electron-updater": "^6.8.9",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -31,7 +37,9 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "cross-env": "^10.1.0",
     "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "jsdom": "^30.0.0",
     "typescript": "^6.0.3",
