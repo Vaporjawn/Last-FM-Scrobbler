@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import electron from "electron";
 import type { PlaybackSource, PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
-import { Tracker, type ScrobbleEligibleEvent } from "@lastfm-scrobbler/core";
+import { Tracker, type ScrobbleEligibleEvent, type TrackChangedEvent } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import type { NowPlayingSnapshot } from "../../shared/now-playing-snapshot.js";
 
@@ -30,6 +30,15 @@ const TRACKER_TICK_INTERVAL_MS = 1000;
  * submission (e.g. a future test harness, or a build with no API credentials
  * configured — see `main/lastfm/create-lastfm-client.ts`).
  *
+ * `onTrackChanged` hands off every new distinct track (already de-duplicated and
+ * exclusion-filtered by the `Tracker`) for a real-time Last.fm "now playing" update —
+ * see `main/scrobbling/wire-scrobbling.ts`'s `onTrackChanged`. Optional and separate
+ * from `onScrobbleEligible` because they answer different questions on different
+ * timelines: "what's playing right now" (fires immediately on every track change) vs.
+ * "what's eligible to scrobble" (fires once, after the eligibility threshold —
+ * usually well after the track started). Omitted entirely (not defaulted to a no-op
+ * logger like `onScrobbleEligible`) in builds/tests that don't need it.
+ *
  * Returns a cleanup function that stops the tracker, its tick timer, and the
  * `get-current` handler.
  */
@@ -39,6 +48,7 @@ export function wireNowPlaying(
   onScrobbleEligible: (event: ScrobbleEligibleEvent) => void = (event) => {
     console.log(`Scrobble eligible (not submitted — no handler wired): ${event.track.artist} — ${event.track.title}`);
   },
+  onTrackChanged?: (event: TrackChangedEvent) => void,
 ): () => void {
   let currentTrack: TrackInfo | undefined;
   let currentState: PlaybackState = "stopped";
@@ -58,7 +68,7 @@ export function wireNowPlaying(
 
   const tracker = new Tracker({
     source,
-    events: { onScrobbleEligible },
+    events: { onScrobbleEligible, ...(onTrackChanged ? { onTrackChanged } : {}) },
   });
   tracker.start();
   const tickHandle = setInterval(() => {

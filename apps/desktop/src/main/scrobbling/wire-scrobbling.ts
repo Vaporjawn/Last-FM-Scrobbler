@@ -1,4 +1,10 @@
-import type { AccountStore, LastfmClient, ScrobbleEligibleEvent, ScrobbleQueue } from "@lastfm-scrobbler/core";
+import type {
+  AccountStore,
+  LastfmClient,
+  ScrobbleEligibleEvent,
+  ScrobbleQueue,
+  TrackChangedEvent,
+} from "@lastfm-scrobbler/core";
 
 const DEFAULT_DRAIN_INTERVAL_MS = 60_000;
 const DRAIN_BATCH_SIZE = 50;
@@ -15,9 +21,29 @@ export interface ScrobbledTrack {
   readonly track: string;
 }
 
+/** Builds the optional album/albumArtist/durationSec fields shared by both
+ * `client.updateNowPlaying` calls this module makes — `onScrobbleEligible`'s enqueue
+ * and `onTrackChanged`'s live "now playing" push both start from the same
+ * `TrackChangedEvent`/`ScrobbleEligibleEvent`'s `.track`, and `exactOptionalPropertyTypes`
+ * means each optional field must be omitted entirely rather than set to `undefined` —
+ * hence the conditional-spread idiom, centralized here so a shape change only needs
+ * updating once instead of twice. */
+function toOptionalTrackFields(track: {
+  readonly album?: string;
+  readonly albumArtist?: string;
+  readonly durationSec?: number;
+}): { album?: string; albumArtist?: string; durationSec?: number } {
+  return {
+    ...(track.album ? { album: track.album } : {}),
+    ...(track.albumArtist ? { albumArtist: track.albumArtist } : {}),
+    ...(track.durationSec !== undefined ? { durationSec: track.durationSec } : {}),
+  };
+}
+
 /** The subset of `LastfmClient` this module needs — kept narrow for easy testing. */
 export interface ScrobblingClient {
   scrobble: LastfmClient["scrobble"];
+  updateNowPlaying: LastfmClient["updateNowPlaying"];
 }
 
 export interface WireScrobblingOptions {
@@ -46,6 +72,18 @@ export interface WireScrobblingOptions {
 export interface ScrobblingHandle {
   /** Pass as `Tracker`'s `events.onScrobbleEligible` — enqueues the eligible play. */
   onScrobbleEligible: (event: ScrobbleEligibleEvent) => void;
+  /** Pass as `Tracker`'s `events.onTrackChanged` — pushes a real-time "now playing"
+   * status to Last.fm (`track.updateNowPlaying`) for whichever account is currently
+   * active, so a track shows up on the user's Last.fm profile *as they're listening*,
+   * not just once it's actually scrobbled (after the eligibility threshold — see
+   * `onScrobbleEligible`/`isEligibleForScrobble`). Best-effort: no active account, or
+   * a failed/rejected request, is silently ignored rather than retried or queued — by
+   * the time a retry would land, the "now playing" status it was for would likely
+   * already be stale, unlike a scrobble (which has a real historical timestamp and is
+   * worth retrying via the persistent queue `onScrobbleEligible` uses). Returns a
+   * `Promise` (even though `Tracker`'s `onTrackChanged` type only requires `void`) so
+   * callers that want to await it — tests, mainly — can. */
+  onTrackChanged: (event: TrackChangedEvent) => Promise<void>;
   /** Exposed for tests/manual triggering; also runs automatically on `drainIntervalMs`. */
   drainOnce: () => Promise<void>;
   stop: () => void;
@@ -69,10 +107,28 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
       artist: event.track.artist,
       track: event.track.title,
       timestamp: event.startedAt,
-      ...(event.track.album ? { album: event.track.album } : {}),
-      ...(event.track.albumArtist ? { albumArtist: event.track.albumArtist } : {}),
-      ...(event.track.durationSec !== undefined ? { durationSec: event.track.durationSec } : {}),
+      ...toOptionalTrackFields(event.track),
     });
+  }
+
+  async function onTrackChanged(event: TrackChangedEvent): Promise<void> {
+    const active = await accountStore.getActiveAccount();
+    if (!active) {
+      return;
+    }
+    const client = createSessionClient(active.sessionKey);
+    try {
+      await client.updateNowPlaying({
+        artist: event.track.artist,
+        track: event.track.title,
+        ...toOptionalTrackFields(event.track),
+      });
+    } catch {
+      // Best-effort — see ScrobblingHandle.onTrackChanged's docstring for why this
+      // isn't retried or surfaced via onScrobbleFailed (that callback specifically
+      // tracks the persistent scrobble-queue drain, a different failure mode with
+      // different stakes than a single transient now-playing update).
+    }
   }
 
   async function drainOnce(): Promise<void> {
@@ -140,6 +196,7 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
 
   return {
     onScrobbleEligible,
+    onTrackChanged,
     drainOnce,
     stop: () => {
       clearInterval(intervalHandle);

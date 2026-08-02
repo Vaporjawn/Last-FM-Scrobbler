@@ -17,7 +17,15 @@ function fakeWindow(): CloseToTrayWindow & { emitClose: (event: { preventDefault
 }
 
 function fakeSettingsStore(closeToTray: boolean) {
-  return { get: () => ({ closeToTray, autoUpdateEnabled: true, hasShownTrayHint: false }) };
+  return {
+    get: () => ({
+      closeToTray,
+      autoUpdateEnabled: true,
+      hasShownTrayHint: false,
+      aspectRatio: "free" as const,
+      themeMode: "dark" as const,
+    }),
+  };
 }
 
 describe("wireCloseToTray", () => {

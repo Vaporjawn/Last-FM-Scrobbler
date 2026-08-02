@@ -21,7 +21,7 @@ export interface WireUpdatesOptions {
   readonly client: UpdaterClient;
   readonly mainWindow: BrowserWindow;
   /** Reads the live `AppSettings.autoUpdateEnabled` value — a function rather than a
-   * snapshot boolean, so a Preferences toggle takes effect on the next scheduled
+   * snapshot boolean, so a Settings toggle takes effect on the next scheduled
    * check without needing to re-wire anything. */
   readonly isAutoCheckEnabled: () => boolean;
   /** Injectable for testing; real callers pass `show-restart-prompt.ts`'s
@@ -55,7 +55,7 @@ export interface WireUpdatesOptions {
  * downloads automatically once an update is found (`UpdaterClient.autoDownload` is
  * `true` — see `create-updater-client.ts`), and prompts to restart once the download
  * finishes. A manual check via `IPC_CHANNELS.updatesCheckNow` always runs regardless
- * of `isAutoCheckEnabled()` — "Check for updates now" in Preferences shouldn't be
+ * of `isAutoCheckEnabled()` — "Check for updates now" in Settings shouldn't be
  * silently inert just because automatic checks are off.
  */
 export function wireUpdates(options: WireUpdatesOptions): () => void {

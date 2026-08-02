@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { SecretStorage } from "@lastfm-scrobbler/core";
 
@@ -84,7 +84,16 @@ export class ElectronSecretStorage implements SecretStorage {
   }
 
   private writeFile(file: SecretsFile): void {
-    mkdirSync(dirname(this.filePath), { recursive: true });
-    writeFileSync(this.filePath, JSON.stringify(file, null, 2), "utf8");
+    // `mode` on mkdirSync/writeFileSync only applies when the directory/file is newly
+    // created — it does not retroactively tighten permissions on one that already
+    // exists on disk (e.g. from a version of this app built before this hardening).
+    // The explicit chmodSync below corrects that on every write, regardless of
+    // whether the file already existed with looser permissions. This file holds
+    // safeStorage-encrypted Last.fm session keys/API credentials — encryption
+    // protects the values, but there's no reason the file itself should be readable
+    // by other local accounts on a shared/multi-user machine.
+    mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 });
+    writeFileSync(this.filePath, JSON.stringify(file, null, 2), { encoding: "utf8", mode: 0o600 });
+    chmodSync(this.filePath, 0o600);
   }
 }

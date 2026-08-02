@@ -17,7 +17,7 @@ export interface ResolvedLastfmCredentials extends AppCredentials {
  * Resolves the Last.fm API key/secret this app run should use. `LASTFM_API_KEY` /
  * `LASTFM_API_SECRET` environment variables take precedence when both are set — an
  * explicit choice by whoever built/launched this instance — falling back to a key the
- * end user saved themselves via Preferences → Accounts (see `AppCredentialsStore`,
+ * end user saved themselves via Settings → Accounts (see `AppCredentialsStore`,
  * `main/auth/wire-auth.ts`). Returns `undefined` if neither source has a usable pair,
  * same as `create-lastfm-client.ts`'s env-only `createLastfmClient` did before this
  * existed.

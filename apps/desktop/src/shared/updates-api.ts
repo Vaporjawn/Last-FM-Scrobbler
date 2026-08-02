@@ -11,7 +11,7 @@ export interface UpdatesApi {
    * "pull current state" reasoning as `NowPlayingApi.getCurrent()`. */
   getStatus(): Promise<UpdateStatus>;
   /** Triggers a check immediately, regardless of the `autoUpdateEnabled` setting —
-   * "Check for updates now" in Preferences always works even with automatic checks
+   * "Check for updates now" in Settings always works even with automatic checks
    * turned off. Resolves once the check (and any resulting download) settles; watch
    * `onStatusChanged` for the actual outcome. */
   checkNow(): Promise<void>;

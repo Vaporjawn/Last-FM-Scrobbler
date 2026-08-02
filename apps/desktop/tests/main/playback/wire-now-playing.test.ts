@@ -121,6 +121,33 @@ describe("wireNowPlaying", () => {
     stop();
   });
 
+  it("calls the injected onTrackChanged (via the Tracker) when a new track starts", () => {
+    const { source, emitTrackChanged } = createFakeSource();
+    const mainWindow = createFakeWindow();
+    const onTrackChanged = vi.fn();
+
+    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged);
+    emitTrackChanged(TRACK);
+
+    expect(onTrackChanged).toHaveBeenCalledWith(
+      expect.objectContaining({ track: TRACK }),
+    );
+    stop();
+  });
+
+  it("does not call onTrackChanged again for the exact same track (no real change)", () => {
+    const { source, emitTrackChanged } = createFakeSource();
+    const mainWindow = createFakeWindow();
+    const onTrackChanged = vi.fn();
+
+    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged);
+    emitTrackChanged(TRACK);
+    emitTrackChanged(TRACK);
+
+    expect(onTrackChanged).toHaveBeenCalledOnce();
+    stop();
+  });
+
   it("removes the get-current handler on stop", () => {
     const { source } = createFakeSource();
     const mainWindow = createFakeWindow();

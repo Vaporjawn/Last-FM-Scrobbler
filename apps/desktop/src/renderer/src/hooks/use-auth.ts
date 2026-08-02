@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { AuthApi } from "../../../shared/auth-api.js";
 import { fail, ok, type ActionResult } from "./action-result.js";
 
 export interface AuthState {
@@ -40,6 +41,39 @@ const INITIAL_STATE: AuthState = {
   isSavingCredentials: false,
   error: undefined,
 };
+
+/**
+ * Runs one `window.auth` call, refreshes state from it, and folds any failure into
+ * `error` — the shape every write action below (`login`/`logout`/`setActiveAccount`/
+ * `saveAppCredentials`/`clearAppCredentials`) shares, previously duplicated once per
+ * action. `action` receives the already-verified-non-undefined `AuthApi` so callers
+ * don't each need their own `!window.auth` guard or a non-null assertion to satisfy
+ * it. Loading flags (`isLoggingIn`/`isSavingCredentials`) are the one thing that
+ * differs per action, so those stay in each `useCallback` around this call rather
+ * than being parameterized here.
+ */
+async function runAuthAction(
+  // `Promise<unknown>` rather than `Promise<void>` so callers can pass `auth.login`
+  // (which resolves with `{ username }`) directly instead of needing a `.then(() =>
+  // {})` adapter just to satisfy the type — the result of `action` is intentionally
+  // discarded either way, since every action re-derives fresh state via `refresh()`.
+  action: (auth: AuthApi) => Promise<unknown>,
+  refresh: () => Promise<void>,
+  setState: (updater: (previous: AuthState) => AuthState) => void,
+): Promise<ActionResult> {
+  if (!window.auth) {
+    return fail(NOT_AVAILABLE);
+  }
+  try {
+    await action(window.auth);
+    await refresh();
+    return ok();
+  } catch (error) {
+    const result = fail(error);
+    setState((previous) => ({ ...previous, error: result.error }));
+    return result;
+  }
+}
 
 /**
  * Manages Last.fm account state against `window.auth` (see `src/shared/auth-api.ts`).
@@ -90,73 +124,37 @@ export function useAuth(): UseAuthResult {
   }, [refresh]);
 
   const login = useCallback(async (): Promise<ActionResult> => {
-    if (!window.auth) {
-      return fail(NOT_AVAILABLE);
-    }
     setState((previous) => ({ ...previous, isLoggingIn: true, error: undefined }));
     try {
-      await window.auth.login();
-      await refresh();
-      return ok();
-    } catch (error) {
-      const result = fail(error);
-      setState((previous) => ({ ...previous, error: result.error }));
-      return result;
+      return await runAuthAction((auth) => auth.login(), refresh, setState);
     } finally {
       setState((previous) => ({ ...previous, isLoggingIn: false }));
     }
   }, [refresh]);
 
   const logout = useCallback(
-    async (username: string): Promise<ActionResult> => {
-      if (!window.auth) {
-        return fail(NOT_AVAILABLE);
-      }
-      try {
-        await window.auth.logout(username);
-        await refresh();
-        return ok();
-      } catch (error) {
-        const result = fail(error);
-        setState((previous) => ({ ...previous, error: result.error }));
-        return result;
-      }
+    (username: string): Promise<ActionResult> => {
+      return runAuthAction((auth) => auth.logout(username), refresh, setState);
     },
     [refresh],
   );
 
   const setActiveAccount = useCallback(
-    async (username: string): Promise<ActionResult> => {
-      if (!window.auth) {
-        return fail(NOT_AVAILABLE);
-      }
-      try {
-        await window.auth.setActiveAccount(username);
-        await refresh();
-        return ok();
-      } catch (error) {
-        const result = fail(error);
-        setState((previous) => ({ ...previous, error: result.error }));
-        return result;
-      }
+    (username: string): Promise<ActionResult> => {
+      return runAuthAction((auth) => auth.setActiveAccount(username), refresh, setState);
     },
     [refresh],
   );
 
   const saveAppCredentials = useCallback(
     async (apiKey: string, apiSecret: string): Promise<ActionResult> => {
-      if (!window.auth) {
-        return fail(NOT_AVAILABLE);
-      }
       setState((previous) => ({ ...previous, isSavingCredentials: true, error: undefined }));
       try {
-        await window.auth.setAppCredentials(apiKey, apiSecret);
-        await refresh();
-        return ok();
-      } catch (error) {
-        const result = fail(error);
-        setState((previous) => ({ ...previous, error: result.error }));
-        return result;
+        return await runAuthAction(
+          (auth) => auth.setAppCredentials(apiKey, apiSecret),
+          refresh,
+          setState,
+        );
       } finally {
         setState((previous) => ({ ...previous, isSavingCredentials: false }));
       }
@@ -164,19 +162,8 @@ export function useAuth(): UseAuthResult {
     [refresh],
   );
 
-  const clearAppCredentials = useCallback(async (): Promise<ActionResult> => {
-    if (!window.auth) {
-      return fail(NOT_AVAILABLE);
-    }
-    try {
-      await window.auth.clearAppCredentials();
-      await refresh();
-      return ok();
-    } catch (error) {
-      const result = fail(error);
-      setState((previous) => ({ ...previous, error: result.error }));
-      return result;
-    }
+  const clearAppCredentials = useCallback((): Promise<ActionResult> => {
+    return runAuthAction((auth) => auth.clearAppCredentials(), refresh, setState);
   }, [refresh]);
 
   const relaunch = useCallback(async () => {

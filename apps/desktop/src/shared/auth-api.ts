@@ -11,8 +11,8 @@ export interface AuthApi {
   isConfigured(): Promise<boolean>;
   /** Where the active Last.fm API key/secret came from: `"environment"` (this build
    * has `LASTFM_API_KEY`/`LASTFM_API_SECRET` baked in), `"user-supplied"` (saved via
-   * Preferences → Accounts), or `"none"` (neither — login is unavailable until one is
-   * configured). Lets Preferences decide whether to offer "change/clear your key". */
+   * Settings → Accounts), or `"none"` (neither — login is unavailable until one is
+   * configured). Lets Settings decide whether to offer "change/clear your key". */
   credentialsSource(): Promise<"environment" | "user-supplied" | "none">;
   /** Opens the user's browser to Last.fm's authorization page and resolves once
    * they've approved access there (no manual token entry). Throws if `isConfigured()`

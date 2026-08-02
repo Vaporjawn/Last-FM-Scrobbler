@@ -314,6 +314,58 @@ describe("wireScrobbling", () => {
     queue.close();
   });
 
+  it("onTrackChanged calls updateNowPlaying for the active account", async () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const accountStore = new AccountStore(inMemoryStorage());
+    await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+    const updateNowPlaying = vi.fn().mockResolvedValue(undefined);
+    const createSessionClient = vi.fn().mockReturnValue({ scrobble: vi.fn(), updateNowPlaying });
+    const { onTrackChanged, stop } = wireScrobbling({ queue, accountStore, createSessionClient });
+
+    await onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 });
+
+    expect(createSessionClient).toHaveBeenCalledWith("sk-123");
+    expect(updateNowPlaying).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artist: "Everything Everything",
+        track: "Weights",
+        album: "Man Alive",
+        durationSec: 340,
+      }),
+    );
+
+    stop();
+    queue.close();
+  });
+
+  it("onTrackChanged does nothing when no account is active", async () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const accountStore = new AccountStore(inMemoryStorage());
+    const createSessionClient = vi.fn();
+    const { onTrackChanged, stop } = wireScrobbling({ queue, accountStore, createSessionClient });
+
+    await onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 });
+
+    expect(createSessionClient).not.toHaveBeenCalled();
+
+    stop();
+    queue.close();
+  });
+
+  it("onTrackChanged never throws, even when updateNowPlaying itself rejects", async () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const accountStore = new AccountStore(inMemoryStorage());
+    await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+    const updateNowPlaying = vi.fn().mockRejectedValue(new Error("network error"));
+    const createSessionClient = vi.fn().mockReturnValue({ scrobble: vi.fn(), updateNowPlaying });
+    const { onTrackChanged, stop } = wireScrobbling({ queue, accountStore, createSessionClient });
+
+    await expect(onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 })).resolves.toBeUndefined();
+
+    stop();
+    queue.close();
+  });
+
   it("stop() clears the drain interval", () => {
     vi.useFakeTimers();
     try {

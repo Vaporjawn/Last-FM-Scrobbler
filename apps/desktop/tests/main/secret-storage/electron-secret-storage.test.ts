@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -93,4 +93,24 @@ describe("ElectronSecretStorage", () => {
       new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage(false) });
     }).toThrow(/encryption is not available/i);
   });
+
+  // Mode bits aren't meaningful on Windows the way they are on POSIX systems — skip
+  // there rather than asserting something that wouldn't mean what it looks like it
+  // means (matches how this codebase already branches on platform elsewhere, e.g.
+  // NowPlayingPage's `isMac` checks).
+  it.skipIf(process.platform === "win32")(
+    "restricts the secrets file to owner-only read/write (0o600), even on an existing file with looser permissions",
+    async () => {
+      const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+      await storage.set("account:alice", "key1");
+      // Simulate a file left over from before this fix, with the old (looser) default
+      // permissions — set() must tighten these on every write, not just at creation.
+      chmodSync(filePath, 0o644);
+
+      await storage.set("account:bob", "key2");
+
+      const mode = statSync(filePath).mode & 0o777;
+      expect(mode).toBe(0o600);
+    },
+  );
 });
