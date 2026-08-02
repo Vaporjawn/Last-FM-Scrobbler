@@ -24,7 +24,10 @@ describe("Logger", () => {
     logger.debug("verbose detail");
 
     expect(logger.getRecentEntries()).toHaveLength(1);
-    expect(logger.getRecentEntries()[0]).toMatchObject({ level: "debug", message: "verbose detail" });
+    expect(logger.getRecentEntries()[0]).toMatchObject({
+      level: "debug",
+      message: "verbose detail",
+    });
   });
 
   it("records nothing at the 'none' level", () => {

@@ -25,6 +25,17 @@ export const IPC_CHANNELS = {
   /** Whether this build has LASTFM_API_KEY/LASTFM_API_SECRET configured at all —
    * distinct from "no account logged in yet". */
   authIsConfigured: "auth:is-configured",
+  /** Where the active Last.fm API key/secret came from: "environment" (baked into
+   * this build), "user-supplied" (saved via Preferences), or "none". */
+  authCredentialsSource: "auth:credentials-source",
+  /** Saves a user-supplied Last.fm API key/secret pair (the "bring your own key"
+   * alternative to a build with LASTFM_API_KEY/LASTFM_API_SECRET baked in). Takes
+   * effect on next launch — call `appRelaunch` afterward to apply it. */
+  authSetAppCredentials: "auth:set-app-credentials",
+  /** Clears a previously-saved user-supplied API key/secret pair. */
+  authClearAppCredentials: "auth:clear-app-credentials",
+  /** Restarts the app so newly-saved credentials take effect. */
+  appRelaunch: "app:relaunch",
 
   /** `user.getRecentTracks` for a given username. */
   lastfmGetRecentTracks: "lastfm:get-recent-tracks",
@@ -32,10 +43,36 @@ export const IPC_CHANNELS = {
   lastfmGetTopArtists: "lastfm:get-top-artists",
   /** `user.getFriends` for a given username. */
   lastfmGetFriends: "lastfm:get-friends",
+  /** `user.getInfo` for a given username — real name + avatar photo. */
+  lastfmGetUserInfo: "lastfm:get-user-info",
+  /** `artist.getInfo` — bio summary + global listener/play stats for an artist. */
+  lastfmGetArtistInfo: "lastfm:get-artist-info",
+  /** `artist.getSimilar` for an artist. */
+  lastfmGetSimilarArtists: "lastfm:get-similar-artists",
+  /** `track.love`, signed as the currently-active account. */
+  lastfmLoveTrack: "lastfm:love-track",
+  /** `track.unlove`, signed as the currently-active account. */
+  lastfmUnloveTrack: "lastfm:unlove-track",
+  /** `track.addTags`, signed as the currently-active account. */
+  lastfmAddTags: "lastfm:add-tags",
 
   /** Whether this build has a bug-report relay URL configured. */
   bugReportIsConfigured: "bug-report:is-configured",
   /** Submits {title, body} to services/bug-report-relay; resolves with the created
    * GitHub issue's URL. */
   bugReportSubmit: "bug-report:submit",
+
+  /** Returns the current persisted `AppSettings` (see `shared/settings-api.ts`). */
+  settingsGet: "settings:get",
+  /** Merges a partial `AppSettings` patch and returns the full updated settings. */
+  settingsSet: "settings:set",
+
+  /** Pushed whenever the auto-updater's state changes (checking/available/
+   * downloading/downloaded/error) — see `shared/update-status.ts`. */
+  updatesStatusChanged: "updates:status-changed",
+  /** Renderer -> main `invoke`: pulls the current status on mount, same
+   * push-plus-pull reasoning as `nowPlayingGetCurrent`. */
+  updatesGetStatus: "updates:get-status",
+  /** Triggers an update check immediately, regardless of `AppSettings.autoUpdateEnabled`. */
+  updatesCheckNow: "updates:check-now",
 } as const;

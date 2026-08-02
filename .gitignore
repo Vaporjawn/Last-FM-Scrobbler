@@ -40,6 +40,8 @@ Thumbs.db
 
 # Cloudflare Workers (services/bug-report-relay)
 .wrangler/
+.dev.vars
+.dev.vars.*.local
 
 # Claude Code tooling — never committed to this public repo
 .claude/

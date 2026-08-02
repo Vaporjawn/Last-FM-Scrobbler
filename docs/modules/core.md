@@ -16,13 +16,19 @@ structured logging.
   `enqueue`/`dequeueBatch`/`remove`/`recordFailure` (retryable vs. drop-outright)/
   `evictStale`/`evictOverflow`. See `docs/adr/0006-offline-queue-persistence.md`.
 - **`lastfm-api`** — `LastfmClient`: every endpoint the app needs (auth, scrobble,
-  now-playing, love/unlove/addTags, recent tracks, top artists, friends, artist
-  info/similar). `signRequest` (pure signature function) and `LastfmApiError` +
+  now-playing, love/unlove/addTags, recent tracks, top artists, friends, user profile,
+  artist info/similar). `signRequest` (pure signature function) and `LastfmApiError` +
   `isRetryableApiErrorCode`/`isRetryableScrobbleIgnoreCode` are separately exported and
-  independently tested.
+  independently tested. See "Known limitation: artist images" below before wiring
+  anything that expects a real per-artist photo out of this client.
 - **`auth`** — `AuthFlow` (token → open browser → poll `auth.getSession` until
-  approved, no manual steps) and `AccountStore` (multi-account persistence over an
-  injected `SecretStorage`, since core has no keychain access itself).
+  approved, no manual steps), `AccountStore` (multi-account persistence over an
+  injected `SecretStorage`, since core has no keychain access itself), and
+  `AppCredentialsStore` (persists a single user-supplied Last.fm API key/secret pair
+  over the same `SecretStorage` abstraction — the "bring your own key" alternative to
+  an app build with `LASTFM_API_KEY`/`LASTFM_API_SECRET` baked in; see
+  `docs/modules/desktop.md`). Deliberately a separate class from `AccountStore`: it
+  holds an *application*-level credential, not a per-user session key.
 - **`filters`** — `compileFilter(expression): CompiledFilter`, the field-based
   exclusion DSL from `docs/adr/0005-multi-source-and-track-identity-policy.md`.
 - **`tracker`** — `Tracker`: wires a `PlaybackSource`'s raw events into scrobble
@@ -46,9 +52,31 @@ add a hard external dependency, latency, and a new privacy surface for listening
 which is worse than the alternative. Embedding the secret in the distributed client is
 the accepted, standard approach across the open-source Last.fm scrobbler ecosystem.
 
+## Known limitation: artist images are a Last.fm-side placeholder, not real photos
+
+`ArtistInfo` (from `getArtistInfo`) and `TopArtist` (from `getTopArtists`) deliberately
+have no `imageUrl` field. Verified live against the real API (not assumed): both
+`artist.getInfo` and `user.getTopArtists` return an `image` array, but every size's
+`#text` points to the *exact same* generic placeholder graphic (hash
+`2a96cbd8b46e442fc41c2b86b821562f`) for every artist, regardless of which one was
+requested — a known, long-standing issue on Last.fm's own side (their API support
+forum has multiple open threads about it going back years), not something fixable from
+this client. Surfacing that URL would look like a real photo per artist when it's
+actually identical for all of them — worse than not showing one at all. This is
+unrelated to `UserProfile.avatarUrl` (from `getUserInfo`) or `Friend.avatarUrl` (from
+`getFriends`), both of which *are* real, per-account photos — verified the same way,
+against real accounts, returning genuine images rather than a placeholder.
+`getFriends` needs no separate per-friend lookup for this: `user.getFriends`' response
+already includes each friend's own `image` array directly, same as `user.getInfo`.
+
 ## Status
 
-Fully implemented and tested (112 tests, TDD throughout). Real Last.fm credentials
-aren't available in the development/CI environment this was built in, so `lastfm-api`
-and `auth` are tested entirely against mocked HTTP, not live-fired against the real API
-— genuinely complete code, not yet verified against the live service.
+Fully implemented and tested (123 tests, TDD throughout). `lastfm-api` and `auth` were
+originally tested entirely against mocked HTTP, with no real Last.fm credentials
+available in the environment this was built in. That's since changed: this repo now
+has a real `LASTFM_API_KEY`/`LASTFM_API_SECRET` pair (see `docs/modules/desktop.md`),
+and several read endpoints (`user.getInfo`, `user.getTopArtists`) have been live-fired
+against the real API directly (via `curl`) to verify actual response shapes — that's
+how the artist-image limitation above was confirmed, rather than assumed from memory.
+Signed/write endpoints (scrobble, love/unlove, auth session exchange) are still
+untested against the live service in this environment.

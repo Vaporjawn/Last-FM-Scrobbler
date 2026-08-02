@@ -1,12 +1,22 @@
 import electron from "electron";
 import type { PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
-import type { Friend, RecentTrack, TopArtist } from "@lastfm-scrobbler/core";
+import type {
+  ArtistInfo,
+  Friend,
+  RecentTrack,
+  SimilarArtist,
+  TopArtist,
+  UserProfile,
+} from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../shared/ipc-channels.js";
 import type { AuthApi } from "../shared/auth-api.js";
 import type { BugReportApi } from "../shared/bug-report-api.js";
 import type { LastfmDataApi } from "../shared/lastfm-api.js";
 import type { NowPlayingApi } from "../shared/now-playing-api.js";
 import type { NowPlayingSnapshot } from "../shared/now-playing-snapshot.js";
+import type { AppSettings, SettingsApi } from "../shared/settings-api.js";
+import type { UpdateStatus } from "../shared/update-status.js";
+import type { UpdatesApi } from "../shared/updates-api.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { contextBridge, ipcRenderer } from "electron"`.
@@ -40,6 +50,11 @@ const authApi: AuthApi = {
   isConfigured() {
     return ipcRenderer.invoke(IPC_CHANNELS.authIsConfigured) as Promise<boolean>;
   },
+  credentialsSource() {
+    return ipcRenderer.invoke(IPC_CHANNELS.authCredentialsSource) as Promise<
+      "environment" | "user-supplied" | "none"
+    >;
+  },
   login() {
     return ipcRenderer.invoke(IPC_CHANNELS.authLogin) as Promise<{ username: string }>;
   },
@@ -54,6 +69,19 @@ const authApi: AuthApi = {
   },
   setActiveAccount(username) {
     return ipcRenderer.invoke(IPC_CHANNELS.authSetActiveAccount, username) as Promise<void>;
+  },
+  setAppCredentials(apiKey, apiSecret) {
+    return ipcRenderer.invoke(
+      IPC_CHANNELS.authSetAppCredentials,
+      apiKey,
+      apiSecret,
+    ) as Promise<void>;
+  },
+  clearAppCredentials() {
+    return ipcRenderer.invoke(IPC_CHANNELS.authClearAppCredentials) as Promise<void>;
+  },
+  relaunch() {
+    return ipcRenderer.invoke(IPC_CHANNELS.appRelaunch) as Promise<void>;
   },
 };
 
@@ -71,6 +99,26 @@ const lastfmApi: LastfmDataApi = {
   getFriends(user) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetFriends, user) as Promise<readonly Friend[]>;
   },
+  getUserInfo(user) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetUserInfo, user) as Promise<UserProfile>;
+  },
+  getArtistInfo(artist) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetArtistInfo, artist) as Promise<ArtistInfo>;
+  },
+  getSimilarArtists(artist, limit) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetSimilarArtists, artist, limit) as Promise<
+      readonly SimilarArtist[]
+    >;
+  },
+  loveTrack(artist, track) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmLoveTrack, artist, track) as Promise<void>;
+  },
+  unloveTrack(artist, track) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmUnloveTrack, artist, track) as Promise<void>;
+  },
+  addTags(artist, track, tags) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmAddTags, artist, track, tags) as Promise<void>;
+  },
 };
 
 const bugReportApi: BugReportApi = {
@@ -84,7 +132,39 @@ const bugReportApi: BugReportApi = {
   },
 };
 
+const settingsApi: SettingsApi = {
+  get() {
+    return ipcRenderer.invoke(IPC_CHANNELS.settingsGet) as Promise<AppSettings>;
+  },
+  set(patch) {
+    return ipcRenderer.invoke(IPC_CHANNELS.settingsSet, patch) as Promise<AppSettings>;
+  },
+};
+
+const updatesApi: UpdatesApi = {
+  getStatus() {
+    return ipcRenderer.invoke(IPC_CHANNELS.updatesGetStatus) as Promise<UpdateStatus>;
+  },
+  checkNow() {
+    return ipcRenderer.invoke(IPC_CHANNELS.updatesCheckNow) as Promise<void>;
+  },
+  onStatusChanged(callback) {
+    const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus): void => {
+      callback(status);
+    };
+    ipcRenderer.on(IPC_CHANNELS.updatesStatusChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.updatesStatusChanged, listener);
+    };
+  },
+};
+
 contextBridge.exposeInMainWorld("nowPlaying", nowPlayingApi);
 contextBridge.exposeInMainWorld("auth", authApi);
 contextBridge.exposeInMainWorld("lastfm", lastfmApi);
 contextBridge.exposeInMainWorld("bugReport", bugReportApi);
+contextBridge.exposeInMainWorld("settings", settingsApi);
+contextBridge.exposeInMainWorld("updates", updatesApi);
+// A plain value (not an async API) so the renderer can pick OS-appropriate copy (e.g.
+// "Close to tray" vs. "Close to menu bar") without a round trip — see PreferencesPage.
+contextBridge.exposeInMainWorld("platform", process.platform);

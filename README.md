@@ -14,21 +14,29 @@ required.
 
 Feature-complete, pre-release — no tagged releases or downloads yet, but every planned
 piece is implemented and tested: all three platform adapters, the full scrobbling
-engine, and a working desktop app (login, scrobble submission, scrobble history,
-profile/friends, and in-app bug reporting). See each package's linked doc below for
-exactly what's live-verified versus code-complete-but-unverified in this environment
-(mainly: real Windows hardware, and a real Last.fm/Cloudflare deployment, neither of
+engine, and a working desktop app (login — either bring your own Last.fm API key or
+one baked into the build, scrobble submission, scrobble history, profile/friends,
+in-app bug reporting, auto-update, and running in the background via a tray/menu bar
+icon so scrobbling keeps working after you close the window). Packaging
+(`electron-builder`, all three platforms) and a GitHub Actions release workflow are
+built too. See each package's linked doc below for exactly what's live-verified
+versus code-complete-but-unverified in this environment (mainly: real Windows/Linux
+hardware, a real code-signing certificate, and a real Cloudflare deployment, none of
 which were available during development). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 for the full design and [docs/adr/](docs/adr/) for the reasoning behind the major
 decisions, or the [project website](https://vaporjawn.dev/Last-FM-Scrobbler/) for a
 lighter-weight overview.
 
-Still needed before a first tagged release: packaging/code signing for distribution
-(see [docs/modules/desktop.md](docs/modules/desktop.md)'s "Not yet built" section),
-your own `LASTFM_API_KEY`/`LASTFM_API_SECRET` (from
-https://www.last.fm/api/account/create) and a deployed
-[`services/bug-report-relay`](docs/modules/bug-report-relay.md) with its own
-`GITHUB_PAT`.
+Still needed before a first _real_ tagged release: pushing a `v*` tag to actually run
+[the release workflow](.github/workflows/release.yml) for the first time, a real code
+signing certificate + Apple notarization credentials for a properly signed/notarized
+build (see [docs/modules/desktop.md](docs/modules/desktop.md)'s "Packaging &
+distribution" section — unsigned builds work locally but won't pass Gatekeeper/
+SmartScreen for other people), and deploying
+[`services/bug-report-relay`](docs/modules/bug-report-relay.md) (now automated via
+[a workflow](.github/workflows/deploy-bug-report-relay.yml) — just needs Cloudflare
+secrets configured once). None of this project's own credentials are ever included —
+see each linked doc for exactly what to supply yourself.
 
 ## Quick start
 
