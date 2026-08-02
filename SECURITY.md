@@ -14,7 +14,7 @@ Instead, report it privately using one of these channels:
 
 1. **Preferred**: [GitHub Security Advisories](https://github.com/Vaporjawn/Last-FM-Scrobbler/security/advisories/new)
    for this repository — this lets us discuss and fix the issue privately before disclosure.
-2. **Email**: [vrwilliams719@gmail.com](mailto:vrwilliams719@gmail.com) with a description of the
+2. **Email**: [victor.williams.dev@gmail.com](mailto:victor.williams.dev@gmail.com) with a description of the
    vulnerability, steps to reproduce, and its potential impact.
 
 You should expect an initial response within 5 business days. This is a hobby/personal project

@@ -1,0 +1,4 @@
+# Every path defaults to this owner unless a more specific rule below overrides it.
+# Combined with branch protection's "require review from code owners", this is what
+# makes @Vaporjawn's approval required on every PR before it can merge.
+* @Vaporjawn
