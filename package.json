@@ -11,13 +11,13 @@
     "cross-platform",
     "media-session"
   ],
-  "homepage": "https://github.com/Vaporjawn/lastfm-scrobbler#readme",
+  "homepage": "https://github.com/Vaporjawn/Last-FM-Scrobbler#readme",
   "bugs": {
-    "url": "https://github.com/Vaporjawn/lastfm-scrobbler/issues"
+    "url": "https://github.com/Vaporjawn/Last-FM-Scrobbler/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Vaporjawn/lastfm-scrobbler.git"
+    "url": "git+https://github.com/Vaporjawn/Last-FM-Scrobbler.git"
   },
   "license": "MIT",
   "author": {

@@ -13,7 +13,7 @@ write-credential — anyone could extract it from the app binary.
 ## Decision
 
 `apps/desktop` POSTs `{title, body, diagnostics}` to `services/bug-report-relay`
-(Cloudflare Worker), which calls `POST /repos/Vaporjawn/lastfm-scrobbler/issues` using a
+(Cloudflare Worker), which calls `POST /repos/Vaporjawn/Last-FM-Scrobbler/issues` using a
 fine-grained PAT scoped only to `issues:write` on this one repo, stored as a
 relay-side secret and never shipped in the app.
 
