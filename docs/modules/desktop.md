@@ -3,7 +3,7 @@
 ## Responsibility
 
 Electron + React + MUI desktop shell. Five destinations: Now Playing, Scrobbles
-(history), Profile (top artists), Friends, and Preferences (General/Accounts). Runs as
+(history), Profile (top artists), Friends, and Settings (General/Accounts). Runs as
 a background app by default — see "Background app (tray / menu bar)" below.
 
 ## Required environment variables
@@ -13,7 +13,7 @@ a background app by default — see "Background app (tray / menu bar)" below.
   or hardcodes real Last.fm credentials — set these two environment variables
   yourself before running `npm run dev`/`start`, and bake them into whatever build
   pipeline produces distributable packages, **or** skip this entirely and let end
-  users supply their own key via Preferences → Accounts (see "Bring your own key"
+  users supply their own key via Settings → Accounts (see "Bring your own key"
   below) — either path works, and both are available in the same build
   simultaneously. Without *either* source configured, the app still launches, but
   login and all Last.fm data views report "not configured" rather than throwing.
@@ -61,7 +61,7 @@ secrets and local `.env` to match.
 
 ## Login UX
 
-Preferences → Accounts has a single "Log in with Last.fm" button. Clicking it drives
+Settings → Accounts has a single "Log in with Last.fm" button. Clicking it drives
 `packages/core`'s `AuthFlow`: it opens the user's default browser to Last.fm's own
 authorization page and polls silently in the background until they click "Allow
 Access" there — no token to copy or paste, no second screen in this app. The resulting
@@ -92,7 +92,7 @@ returning "not authorized yet", by design, with no way to be told "done" any fas
 more reliably than that.
 
 Given that, "jumping back to the app" can only ever be a **best-effort courtesy**, not
-a guaranteed handoff — and the UI (`PreferencesPage.tsx`) says so explicitly while
+a guaranteed handoff — and the UI (`SettingsPage.tsx`) says so explicitly while
 `isLoggingIn` is true, so the user's own expectation matches what Last.fm's flow can
 actually promise rather than what a nicer-looking notification implies it can.
 `wire-auth.ts` covers both outcomes of that wait:
@@ -125,7 +125,7 @@ actually promise rather than what a nicer-looking notification implies it can.
   throws — most commonly `AuthTimeoutError` after the default 5-minute poll window
   elapses with no approval. Before this existed, a failure here was **completely
   silent** unless the user happened to still be looking at the window when it
-  happened (only then would `PreferencesPage`'s snackbar, driven by the renderer-side
+  happened (only then would `SettingsPage`'s snackbar, driven by the renderer-side
   promise rejection, ever be seen) — for a flow whose entire premise is sending the
   user away to a browser, that's the common case, not an edge case. It now also fires
   a native "Login failed" notification with the error message, independent of window
@@ -160,7 +160,7 @@ ways to supply one, and both are available in the same build at once:
 1. **Baked in by whoever built this instance** — `LASTFM_API_KEY`/`LASTFM_API_SECRET`
    environment variables (see above). Takes precedence when set.
 2. **Supplied by the end user** — an "API key" / "Shared secret" form in
-   Preferences → Accounts, shown directly (no gate in front of it) whenever no
+   Settings → Accounts, shown directly (no gate in front of it) whenever no
    environment-baked key is active, with a link to
    https://www.last.fm/api/account/create to generate the pair. That link is
    pre-filled via query string (see `buildCreateApiAccountUrl()`) so there's nothing
@@ -179,14 +179,14 @@ ways to supply one, and both are available in the same build at once:
    `app-credentials.json` vs. `secrets.json` — since this holds an application
    credential, not a per-user one). A saved key only takes effect on the *next* launch
    (`main/lastfm/resolve-lastfm-credentials.ts` resolves it once at `app.whenReady()`),
-   so the Preferences UI offers a "Restart now" button (`window.auth.relaunch()` →
+   so the Settings UI offers a "Restart now" button (`window.auth.relaunch()` →
    `app.relaunch()` + `app.exit()`) right after saving.
 
 Either source, once active, unlocks the exact same "Log in with Last.fm" button and
 `AuthFlow` described above — the end user never sees a difference. A user-supplied key
-can be changed or removed from Preferences ("Remove saved API key"); an
+can be changed or removed from Settings ("Remove saved API key"); an
 environment-baked one can't (it was a deliberate choice by whoever built/launched this
-instance, so Preferences doesn't offer to edit or clear it — see
+instance, so Settings doesn't offer to edit or clear it — see
 `window.auth.credentialsSource()`).
 
 ## Background app (tray / menu bar)
@@ -200,7 +200,7 @@ intercepts the window's `close` event and hides it instead, as long as
 the system tray (Windows/Linux) or menu bar (macOS, rendered as a template image so
 the OS recolors it for light/dark mode and Retina automatically — see
 `apps/desktop/resources/tray-iconTemplate*.png`) with "Show"/"Quit" entries, so the
-app stays reachable and can still be told to actually exit. Preferences → General has
+app stays reachable and can still be told to actually exit. Settings → General has
 a "Keep running in the tray/menu bar when the window is closed" toggle for turning
 this off; the real-quit paths (the tray's "Quit" item, Cmd+Q, `app.quit()`) all route
 through one `isQuitting` flag so they aren't re-intercepted as a hide.
@@ -209,7 +209,7 @@ The very first time the window is actually hidden this way — across the whole
 install's lifetime, not just this run — `main/index.ts`'s `handleTrayHide()` shows a
 one-time native "Still running" notification explaining where the app went (see
 "Native notifications" below). Tracked via `AppSettings.hasShownTrayHint` (not a
-Preferences toggle — this is bookkeeping, not something to choose a value for) so it
+Settings toggle — this is bookkeeping, not something to choose a value for) so it
 never repeats after that first time. `wire-close-to-tray.ts` itself stays a pure
 "hide instead of close" policy module — it just calls an optional `onHide` callback
 every time it actually hides the window; the one-time/persisted-flag decision lives
@@ -251,6 +251,10 @@ Real custom icon *artwork* commissioned specifically for this project is still n
 built — see "Not yet built" below; this section is about the (real, working,
 Last.fm-derived) icon that exists today, not a placeholder.
 
+The project's public landing page (`apps/site/`, a GitHub Pages deployment) is
+documented separately — see docs/modules/site.md — it's a sibling of this app, not
+part of it, despite reusing this app's icon for its favicon (see "App icon" above).
+
 ## Scrobbling pipeline
 
 `main/playback/wire-now-playing.ts` drives a `Tracker` (from `packages/core`) off the
@@ -263,7 +267,7 @@ until the user logs in.
 
 ## Bug reporting
 
-A "Report a Bug" button lives at the bottom of the sidebar (next to Preferences,
+A "Report a Bug" button lives at the bottom of the sidebar (next to Settings,
 always visible regardless of which view is active). It opens a dialog
 (`BugReportDialog`) for a title and description, then submits both — plus
 diagnostics (`platform`, `arch`, `appVersion`, and the last 50 log lines from a
@@ -286,9 +290,12 @@ Every layer of this feature — dialog → hook → preload → IPC → `wire-bu
 the relay Worker → GitHub's REST API — has been verified end-to-end: comprehensive
 mocked tests at every layer (see each file's own test), plus a real (not mocked) local
 run of the relay itself via `wrangler dev`, exercising its actual `workerd` runtime
-against a real `POST` request all the way to a real call to `api.github.com` (which
-correctly 401s and gets wrapped into a non-leaking `502`, since no real `GITHUB_PAT`
-was available in this environment — see docs/modules/bug-report-relay.md's "Status").
+against real `POST` requests all the way to real calls to `api.github.com` — first
+against a placeholder PAT (401, correctly wrapped into a non-leaking `502`), then, once
+this repo's owner supplied a real `GITHUB_PAT`, an actual filed issue
+(https://github.com/Vaporjawn/Last-FM-Scrobbler/issues/9) proving the full path works
+end-to-end, not just up to a credential boundary — see docs/modules/bug-report-relay.md's
+"Status".
 The one thing that *was* a genuine bug (not just "not deployed yet"): setting
 `BUG_REPORT_RELAY_URL` as a CI secret during packaging did nothing on its own — a
 packaged Electron main process is real Node.js code, and CI-time env vars only exist
@@ -364,6 +371,9 @@ A few things worth knowing if you touch this config:
   platforms to a GitHub Release whenever a `v*` tag is pushed (or as an unpublished,
   downloadable workflow artifact via manual `workflow_dispatch`, for testing the
   workflow itself without cutting a real release).
+- **What this means for end users, and what the auto-updater does/doesn't verify as a
+  result** — see [SECURITY.md](../../SECURITY.md)'s "Release Integrity & Code Signing"
+  section rather than duplicating that explanation here.
 
 **Verification status**: the macOS `--dir` (unpacked) build was produced and inspected
 directly on this machine — confirmed `MediaRemoteAdapter.framework` and
@@ -397,7 +407,7 @@ repo.
 - **When it checks**: once ~10 seconds after launch, then every 4 hours while running
   (a background/tray app can stay running for days — see "Background app" above) —
   both gated on `AppSettings.autoUpdateEnabled` (default on; toggle lives in
-  Preferences → General, next to a "Check for updates now" button that *always* works
+  Settings → General, next to a "Check for updates now" button that *always* works
   regardless of the toggle).
 - **What happens when one's found**: `autoUpdater.autoDownload` is left `true`, so a
   detected update downloads automatically in the background — no separate "download
@@ -407,7 +417,7 @@ repo.
   is very often hidden and an in-app banner would go unseen. Choosing "Restart Now"
   calls `autoUpdater.quitAndInstall()`; choosing "Later" leaves the downloaded update
   in place to install automatically the next time the app quits and reopens.
-- **Status visibility**: Preferences → General also shows a live one-line status
+- **Status visibility**: Settings → General also shows a live one-line status
   (checking/downloading progress percent/downloaded/error) sourced from the same
   `UpdateStatus` pushed to the renderer over IPC.
 - **Platform coverage**: `mac`'s `zip` target and `win`'s `nsis` target are both
@@ -477,7 +487,7 @@ load, `contextBridge.exposeInMainWorld` never runs, so *every* `window.*` API
 the renderer. Every hook here is written to degrade gracefully when its API is
 missing (see each hook's docstring) — which is correct behavior for a component test,
 but in a real broken-preload scenario it means the UI doesn't show an error, it just
-quietly does nothing: Preferences' Accounts section, for example, showed an endless
+quietly does nothing: Settings' Accounts section, for example, showed an endless
 loading spinner rather than any indication of what had gone wrong (see `useAuth`'s
 `refresh()`, which now also falls back to a non-loading state and surfaces `error` if
 its initial IPC calls reject, precisely so a future instance of *any* IPC failure —
@@ -644,7 +654,7 @@ that file's docstring for why that race is real):
   previously *zero* user-visible feedback for either (success was invisible, errors
   were caught but never rendered anywhere) — the single biggest UI feedback gap found
   when surveying the app for this.
-- **Preferences**: login success/failure, log out, switch active account, save/clear
+- **Settings**: login success/failure, log out, switch active account, save/clear
   a user-supplied API key (with a longer-lived "Restart now" action button snackbar,
   replacing what used to be a persistent inline `Alert`), a `closeToTray`/
   `autoUpdateEnabled` toggle failing to persist, and "Check for updates now" (fires
@@ -733,7 +743,7 @@ cases in each module's own test file) — the real OS-level rendering isn't.
 All five views are real (not placeholders) and visually distinct from bare placeholder
 text — Card/Paper layouts, icons, and rank/progress styling rather than plain lists:
 Now Playing, Scrobbles, Profile, and Friends render live data once logged in (or a
-clear "log in on Preferences" prompt when not); Preferences has General (background-app
+clear "log in on Settings" prompt when not); Settings has General (background-app
 behavior) and Accounts tabs; bug reporting is wired end to end. Main-process wiring
 (playback source selection, now-playing IPC, auth IPC, read-only Last.fm data IPC,
 scrobble queue + submission, bug-report relay, settings persistence, tray/close-to-tray)

@@ -3,6 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import { NavigationSidebar } from "../../src/renderer/src/components/NavigationSidebar.js";
 
 describe("NavigationSidebar", () => {
+  it("shows the app icon and wordmark when expanded", () => {
+    render(<NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />);
+
+    expect(screen.getByText("Last.fm")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Last.fm Scrobbler" })).toBeInTheDocument();
+  });
+
+  it("shows only the app icon, not the wordmark, once collapsed", () => {
+    render(<NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />);
+
+    fireEvent.click(screen.getByLabelText("Collapse sidebar"));
+
+    expect(screen.queryByText("Last.fm")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Last.fm Scrobbler" })).toBeInTheDocument();
+  });
+
   it("renders all five navigation destinations", () => {
     render(<NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />);
 
@@ -10,7 +26,7 @@ describe("NavigationSidebar", () => {
     expect(screen.getByText("Scrobbles")).toBeInTheDocument();
     expect(screen.getByText("Profile")).toBeInTheDocument();
     expect(screen.getByText("Friends")).toBeInTheDocument();
-    expect(screen.getByText("Preferences")).toBeInTheDocument();
+    expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
   it("calls onSelectView with the clicked destination", () => {
@@ -32,7 +48,7 @@ describe("NavigationSidebar", () => {
     expect(screen.getByLabelText("Scrobbles")).toBeInTheDocument();
     expect(screen.getByLabelText("Profile")).toBeInTheDocument();
     expect(screen.getByLabelText("Friends")).toBeInTheDocument();
-    expect(screen.getByLabelText("Preferences")).toBeInTheDocument();
+    expect(screen.getByLabelText("Settings")).toBeInTheDocument();
     expect(screen.getByLabelText("Expand sidebar")).toBeInTheDocument();
   });
 

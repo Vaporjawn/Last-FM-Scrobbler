@@ -7,15 +7,18 @@ import PeopleIcon from "@mui/icons-material/People";
 import PersonIcon from "@mui/icons-material/Person";
 import PlayCircleIcon from "@mui/icons-material/PlayCircle";
 import SettingsIcon from "@mui/icons-material/Settings";
+import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
 
-export type ViewId = "now-playing" | "scrobbles" | "profile" | "friends" | "preferences";
+export type ViewId = "now-playing" | "scrobbles" | "profile" | "friends" | "settings";
 
 interface NavItem {
   readonly id: ViewId;
@@ -30,9 +33,9 @@ const NAV_ITEMS: readonly NavItem[] = [
   { id: "friends", label: "Friends", icon: <PeopleIcon /> },
 ];
 
-const PREFERENCES_ITEM: NavItem = {
-  id: "preferences",
-  label: "Preferences",
+const SETTINGS_ITEM: NavItem = {
+  id: "settings",
+  label: "Settings",
   icon: <SettingsIcon />,
 };
 
@@ -107,6 +110,42 @@ function NavButton({
   );
 }
 
+/** Purely presentational visual anchor for the app's persistent chrome — no props
+ * beyond `collapsed`, no click behavior. `/favicon.png` (served from `public/`) is
+ * byte-identical to `resources/app-icon.png` (verified via `shasum`) — the same mark
+ * used for the dock/window icon — so this reuses it directly rather than duplicating
+ * the asset under a second name. */
+function SidebarHeader({ collapsed }: { readonly collapsed: boolean }): JSX.Element {
+  const icon = (
+    <Box
+      component="img"
+      src="/favicon.png"
+      alt="Last.fm Scrobbler"
+      sx={{ width: 28, height: 28, borderRadius: 0.75, flexShrink: 0 }}
+    />
+  );
+
+  return (
+    <Stack
+      direction="row"
+      spacing={1.5}
+      sx={{
+        alignItems: "center",
+        justifyContent: collapsed ? "center" : "flex-start",
+        px: collapsed ? 2 : 3,
+        py: 2,
+      }}
+    >
+      {icon}
+      {collapsed ? null : (
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
+          Last.fm
+        </Typography>
+      )}
+    </Stack>
+  );
+}
+
 function ReportBugButton({
   collapsed,
   onClick,
@@ -148,6 +187,8 @@ export function NavigationSidebar({
         },
       }}
     >
+      <SidebarHeader collapsed={collapsed} />
+      <Divider />
       <List sx={{ flexGrow: 1 }}>
         {NAV_ITEMS.map((item) => (
           <NavButton
@@ -164,11 +205,11 @@ export function NavigationSidebar({
       <Divider />
       <List>
         <NavButton
-          item={PREFERENCES_ITEM}
-          selected={activeView === PREFERENCES_ITEM.id}
+          item={SETTINGS_ITEM}
+          selected={activeView === SETTINGS_ITEM.id}
           collapsed={collapsed}
           onClick={() => {
-            onSelectView(PREFERENCES_ITEM.id);
+            onSelectView(SETTINGS_ITEM.id);
           }}
         />
         {onReportBug ? (

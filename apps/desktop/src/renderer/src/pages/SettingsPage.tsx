@@ -1,0 +1,601 @@
+import type { JSX, SubmitEvent } from "react";
+import { useState } from "react";
+import AccountCircleIcon from "@mui/icons-material/AccountCircle";
+import AspectRatioIcon from "@mui/icons-material/AspectRatio";
+import SearchIcon from "@mui/icons-material/Search";
+import TuneIcon from "@mui/icons-material/Tune";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import Alert from "@mui/material/Alert";
+import Avatar from "@mui/material/Avatar";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import InputAdornment from "@mui/material/InputAdornment";
+import Link from "@mui/material/Link";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
+import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
+import { useSnackbar } from "../contexts/snackbar-context.js";
+import { PageHeader } from "../components/PageHeader.js";
+import { SettingsRow } from "../components/SettingsRow.js";
+import { SettingsSaveStatus, type SettingsSaveState } from "../components/SettingsSaveStatus.js";
+import { SettingsSectionCard } from "../components/SettingsSectionCard.js";
+import { useAccountAvatars } from "../hooks/use-account-avatars.js";
+import { useAppVersion } from "../hooks/use-app-version.js";
+import { useAuth } from "../hooks/use-auth.js";
+import { useSettings } from "../hooks/use-settings.js";
+import { useUpdates } from "../hooks/use-updates.js";
+import type { PageProps } from "./page-props.js";
+import type { AspectRatioOption } from "../../../shared/settings-api.js";
+import type { UpdateStatus } from "../../../shared/update-status.js";
+
+const ASPECT_RATIO_OPTIONS: readonly {
+  readonly value: AspectRatioOption;
+  readonly label: string;
+}[] = [
+  { value: "free", label: "Free (default)" },
+  { value: "16:9", label: "16:9 (widescreen)" },
+  { value: "4:3", label: "4:3 (standard)" },
+  { value: "1:1", label: "1:1 (square)" },
+];
+
+/**
+ * Pre-fills Last.fm's "create an API account" form via query string, so all the user
+ * has to do is click "Submit" — no typing. **Best-effort, not independently
+ * verified**: that form requires being logged in to Last.fm to view at all (Last.fm's
+ * own login page handles that redirect before this URL is ever reached — nothing in
+ * this app needs to broker it), and its real field `name` attributes couldn't be
+ * inspected from here — `name`/`description`/`homepage` are a reasonable guess based
+ * on the form's known labels (Application name / description / homepage), not a
+ * confirmed contract. If these don't actually populate the form when tested live,
+ * Last.fm uses different field names than guessed here; whoever notices should update
+ * this against the real page source (view-source once logged in) rather than
+ * re-guessing.
+ */
+function buildCreateApiAccountUrl(): string {
+  const url = new URL("https://www.last.fm/api/account/create");
+  url.searchParams.set("name", "Last.fm Scrobbler");
+  url.searchParams.set(
+    "description",
+    "Cross-platform desktop scrobbler — reads Now Playing from the OS media session " +
+      "and submits scrobbles to Last.fm.",
+  );
+  url.searchParams.set("homepage", "https://github.com/Vaporjawn/Last-FM-Scrobbler");
+  return url.toString();
+}
+
+const CREATE_API_ACCOUNT_URL = buildCreateApiAccountUrl();
+
+/** Human-readable summary of `UpdateStatus` for the Settings "Updates" row —
+ * `undefined` for "idle" (nothing worth saying before the first check has even run). */
+function describeUpdateStatus(status: UpdateStatus): string | undefined {
+  switch (status.phase) {
+    case "idle":
+      return undefined;
+    case "checking":
+      return "Checking for updates…";
+    case "available":
+      return `Update ${status.version} found — downloading…`;
+    case "not-available":
+      return "You're up to date.";
+    case "downloading":
+      return `Downloading update… ${Math.round(status.percent)}%`;
+    case "downloaded":
+      return `Update ${status.version} downloaded — restart to install it.`;
+    case "error":
+      return `Couldn't check for updates: ${status.message}`;
+  }
+}
+
+/** Case-insensitive substring match against every non-empty candidate — used to
+ * decide whether a section stays visible for the current search query. Empty query
+ * always matches (nothing typed yet = show everything). */
+function sectionMatches(query: string, ...candidates: (string | undefined)[]): boolean {
+  if (!query) {
+    return true;
+  }
+  return candidates.some((candidate) => candidate?.toLowerCase().includes(query));
+}
+
+/**
+ * Settings → General, Window, Accounts, and (when needed) a Last.fm API key form.
+ * Laid out as a search-filterable card grid — see `SettingsSectionCard`/`SettingsRow`
+ * — modeled on a reference design the UI was asked to look more like, restyled onto
+ * this app's own theme (`theme/index.ts`'s red/amber palette) rather than adopting
+ * the reference's own colors.
+ *
+ * Login is deliberately a single button: `useAuth`'s `login()` drives
+ * `packages/core`'s `AuthFlow`, which opens the user's browser to Last.fm's own
+ * authorization page and polls silently until they approve access there — no token to
+ * copy/paste, no extra screen in this app.
+ *
+ * Login needs *some* Last.fm API key/secret pair to exist first, though. This build
+ * either has one baked in (`credentialsSource === "environment"`, configured by
+ * whoever built it via LASTFM_API_KEY/LASTFM_API_SECRET — not user-editable here), or
+ * the end user supplies their own below ("bring your own key") — both paths unlock the
+ * exact same login flow above once a key is in place.
+ */
+export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
+  const {
+    isConfigured,
+    credentialsSource,
+    accounts,
+    activeAccount,
+    isLoggingIn,
+    isSavingCredentials,
+    error,
+    login,
+    logout,
+    setActiveAccount,
+    saveAppCredentials,
+    clearAppCredentials,
+    relaunch,
+  } = useAuth();
+  const { settings, updateSettings } = useSettings();
+  const avatarsByUsername = useAccountAvatars(accounts);
+  const appVersion = useAppVersion();
+  const { status: updateStatus, isChecking: isCheckingForUpdate, checkNow: checkForUpdatesNow } =
+    useUpdates();
+  const { notify } = useSnackbar();
+
+  // `window.platform` is absent outside a real Electron renderer (e.g. component
+  // tests) — default to the more common "tray" phrasing in that case.
+  const isMac = window.platform === "darwin";
+  const updateStatusText = describeUpdateStatus(updateStatus);
+  const trayLabel = isMac
+    ? "Keep running in the menu bar when the window is closed"
+    : "Keep running in the tray when the window is closed";
+
+  const [query, setQuery] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
+  const [saveState, setSaveState] = useState<SettingsSaveState>("saved");
+
+  const q = query.trim().toLowerCase();
+
+  const handleSaveCredentials = (event: SubmitEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    void (async () => {
+      const result = await saveAppCredentials(apiKey, apiSecret);
+      if (result.success) {
+        setApiKey("");
+        setApiSecret("");
+        // Stays up longer than the default (see SnackbarProvider) and carries the
+        // actual "restart now" action — this is a more consequential outcome than a
+        // routine success toast, since nothing takes effect until the app restarts.
+        notify({
+          message: "Saved. Restart the app for it to take effect.",
+          severity: "success",
+          autoHideDurationMs: 15_000,
+          action: { label: "Restart now", onClick: () => void relaunch() },
+        });
+      } else {
+        notify({ message: result.error, severity: "error" });
+      }
+    })();
+  };
+
+  const handleLogin = (): void => {
+    // Once `AuthFlow` confirms the session (the user approved access on Last.fm in
+    // their browser), jump straight to Profile so they see confirmation of who
+    // they're now logged in as, rather than sitting on this plain account list.
+    void login().then((result) => {
+      if (result.success) {
+        notify({ message: "Logged in.", severity: "success" });
+        onNavigateToProfile?.();
+      } else {
+        notify({ message: result.error, severity: "error" });
+      }
+    });
+  };
+
+  const handleLogout = (username: string): void => {
+    void logout(username).then((result) => {
+      notify(
+        result.success
+          ? { message: `Logged out ${username}.`, severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
+    });
+  };
+
+  const handleSetActiveAccount = (username: string): void => {
+    void setActiveAccount(username).then((result) => {
+      notify(
+        result.success
+          ? { message: `Switched to ${username}.`, severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
+    });
+  };
+
+  const handleClearAppCredentials = (): void => {
+    void clearAppCredentials().then((result) => {
+      notify(
+        result.success
+          ? { message: "API key removed. Restart the app for it to take effect.", severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
+    });
+  };
+
+  const handleUpdateSetting = (patch: Parameters<typeof updateSettings>[0]): void => {
+    setSaveState("saving");
+    void updateSettings(patch).then((result) => {
+      if (result.success) {
+        setSaveState("saved");
+      } else {
+        setSaveState("error");
+        notify({ message: result.error, severity: "error" });
+      }
+    });
+  };
+
+  const handleCheckForUpdatesNow = (): void => {
+    void checkForUpdatesNow().then((result) => {
+      notify(
+        result.success
+          ? { message: "Checked for updates.", severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
+    });
+  };
+
+  // An "environment"-sourced key was a deliberate choice by whoever built/launched
+  // this instance — not something to let the end user change/clear from in here.
+  // Otherwise (no key yet, or a user-supplied one already active) the form is always
+  // shown — no gating on some prior "log in" step that this app has no way to
+  // actually verify happened.
+  const showKeyForm = credentialsSource !== "environment";
+
+  const generalVisible = sectionMatches(
+    q,
+    "general",
+    "dark mode",
+    "light mode",
+    "appearance",
+    "theme",
+    trayLabel,
+    "automatically check for updates",
+    "check for updates",
+    updateStatusText,
+    "version",
+    appVersion,
+  );
+  const windowVisible = sectionMatches(
+    q,
+    "window",
+    "aspect ratio",
+    ...ASPECT_RATIO_OPTIONS.map((option) => option.label),
+  );
+  const accountsVisible = sectionMatches(
+    q,
+    "accounts",
+    "log in with last.fm",
+    "log out",
+    activeAccount,
+    ...accounts,
+  );
+  const apiKeyVisible =
+    showKeyForm && sectionMatches(q, "last.fm api key", "api key", "shared secret");
+  const noResults = q.length > 0 && !generalVisible && !windowVisible && !accountsVisible && !apiKeyVisible;
+
+  return (
+    <Box sx={{ p: 3 }}>
+      {/* `md` rather than the usual `sm` — same reasoning as ScrobbleDetailPage's
+          avatar+text Stack: this breakpoint reacts to the whole window's width, not
+          this Box's actual available width, and the sidebar (200px expanded) eats
+          into that. At this app's own 680px minimum window width, `sm` (600px) would
+          already force the title block to share a row with the search box, leaving
+          the subtitle only ~150px to wrap into. `md` (900px) keeps the header stacked
+          until there's genuinely enough room for a row. */}
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        sx={{ justifyContent: "space-between", alignItems: { md: "flex-start" }, mb: 3 }}
+      >
+        <PageHeader
+          title="Settings"
+          subtitle="Your background app behavior, window sizing, and connected Last.fm account"
+        />
+        <Stack direction="row" spacing={2} sx={{ alignItems: "center", flexShrink: 0 }}>
+          <TextField
+            size="small"
+            placeholder="Search settings…"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="disabled" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{
+              minWidth: 200,
+              "& .MuiOutlinedInput-root": { borderRadius: 999 },
+            }}
+          />
+          <SettingsSaveStatus state={saveState} />
+        </Stack>
+      </Stack>
+
+      {noResults ? (
+        <Typography color="text.secondary" sx={{ py: 6, textAlign: "center" }}>
+          No settings match "{query}"
+        </Typography>
+      ) : (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+            gap: 2.5,
+          }}
+        >
+          {generalVisible ? (
+            <SettingsSectionCard icon={<TuneIcon fontSize="small" />} title="General">
+              <SettingsRow
+                label="Dark mode"
+                description="Switch to a light color scheme — takes effect immediately"
+                control={
+                  <Switch
+                    checked={settings.themeMode === "dark"}
+                    onChange={(event) => {
+                      handleUpdateSetting({ themeMode: event.target.checked ? "dark" : "light" });
+                    }}
+                    slotProps={{ input: { "aria-label": "Dark mode" } }}
+                  />
+                }
+              />
+              <SettingsRow
+                label={trayLabel}
+                description={
+                  "Last.fm Scrobbler is a background app — playback tracking and scrobbling " +
+                  "only happen while it's running. This keeps it running after you close the " +
+                  `window; quit it from the ${isMac ? "menu bar" : "tray"} icon instead.`
+                }
+                control={
+                  <Switch
+                    checked={settings.closeToTray}
+                    onChange={(event) => {
+                      handleUpdateSetting({ closeToTray: event.target.checked });
+                    }}
+                    slotProps={{ input: { "aria-label": trayLabel } }}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Automatically check for updates"
+                control={
+                  <Switch
+                    checked={settings.autoUpdateEnabled}
+                    onChange={(event) => {
+                      handleUpdateSetting({ autoUpdateEnabled: event.target.checked });
+                    }}
+                    slotProps={{ input: { "aria-label": "Automatically check for updates" } }}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Check for updates"
+                description={updateStatusText}
+                control={
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={handleCheckForUpdatesNow}
+                    disabled={isCheckingForUpdate}
+                  >
+                    {isCheckingForUpdate ? "Checking…" : "Check for updates now"}
+                  </Button>
+                }
+              />
+              <SettingsRow
+                label="Version"
+                control={
+                  <Typography variant="body2" color="text.secondary">
+                    {appVersion ?? "…"}
+                  </Typography>
+                }
+              />
+            </SettingsSectionCard>
+          ) : null}
+
+          {windowVisible ? (
+            <SettingsSectionCard
+              icon={<AspectRatioIcon fontSize="small" />}
+              title="Window"
+              description="Locks resizing to a ratio — takes effect immediately, no restart needed"
+            >
+              <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                Aspect ratio
+              </Typography>
+              <RadioGroup
+                row
+                value={settings.aspectRatio}
+                onChange={(event) => {
+                  handleUpdateSetting({ aspectRatio: event.target.value as AspectRatioOption });
+                }}
+              >
+                {ASPECT_RATIO_OPTIONS.map((option) => (
+                  <FormControlLabel
+                    key={option.value}
+                    value={option.value}
+                    control={<Radio size="small" />}
+                    label={option.label}
+                    sx={{ mr: 2 }}
+                  />
+                ))}
+              </RadioGroup>
+            </SettingsSectionCard>
+          ) : null}
+
+          {accountsVisible ? (
+            <SettingsSectionCard icon={<AccountCircleIcon fontSize="small" />} title="Accounts" fullWidth>
+              {isConfigured === undefined ? (
+                <CircularProgress size={24} />
+              ) : (
+                <>
+                  {error ? (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      {error}
+                    </Alert>
+                  ) : null}
+
+                  {isConfigured ? (
+                    <>
+                      {accounts.length > 0 ? (
+                        <Box sx={{ mb: 2 }}>
+                          {accounts.map((username) => (
+                            <SettingsRow
+                              key={username}
+                              label={username}
+                              description={username === activeAccount ? "Active account" : undefined}
+                              leading={
+                                <Avatar
+                                  src={avatarsByUsername[username]}
+                                  alt={username}
+                                  sx={{
+                                    width: 32,
+                                    height: 32,
+                                    bgcolor: "action.selected",
+                                    color: "text.secondary",
+                                  }}
+                                >
+                                  {username.slice(0, 1).toUpperCase()}
+                                </Avatar>
+                              }
+                              control={
+                                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                                  <Radio
+                                    size="small"
+                                    checked={username === activeAccount}
+                                    onChange={() => {
+                                      handleSetActiveAccount(username);
+                                    }}
+                                    name="active-account"
+                                    slotProps={{
+                                      input: { "aria-label": `Use ${username} as the active account` },
+                                    }}
+                                  />
+                                  <Button
+                                    size="small"
+                                    color="inherit"
+                                    onClick={() => {
+                                      handleLogout(username);
+                                    }}
+                                  >
+                                    Log out
+                                  </Button>
+                                </Stack>
+                              }
+                            />
+                          ))}
+                        </Box>
+                      ) : (
+                        <Typography color="text.secondary" sx={{ mb: 2 }}>
+                          No Last.fm account connected yet.
+                        </Typography>
+                      )}
+
+                      <Button variant="contained" onClick={handleLogin} disabled={isLoggingIn} sx={{ mt: 1 }}>
+                        {isLoggingIn ? "Waiting for approval on Last.fm…" : "Log in with Last.fm"}
+                      </Button>
+                      {isLoggingIn ? (
+                        // Last.fm's own desktop-auth flow has no way to redirect the browser
+                        // back to this app automatically once you click "Allow Access" —
+                        // their docs say the user is expected to close the browser and return
+                        // here manually. This app *does* try to bring itself to the front and
+                        // fire a notification when that happens (best-effort — the OS doesn't
+                        // guarantee a background app can steal focus), but the one thing
+                        // that's always true is what this line says: come back here yourself
+                        // once you've approved it, and it'll already be showing you logged in.
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 480 }}>
+                          Click "Allow Access" on the Last.fm page that just opened, then come back to
+                          this window — we'll try to bring it to the front automatically, but if it
+                          doesn't, your profile will already be here waiting for you.
+                        </Typography>
+                      ) : null}
+
+                      {credentialsSource === "user-supplied" ? (
+                        <Button
+                          size="small"
+                          color="inherit"
+                          sx={{ mt: 1, display: "block" }}
+                          onClick={handleClearAppCredentials}
+                        >
+                          Remove saved API key
+                        </Button>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Logging in needs a Last.fm API key first — either baked into the build
+                      you're running, or your own free one below.
+                    </Alert>
+                  )}
+                </>
+              )}
+            </SettingsSectionCard>
+          ) : null}
+
+          {isConfigured !== undefined && apiKeyVisible ? (
+            <SettingsSectionCard icon={<VpnKeyIcon fontSize="small" />} title="Last.fm API key" fullWidth>
+              <Box component="form" onSubmit={handleSaveCredentials}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Don't have one?{" "}
+                  <Link href={CREATE_API_ACCOUNT_URL} target="_blank" rel="noreferrer">
+                    Get your free Last.fm API key
+                  </Link>
+                  , then paste it and its shared secret below.
+                </Typography>
+                {/* `md`, not `sm` — same sidebar-width reasoning as the page header
+                    Stack above. */}
+                <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560 }}>
+                  <TextField
+                    label="API key"
+                    value={apiKey}
+                    onChange={(event) => {
+                      setApiKey(event.target.value);
+                    }}
+                    size="small"
+                    fullWidth
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="Shared secret"
+                    type="password"
+                    value={apiSecret}
+                    onChange={(event) => {
+                      setApiSecret(event.target.value);
+                    }}
+                    size="small"
+                    fullWidth
+                    autoComplete="off"
+                  />
+                </Stack>
+                <Box sx={{ mt: 1.5, mb: 1 }}>
+                  <Button
+                    type="submit"
+                    variant="outlined"
+                    disabled={isSavingCredentials || !apiKey.trim() || !apiSecret.trim()}
+                  >
+                    {isSavingCredentials ? "Saving…" : "Save API key"}
+                  </Button>
+                </Box>
+              </Box>
+            </SettingsSectionCard>
+          ) : null}
+        </Box>
+      )}
+    </Box>
+  );
+}
