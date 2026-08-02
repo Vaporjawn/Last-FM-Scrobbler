@@ -19,6 +19,14 @@ function formatTimestamp(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
 }
 
+/** Friend avatar size — bumped up from MUI's 40px default so real Last.fm photos
+ * actually read at list scale; matches `ScrobbleListItem`'s row avatar for a
+ * consistent list-avatar size across the app. The nested activity card's own avatar
+ * stays a step smaller (see `ACTIVITY_AVATAR_SIZE` below) to keep the visual hierarchy
+ * — this row is about the friend, the card beneath it is a secondary detail. */
+const AVATAR_SIZE = 56;
+const ACTIVITY_AVATAR_SIZE = 48;
+
 export interface FriendListItemProps {
   readonly friend: Friend;
   /** This friend's most recent activity — fetched by `FriendsPage` (via
@@ -57,14 +65,19 @@ export function FriendListItem({ friend, activity }: FriendListItemProps): JSX.E
             <Avatar
               src={friend.avatarUrl}
               alt={friend.username}
-              sx={{ bgcolor: "action.selected", color: "text.secondary" }}
+              sx={{
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
+                bgcolor: "action.selected",
+                color: "text.secondary",
+              }}
             >
               {friend.username.slice(0, 1).toUpperCase()}
             </Avatar>
             {friend.isSubscriber ? (
               <StarIcon
                 titleAccess="Last.fm Pro subscriber"
-                sx={{ fontSize: 14, color: "warning.main" }}
+                sx={{ fontSize: 16, color: "warning.main" }}
               />
             ) : null}
           </Stack>
@@ -73,7 +86,7 @@ export function FriendListItem({ friend, activity }: FriendListItemProps): JSX.E
       </Stack>
 
       {track ? (
-        <Box sx={{ mt: 1.25, ml: `${40 + 12}px` }}>
+        <Box sx={{ mt: 1.25, ml: `${AVATAR_SIZE + 12}px` }}>
           <Paper
             variant="outlined"
             sx={{
@@ -89,14 +102,14 @@ export function FriendListItem({ friend, activity }: FriendListItemProps): JSX.E
               src={track.imageUrl}
               alt={track.track}
               sx={{
-                width: 40,
-                height: 40,
+                width: ACTIVITY_AVATAR_SIZE,
+                height: ACTIVITY_AVATAR_SIZE,
                 flexShrink: 0,
                 bgcolor: track.nowPlaying ? "primary.main" : "action.selected",
                 color: track.nowPlaying ? "primary.contrastText" : "text.secondary",
               }}
             >
-              {track.nowPlaying ? <PlayArrowIcon fontSize="small" /> : <MusicNoteIcon fontSize="small" />}
+              {track.nowPlaying ? <PlayArrowIcon fontSize="medium" /> : <MusicNoteIcon fontSize="medium" />}
             </Avatar>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               {track.nowPlaying ? (

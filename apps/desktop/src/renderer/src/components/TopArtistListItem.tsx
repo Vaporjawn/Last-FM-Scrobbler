@@ -7,7 +7,7 @@ import Typography from "@mui/material/Typography";
 import type { TopArtist } from "@lastfm-scrobbler/core";
 import { ArtistAvatar } from "./ArtistAvatar.js";
 
-const AVATAR_SIZE = 32;
+const AVATAR_SIZE = 48;
 /** Left offset that lines the play-count bar up under the artist name (rank column +
  * avatar + the two gaps between them — see the Stack below). */
 const BAR_INDENT_PX = 20 + 12 + AVATAR_SIZE + 12;

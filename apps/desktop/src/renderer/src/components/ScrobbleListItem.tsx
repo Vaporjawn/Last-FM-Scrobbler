@@ -17,6 +17,10 @@ function formatTimestamp(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
 }
 
+/** Row avatar size — bumped up from MUI's 40px default so real album art actually
+ * reads at list scale instead of looking like a favicon. */
+const AVATAR_SIZE = 56;
+
 export interface ScrobbleListItemProps {
   readonly track: RecentTrack;
   /** Opens `ScrobbleDetailPage` for this track when given — the avatar/text portion of
@@ -47,11 +51,13 @@ export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JS
         src={track.imageUrl}
         alt={track.track}
         sx={{
+          width: AVATAR_SIZE,
+          height: AVATAR_SIZE,
           bgcolor: track.nowPlaying ? "primary.main" : "action.selected",
           color: track.nowPlaying ? "primary.contrastText" : "text.secondary",
         }}
       >
-        {track.nowPlaying ? <PlayArrowIcon fontSize="small" /> : <MusicNoteIcon fontSize="small" />}
+        {track.nowPlaying ? <PlayArrowIcon fontSize="medium" /> : <MusicNoteIcon fontSize="medium" />}
       </Avatar>
     </ListItemAvatar>
   );
