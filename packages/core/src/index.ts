@@ -1,5 +1,8 @@
 export type { EligibilityInput } from "./rules/is-eligible-for-scrobble.js";
-export { isEligibleForScrobble } from "./rules/is-eligible-for-scrobble.js";
+export {
+  isEligibleForScrobble,
+  MAX_ELIGIBILITY_THRESHOLD_SEC,
+} from "./rules/is-eligible-for-scrobble.js";
 export type {
   PendingScrobble,
   QueuedScrobble,
@@ -34,3 +37,11 @@ export { AuthFlow, AuthTimeoutError } from "./auth/auth-flow.js";
 export type { AuthFlowClient, AuthFlowOptions } from "./auth/auth-flow.js";
 export { compileFilter, FilterSyntaxError } from "./filters/filter-expression.js";
 export type { CompiledFilter, FilterableTrack } from "./filters/filter-expression.js";
+export { Tracker } from "./tracker/tracker.js";
+export type {
+  ScrobbleEligibleEvent,
+  TrackChangedEvent,
+  TrackerEvents,
+  TrackerOptions,
+} from "./tracker/tracker.js";
+export { computeTrackIdentity } from "./tracker/track-identity.js";

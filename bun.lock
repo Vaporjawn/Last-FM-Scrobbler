@@ -79,6 +79,7 @@
       "name": "@lastfm-scrobbler/core",
       "version": "0.0.0",
       "dependencies": {
+        "@lastfm-scrobbler/shared-types": "0.0.0",
         "better-sqlite3": "^13.0.2",
       },
       "devDependencies": {

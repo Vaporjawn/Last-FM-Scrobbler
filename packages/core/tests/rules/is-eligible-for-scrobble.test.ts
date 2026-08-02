@@ -25,4 +25,9 @@ describe("isEligibleForScrobble", () => {
   it("accepts a short-but-valid track exactly at its 50% mark", () => {
     expect(isEligibleForScrobble({ durationSec: 60, playedSec: 30 })).toBe(true);
   });
+
+  it("falls back to the 240s cap alone when duration is unknown (e.g. a live stream)", () => {
+    expect(isEligibleForScrobble({ playedSec: 239 })).toBe(false);
+    expect(isEligibleForScrobble({ playedSec: 240 })).toBe(true);
+  });
 });

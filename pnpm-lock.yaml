@@ -135,6 +135,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@lastfm-scrobbler/shared-types':
+        specifier: 0.0.0
+        version: link:../shared-types
       better-sqlite3:
         specifier: ^13.0.2
         version: 13.0.2
