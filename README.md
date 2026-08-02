@@ -67,6 +67,7 @@ contributor guide.
 | [`packages/adapter-windows`](docs/modules/adapter-windows.md)   | SMTC playback source                                                                 |
 | [`packages/adapter-macos`](docs/modules/adapter-macos.md)       | MediaRemote playback source                                                          |
 | [`apps/desktop`](docs/modules/desktop.md)                       | Electron + React + MUI desktop app                                                   |
+| [`apps/site`](docs/modules/site.md)                             | Public landing page, deployed to GitHub Pages                                        |
 | [`services/bug-report-relay`](docs/modules/bug-report-relay.md) | Anonymous bug-report → GitHub issue relay                                            |
 
 ## Community and support
