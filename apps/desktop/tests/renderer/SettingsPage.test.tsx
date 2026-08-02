@@ -4,18 +4,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "../../src/shared/auth-api.js";
 import type { LastfmDataApi } from "../../src/shared/lastfm-api.js";
 import { DEFAULT_APP_SETTINGS, type AppSettings, type SettingsApi } from "../../src/shared/settings-api.js";
+import { SettingsProvider } from "../../src/renderer/src/contexts/SettingsProvider.js";
 import { SnackbarProvider } from "../../src/renderer/src/contexts/SnackbarProvider.js";
 import { SettingsPage } from "../../src/renderer/src/pages/SettingsPage.js";
 
-/** `SettingsPage` fires snackbars via `useSnackbar()` — a real `SnackbarProvider`
- * (not present in a bare `render(<SettingsPage />)`, which only ever exercises
- * `useSnackbar()`'s no-op fallback) is needed for those to actually render and be
- * assertable. */
+/** `SettingsPage` fires snackbars via `useSnackbar()` and reads/writes settings via
+ * `useSettings()` — real `SnackbarProvider`/`SettingsProvider` ancestors (not present
+ * in a bare `render(<SettingsPage />)`, which only ever exercises each hook's no-op
+ * fallback) are needed for either to actually work and be assertable. */
 function renderSettingsPage(props: ComponentProps<typeof SettingsPage>): ReturnType<typeof render> {
   return render(
-    <SnackbarProvider>
-      <SettingsPage {...props} />
-    </SnackbarProvider>,
+    <SettingsProvider>
+      <SnackbarProvider>
+        <SettingsPage {...props} />
+      </SnackbarProvider>
+    </SettingsProvider>,
   );
 }
 
