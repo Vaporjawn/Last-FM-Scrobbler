@@ -2,27 +2,40 @@
 
 ## Responsibility
 
-Pure TypeScript scrobbling engine — zero OS dependencies. Owns scrobble eligibility
-rules, the offline queue, the Last.fm API client, auth/session management, exclusion
-filters, and structured logging. See `packages/shared-types` for the `PlaybackSource`
-interface adapters implement and this package consumes.
+Pure TypeScript scrobbling engine — zero OS dependencies (except `@lastfm-scrobbler/shared-types`,
+its own sibling package). Owns scrobble eligibility rules, the offline queue, the
+Last.fm API client, auth/session management, exclusion filters, playback tracking, and
+structured logging.
 
-## Public interface (current)
+## Public interface
 
-- `isEligibleForScrobble(input: EligibilityInput): boolean` — scrobble eligibility rule
-  (≥50% played or ≥240s, minimum 30s track length).
+- **`rules`** — `isEligibleForScrobble(input: EligibilityInput): boolean`. ≥50% played
+  or ≥240s (whichever first), minimum 30s track length. Falls back to the 240s cap alone
+  when `durationSec` is omitted (a stream with no fixed length).
+- **`queue`** — `ScrobbleQueue`: SQLite-backed (`better-sqlite3`) offline cache.
+  `enqueue`/`dequeueBatch`/`remove`/`recordFailure` (retryable vs. drop-outright)/
+  `evictStale`/`evictOverflow`. See `docs/adr/0006-offline-queue-persistence.md`.
+- **`lastfm-api`** — `LastfmClient`: every endpoint the app needs (auth, scrobble,
+  now-playing, love/unlove/addTags, recent tracks, top artists, friends, artist
+  info/similar). `signRequest` (pure signature function) and `LastfmApiError` +
+  `isRetryableApiErrorCode`/`isRetryableScrobbleIgnoreCode` are separately exported and
+  independently tested.
+- **`auth`** — `AuthFlow` (token → open browser → poll `auth.getSession` until
+  approved, no manual steps) and `AccountStore` (multi-account persistence over an
+  injected `SecretStorage`, since core has no keychain access itself).
+- **`filters`** — `compileFilter(expression): CompiledFilter`, the field-based
+  exclusion DSL from `docs/adr/0005-multi-source-and-track-identity-policy.md`.
+- **`tracker`** — `Tracker`: wires a `PlaybackSource`'s raw events into scrobble
+  eligibility, deduping via `computeTrackIdentity` and accumulating actual elapsed
+  playing time (not raw position, so seeking can't fake eligibility). Driven by an
+  explicit `tick()` call from the host rather than owning a timer itself.
+- **`logging`** — `Logger`: bounded ring buffer, level filtering (none/basic/debug),
+  injectable sink, `formatRecentEntriesAsText()` for the bug-report relay's diagnostics.
 
 ## Dependencies
 
-None yet. Will depend on `@lastfm-scrobbler/shared-types` once the `tracker` module
-(consuming `PlaybackSource`/`TrackInfo`) is implemented.
-
-## Last.fm API surface `lastfm-api` will need to cover
-
-`auth.getToken`, `auth.getSession`, `track.scrobble` (single + batch),
-`track.updateNowPlaying`, `track.love`, `track.unlove`, `track.addTags`,
-`user.getRecentTracks`, `user.getTopArtists`, `user.getFriends`, `artist.getInfo`,
-`artist.getSimilar`.
+`@lastfm-scrobbler/shared-types` (`TrackInfo`, `PlaybackSource`, `PlaybackState`),
+`better-sqlite3`.
 
 ## Known limitation: the Last.fm API secret ships inside the client
 
@@ -35,6 +48,7 @@ the accepted, standard approach across the open-source Last.fm scrobbler ecosyst
 
 ## Status
 
-Scaffolded with one real module (`rules/is-eligible-for-scrobble`), TDD, fully tested.
-`queue`, `lastfm-api`, `auth`, `filters`, `tracker`, and `logging` are not yet
-implemented — see ADR 0005 and ADR 0006 for the decisions already locked in for them.
+Fully implemented and tested (112 tests, TDD throughout). Real Last.fm credentials
+aren't available in the development/CI environment this was built in, so `lastfm-api`
+and `auth` are tested entirely against mocked HTTP, not live-fired against the real API
+— genuinely complete code, not yet verified against the live service.
