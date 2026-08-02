@@ -2,6 +2,7 @@ import { useState, type JSX } from "react";
 import Box from "@mui/material/Box";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
+import { BugReportDialog } from "./components/BugReportDialog.js";
 import { NavigationSidebar, type ViewId } from "./components/NavigationSidebar.js";
 import { FriendsPage } from "./pages/FriendsPage.js";
 import { NowPlayingPage } from "./pages/NowPlayingPage.js";
@@ -20,17 +21,30 @@ const PAGES: Record<ViewId, () => JSX.Element> = {
 
 export function App(): JSX.Element {
   const [activeView, setActiveView] = useState<ViewId>("now-playing");
+  const [bugReportOpen, setBugReportOpen] = useState(false);
   const ActivePage = PAGES[activeView];
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ display: "flex", height: "100vh" }}>
-        <NavigationSidebar activeView={activeView} onSelectView={setActiveView} />
+        <NavigationSidebar
+          activeView={activeView}
+          onSelectView={setActiveView}
+          onReportBug={() => {
+            setBugReportOpen(true);
+          }}
+        />
         <Box component="main" sx={{ flexGrow: 1, overflow: "auto" }}>
           <ActivePage />
         </Box>
       </Box>
+      <BugReportDialog
+        open={bugReportOpen}
+        onClose={() => {
+          setBugReportOpen(false);
+        }}
+      />
     </ThemeProvider>
   );
 }

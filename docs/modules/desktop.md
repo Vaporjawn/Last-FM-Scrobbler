@@ -16,6 +16,11 @@ Electron + React + MUI desktop shell. Five destinations: Now Playing, Scrobbles
   bake them into whatever build pipeline produces distributable packages. Without
   them, the app still launches, but login and all Last.fm data views report "not
   configured" rather than throwing.
+- `BUG_REPORT_RELAY_URL` — the deployed URL of `services/bug-report-relay` (e.g.
+  `https://lastfm-scrobbler-bug-report-relay.<your-subdomain>.workers.dev/report`),
+  set once that Worker is deployed with its own `GITHUB_PAT` secret (see
+  docs/modules/bug-report-relay.md). Without it, the "Report a Bug" button still
+  appears but reports "not configured" instead of submitting.
 
 ## Login UX
 
@@ -42,6 +47,17 @@ platform `PlaybackSource`; eligible plays are hand off to
 whichever account is currently active. If no account is active yet, scrobbles simply
 accumulate in the queue (bounded — see docs/adr/0006-offline-queue-persistence.md)
 until the user logs in.
+
+## Bug reporting
+
+A "Report a Bug" button lives at the bottom of the sidebar (next to Preferences,
+always visible regardless of which view is active). It opens a dialog
+(`BugReportDialog`) for a title and description, then submits both — plus
+diagnostics (`platform`, `arch`, `appVersion`, and the last 50 log lines from a
+main-process `Logger`) — to `services/bug-report-relay` via
+`main/bug-report/wire-bug-report.ts`, which files them as an anonymous GitHub issue.
+No GitHub account is required, and no Last.fm credential is ever included (see
+`docs/adr/0004-anonymous-bug-report-relay.md`).
 
 ## A real gotcha found via live verification: `electron`'s ESM named exports
 
@@ -71,8 +87,10 @@ preview` to actually launch a working window.
   `LastfmClient.getArtistInfo`/`getSimilarArtists` isn't wired into it yet).
 - Tray icon and "launch at login".
 - Auto-update (`electron-updater`).
-- Crash reporting (tie into `services/bug-report-relay` as an opt-in automatic
-  reporter).
+- *Automatic* crash reporting — an opt-in reporter that auto-fills the bug-report
+  dialog (or reports silently) on an unhandled exception/crash. The manual "Report a
+  Bug" button/dialog is built (see "Bug reporting" above); wiring it to fire
+  automatically on a crash is not.
 - i18n / language selection.
 - Code signing and notarization for distribution.
 - Scrobbling settings UI (enable/disable, exclusion filter expression editor for
@@ -90,19 +108,25 @@ preview` to actually launch a working window.
 
 All five views are real (not placeholders): Now Playing, Scrobbles, Profile, and
 Friends render live data once logged in (or a clear "log in on Preferences" prompt
-when not); Preferences has a fully functional Accounts tab. Main-process wiring
-(playback source selection, now-playing IPC, auth IPC, read-only Last.fm data IPC,
-scrobble queue + submission) is complete and unit-tested (69 tests: secret storage,
-account store construction, auth IPC, Last.fm data IPC, scrobbling queue/submission
-logic against a real in-memory `ScrobbleQueue`, and renderer component behavior via
-Testing Library with faked `window.*` APIs).
+when not); Preferences has a fully functional Accounts tab; bug reporting is wired
+end to end. Main-process wiring (playback source selection, now-playing IPC, auth
+IPC, read-only Last.fm data IPC, scrobble queue + submission, bug-report relay) is
+complete and unit-tested (83 tests: secret storage, account store construction, auth
+IPC, Last.fm data IPC, scrobbling queue/submission logic against a real in-memory
+`ScrobbleQueue`, bug-report IPC, and renderer component behavior via Testing Library
+with faked `window.*` APIs).
 
-Live-verified end to end on this machine: the production build
+Live-verified end to end on this machine, twice — once after the initial auth/
+scrobbling/views work, and again after adding bug reporting: the production build
 (`electron-vite build` + `electron-vite preview`) launches a real, stable multi-process
 Electron app (main/GPU/network/renderer processes all present, matching Electron's
-normal architecture) with no startup errors. Not verified: actual on-screen rendering
-content (this development environment has no attached display, so screenshots aren't
-possible — verification stopped at "the process tree is healthy and nothing crashed"),
-and the full login → scrobble round trip against the real Last.fm API (no API
-credentials were available in this environment — see docs/modules/core.md's note on
-`lastfm-api` being tested against mocked HTTP only).
+normal architecture) with no startup errors. The second run additionally confirmed
+`createPlatformPlaybackSource()` genuinely spawns `packages/adapter-macos`'s real
+`mediaremote-adapter.pl` child process as part of normal app startup on this machine —
+end-to-end proof the adapter is correctly wired into the running app, not just
+independently tested. Not verified: actual on-screen rendering content (this
+development environment has no attached display, so screenshots aren't possible —
+verification stopped at "the process tree is healthy and nothing crashed"), and the
+full login → scrobble round trip against the real Last.fm API, or a real bug-report
+submission against a deployed relay (no Last.fm API credentials, Cloudflare account,
+or deployed relay URL were available in this environment).

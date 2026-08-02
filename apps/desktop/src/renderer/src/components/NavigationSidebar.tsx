@@ -1,4 +1,5 @@
 import { useState, type JSX } from "react";
+import BugReportIcon from "@mui/icons-material/BugReport";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import LibraryMusicIcon from "@mui/icons-material/LibraryMusic";
@@ -41,6 +42,47 @@ const WIDTH_COLLAPSED = 64;
 export interface NavigationSidebarProps {
   readonly activeView: ViewId;
   readonly onSelectView: (view: ViewId) => void;
+  /** Omitted entirely in contexts that don't wire bug reporting — no button is
+   * rendered in that case, rather than a button that does nothing. */
+  readonly onReportBug?: () => void;
+}
+
+function SidebarButton({
+  label,
+  icon,
+  selected,
+  collapsed,
+  onClick,
+}: {
+  readonly label: string;
+  readonly icon: JSX.Element;
+  readonly selected: boolean;
+  readonly collapsed: boolean;
+  readonly onClick: () => void;
+}): JSX.Element {
+  const button = (
+    <ListItemButton
+      selected={selected}
+      onClick={onClick}
+      aria-label={label}
+      sx={{ justifyContent: collapsed ? "center" : "flex-start", px: collapsed ? 2 : 3 }}
+    >
+      <ListItemIcon sx={{ minWidth: collapsed ? 0 : undefined, justifyContent: "center" }}>
+        {icon}
+      </ListItemIcon>
+      {collapsed ? null : <ListItemText primary={label} sx={{ ml: 1 }} />}
+    </ListItemButton>
+  );
+
+  // Tooltips only add value once the label itself is hidden — showing both the visible
+  // label and a tooltip repeating it is just noise.
+  return collapsed ? (
+    <Tooltip title={label} placement="right">
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
 }
 
 function NavButton({
@@ -54,34 +96,39 @@ function NavButton({
   readonly collapsed: boolean;
   readonly onClick: () => void;
 }): JSX.Element {
-  const button = (
-    <ListItemButton
+  return (
+    <SidebarButton
+      label={item.label}
+      icon={item.icon}
       selected={selected}
+      collapsed={collapsed}
       onClick={onClick}
-      aria-label={item.label}
-      sx={{ justifyContent: collapsed ? "center" : "flex-start", px: collapsed ? 2 : 3 }}
-    >
-      <ListItemIcon sx={{ minWidth: collapsed ? 0 : undefined, justifyContent: "center" }}>
-        {item.icon}
-      </ListItemIcon>
-      {collapsed ? null : <ListItemText primary={item.label} sx={{ ml: 1 }} />}
-    </ListItemButton>
+    />
   );
+}
 
-  // Tooltips only add value once the label itself is hidden — showing both the visible
-  // label and a tooltip repeating it is just noise.
-  return collapsed ? (
-    <Tooltip title={item.label} placement="right">
-      {button}
-    </Tooltip>
-  ) : (
-    button
+function ReportBugButton({
+  collapsed,
+  onClick,
+}: {
+  readonly collapsed: boolean;
+  readonly onClick: () => void;
+}): JSX.Element {
+  return (
+    <SidebarButton
+      label="Report a Bug"
+      icon={<BugReportIcon />}
+      selected={false}
+      collapsed={collapsed}
+      onClick={onClick}
+    />
   );
 }
 
 export function NavigationSidebar({
   activeView,
   onSelectView,
+  onReportBug,
 }: NavigationSidebarProps): JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
   const width = collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED;
@@ -124,6 +171,9 @@ export function NavigationSidebar({
             onSelectView(PREFERENCES_ITEM.id);
           }}
         />
+        {onReportBug ? (
+          <ReportBugButton collapsed={collapsed} onClick={onReportBug} />
+        ) : null}
         <ListItemButton
           onClick={() => {
             setCollapsed((previous) => !previous);

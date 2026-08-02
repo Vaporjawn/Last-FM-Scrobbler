@@ -1,4 +1,5 @@
 import type { AuthApi } from "../../../shared/auth-api.js";
+import type { BugReportApi } from "../../../shared/bug-report-api.js";
 import type { LastfmDataApi } from "../../../shared/lastfm-api.js";
 import type { NowPlayingApi } from "../../../shared/now-playing-api.js";
 
@@ -10,6 +11,7 @@ declare global {
     readonly nowPlaying?: NowPlayingApi;
     readonly auth?: AuthApi;
     readonly lastfm?: LastfmDataApi;
+    readonly bugReport?: BugReportApi;
   }
 }
 

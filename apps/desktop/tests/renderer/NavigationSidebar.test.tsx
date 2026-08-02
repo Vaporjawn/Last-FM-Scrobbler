@@ -46,6 +46,23 @@ describe("NavigationSidebar", () => {
     expect(onSelectView).toHaveBeenCalledWith("friends");
   });
 
+  it("does not render a 'Report a Bug' button when onReportBug is omitted", () => {
+    render(<NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />);
+
+    expect(screen.queryByText("Report a Bug")).not.toBeInTheDocument();
+  });
+
+  it("calls onReportBug when the 'Report a Bug' button is clicked", () => {
+    const onReportBug = vi.fn();
+    render(
+      <NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} onReportBug={onReportBug} />,
+    );
+
+    fireEvent.click(screen.getByText("Report a Bug"));
+
+    expect(onReportBug).toHaveBeenCalled();
+  });
+
   it("restores labels when expanded again", () => {
     render(<NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />);
 

@@ -32,4 +32,10 @@ export const IPC_CHANNELS = {
   lastfmGetTopArtists: "lastfm:get-top-artists",
   /** `user.getFriends` for a given username. */
   lastfmGetFriends: "lastfm:get-friends",
+
+  /** Whether this build has a bug-report relay URL configured. */
+  bugReportIsConfigured: "bug-report:is-configured",
+  /** Submits {title, body} to services/bug-report-relay; resolves with the created
+   * GitHub issue's URL. */
+  bugReportSubmit: "bug-report:submit",
 } as const;
