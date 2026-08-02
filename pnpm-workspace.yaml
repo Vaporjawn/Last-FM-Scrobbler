@@ -8,9 +8,29 @@ packages:
 linkWorkspacePackages: true
 allowBuilds:
   better-sqlite3: true
+  # electron-builder's Windows Squirrel-installer builder — its postinstall isn't
+  # needed to build, test, or run this project on macOS/Linux, and isn't vetted here;
+  # leave disabled unless someone building Windows installers via pnpm specifically
+  # hits a real failure that traces back to this.
+  electron-winstaller: false
   esbuild: true
   usocket: true
   workerd: true
 minimumReleaseAgeExclude:
   - "@cloudflare/workers-types@5.20260801.1"
   - "@types/better-sqlite3@9.6.0"
+# Mirrors the root package.json "overrides" field — npm and Bun both read that
+# top-level key directly, but pnpm only reads overrides from here (confirmed against
+# pnpm's own docs: https://pnpm.io/settings/dependency-resolution#overrides). See
+# docs/adr/0010-dbus-next-transitive-vulnerability-audit.md for what these force and
+# why — every one of them is a leaf of packages/adapter-linux's optional dbus-next ->
+# usocket -> node-gyp native-build chain (form-data/tar/tough-cookie/uuid/qs), except
+# xml2js, which dbus-next itself uses directly and unconditionally.
+overrides:
+  node-gyp: ">=11.0.0"
+  form-data: ">=4.0.6"
+  tar: ">=7.5.21"
+  tough-cookie: ">=4.1.3"
+  uuid: ">=11.1.1"
+  qs: ">=6.14.1"
+  xml2js: ">=0.5.0"

@@ -49,6 +49,12 @@ interface — no private-API workarounds needed.
   approved in `pnpm-workspace.yaml`'s `allowBuilds`).
 - `dbus-daemon` at test time only, for the real-pipeline smoke test (see Status).
 
+`dbus-next`'s own dependency tree is the reason the root `package.json`/
+`pnpm-workspace.yaml` carry an `overrides` block at all — `npm audit --omit=dev` once
+reported 10 vulnerabilities (3 critical) reachable through it. See
+`docs/adr/0010-dbus-next-transitive-vulnerability-audit.md` for the full reachability
+investigation and why the audit is clean now.
+
 ## Status
 
 Fully implemented and tested: 45 tests across the pure mappers, `PlayerRegistry`'s
