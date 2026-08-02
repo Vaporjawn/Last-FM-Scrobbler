@@ -8,7 +8,7 @@ import { NowPlayingPage } from "./pages/NowPlayingPage.js";
 import { PreferencesPage } from "./pages/PreferencesPage.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
 import { ScrobblesPage } from "./pages/ScrobblesPage.js";
-import { theme } from "./theme.js";
+import { theme } from "./theme/index.js";
 
 const PAGES: Record<ViewId, () => JSX.Element> = {
   "now-playing": NowPlayingPage,

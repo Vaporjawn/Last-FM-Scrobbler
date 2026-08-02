@@ -35,6 +35,11 @@
     "packages/*",
     "services/*"
   ],
+  "trustedDependencies": [
+    "electron",
+    "better-sqlite3",
+    "esbuild"
+  ],
   "scripts": {
     "start": "node scripts/run-workspaces.mjs dev --package @lastfm-scrobbler/desktop",
     "build": "node scripts/run-workspaces.mjs build",

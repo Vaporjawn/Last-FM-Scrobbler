@@ -15,6 +15,11 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@lastfm-scrobbler/adapter-linux": "0.0.0",
+    "@lastfm-scrobbler/adapter-macos": "0.0.0",
+    "@lastfm-scrobbler/adapter-windows": "0.0.0",
+    "@lastfm-scrobbler/core": "0.0.0",
+    "@lastfm-scrobbler/shared-types": "0.0.0",
     "@mui/icons-material": "^9.2.0",
     "@mui/material": "^9.2.0",
     "react": "^19.2.0",
