@@ -1,10 +1,28 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, unlinkSync } from "node:fs";
+import { unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import dbus, { Variant, type MessageBus } from "dbus-next";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLinuxPlaybackSource } from "../../src/mpris/create-linux-playback-source.js";
+
+/** `existsSync(path) && unlinkSync(path)` has a real TOCTOU race here specifically:
+ * `dbus-daemon` cleans up its own socket file on exit, which can happen concurrently
+ * with (and win against) this check — verified live in CI ("Error: ENOENT: no such
+ * file or directory, unlink '/tmp/lastfm-scrobbler-test-bus-NNNN.sock'", thrown from
+ * the `afterAll` below, right after `daemon.kill()` on the line before it). Since the
+ * entire point of this call is "make sure this path doesn't exist anymore", an ENOENT
+ * from a file that's already gone is exactly the outcome this was going for — not a
+ * real failure to surface. */
+function removeSocketIfPresent(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
 
 // Real integration smoke test: spawns a throwaway D-Bus session bus, registers a real
 // MPRIS2 service on it via dbus-next's own service API (not a mock of dbus-next itself
@@ -60,9 +78,7 @@ describe.skipIf(!dbusDaemonAvailable)("MPRIS2 adapter (real D-Bus pipeline)", ()
   let player: PlayerInterface;
 
   beforeAll(async () => {
-    if (existsSync(socketPath)) {
-      unlinkSync(socketPath);
-    }
+    removeSocketIfPresent(socketPath);
     daemon = spawn("dbus-daemon", ["--session", `--address=${busAddress}`, "--nofork"], {
       stdio: "ignore",
     });
@@ -78,9 +94,7 @@ describe.skipIf(!dbusDaemonAvailable)("MPRIS2 adapter (real D-Bus pipeline)", ()
   afterAll(() => {
     mockBus.disconnect();
     daemon.kill();
-    if (existsSync(socketPath)) {
-      unlinkSync(socketPath);
-    }
+    removeSocketIfPresent(socketPath);
   });
 
   it("discovers the real player and reports its real initial metadata over real D-Bus", async () => {
