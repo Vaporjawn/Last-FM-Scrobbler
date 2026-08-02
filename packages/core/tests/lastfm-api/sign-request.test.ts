@@ -13,7 +13,8 @@ describe("signRequest", () => {
 
     // Build the expected string the same way the spec describes, independently of
     // the implementation under test, to avoid the test just re-deriving the code.
-    const manuallyOrdered = "api_key" + "xxxx" + "method" + "auth.getSession" + "token" + "yyyy" + secret;
+    const manuallyOrdered =
+      "api_key" + "xxxx" + "method" + "auth.getSession" + "token" + "yyyy" + secret;
 
     expect(signRequest(params, secret)).toBe(md5(manuallyOrdered));
   });

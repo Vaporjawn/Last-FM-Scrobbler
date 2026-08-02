@@ -140,19 +140,16 @@ export class LastfmClient {
       track: submission.track,
       ...(submission.album !== undefined ? { album: submission.album } : {}),
       ...(submission.albumArtist !== undefined ? { albumArtist: submission.albumArtist } : {}),
-      ...(submission.durationSec !== undefined
-        ? { duration: String(submission.durationSec) }
-        : {}),
+      ...(submission.durationSec !== undefined ? { duration: String(submission.durationSec) } : {}),
       ...(submission.trackNumber !== undefined
         ? { trackNumber: String(submission.trackNumber) }
         : {}),
       ...(submission.mbid !== undefined ? { mbid: submission.mbid } : {}),
     };
-    await this.request(
-      "track.updateNowPlaying",
-      this.signedParams(params),
-      { httpMethod: "POST", signed: true },
-    );
+    await this.request("track.updateNowPlaying", this.signedParams(params), {
+      httpMethod: "POST",
+      signed: true,
+    });
   }
 
   async scrobble(submissions: readonly ScrobbleSubmission[]): Promise<ScrobbleBatchResult> {

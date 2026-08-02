@@ -43,12 +43,12 @@ live API; ask a maintainer for a development key if you need one.
 
 One category set, applied consistently across three places:
 
-| Category | Commit subject | GitHub issue title | Branch name |
-|---|---|---|---|
-| Bug fix | `[BUG]: title` | `[BUG]: title` | `bug/title` |
-| New feature | `[FEATURE]: title` | `[FEATURE]: title` | `feature/title` |
-| Planned task / non-bug work item | `[TASK]: title` | `[TASK]: title` | `task/title` |
-| Tooling, infra, no user-facing behavior change | `[CHORE]: title` | `[CHORE]: title` | `chore/title` |
+| Category                                       | Commit subject     | GitHub issue title | Branch name     |
+| ---------------------------------------------- | ------------------ | ------------------ | --------------- |
+| Bug fix                                        | `[BUG]: title`     | `[BUG]: title`     | `bug/title`     |
+| New feature                                    | `[FEATURE]: title` | `[FEATURE]: title` | `feature/title` |
+| Planned task / non-bug work item               | `[TASK]: title`    | `[TASK]: title`    | `task/title`    |
+| Tooling, infra, no user-facing behavior change | `[CHORE]: title`   | `[CHORE]: title`   | `chore/title`   |
 
 Branch `title` segments are kebab-case (e.g. `feature/mpris-playback-source`).
 

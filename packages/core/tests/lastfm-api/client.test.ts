@@ -95,9 +95,9 @@ describe("LastfmClient", () => {
         code: 9,
         message: "Invalid session key - Please re-authenticate",
       });
-      await expect(
-        client.updateNowPlaying({ artist: "A", track: "B" }),
-      ).rejects.toBeInstanceOf(LastfmApiError);
+      await expect(client.updateNowPlaying({ artist: "A", track: "B" })).rejects.toBeInstanceOf(
+        LastfmApiError,
+      );
     });
   });
 
@@ -193,7 +193,11 @@ describe("LastfmClient", () => {
 
     it("adds comma-separated tags to a track", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({}));
-      await client.addTags({ artist: "Radiohead", track: "Idioteque", tags: ["electronic", "2000s"] });
+      await client.addTags({
+        artist: "Radiohead",
+        track: "Idioteque",
+        tags: ["electronic", "2000s"],
+      });
       const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
       const body = new URLSearchParams(init.body as string);
       expect(body.get("tags")).toBe("electronic,2000s");

@@ -5,8 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel superseded runs on the same branch/PR so a rapid string of pushes doesn't queue
+# up redundant matrix jobs and burn CI minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +38,14 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      # setup-node only caches npm/pnpm; bun's global install cache needs its own step.
+      - if: matrix.pm == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\bun\install\cache' || '~/.bun/install/cache' }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies (pnpm)
         if: matrix.pm == 'pnpm'

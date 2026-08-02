@@ -1,15 +1,21 @@
 # Last.fm Scrobbler
 
+[![CI](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/ci.yml/badge.svg)](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/codeql.yml/badge.svg)](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux. Unlike
-player-specific plugins (e.g. [foo_scrobbler_mac](https://github.com/zfoxer/foo_scrobbler_mac)),
-this app reads "now playing" directly from each OS's native media-session API — MPRIS2 on
-Linux, SMTC on Windows, MediaRemote on macOS — so it works with whatever you're already
-using to play music, with no per-player integration required.
+player-specific plugins, this app reads "now playing" directly from each OS's native
+media-session API — MPRIS2 on Linux, SMTC on Windows, MediaRemote on macOS — so it works
+with whatever you're already using to play music, with no per-player integration
+required.
 
 ## Status
 
-Early scaffolding. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design
-and [docs/adr/](docs/adr/) for the reasoning behind the major decisions.
+Early scaffolding — no tagged releases or downloads yet. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and [docs/adr/](docs/adr/)
+for the reasoning behind the major decisions, or the
+[project website](https://vaporjawn.dev/Last-FM-Scrobbler/) for a lighter-weight overview.
 
 ## Quick start
 
@@ -42,6 +48,18 @@ contributor guide.
 | [`apps/desktop`](docs/modules/desktop.md)                       | Electron + React + MUI desktop app                                                   |
 | [`services/bug-report-relay`](docs/modules/bug-report-relay.md) | Anonymous bug-report → GitHub issue relay                                            |
 
+## Community and support
+
+- [Wiki](https://github.com/Vaporjawn/Last-FM-Scrobbler/wiki) — architecture overview and
+  getting-started guide, outside the versioned repo docs
+- [Discussions](https://github.com/Vaporjawn/Last-FM-Scrobbler/discussions) — questions,
+  ideas, and show-and-tell
+- [Issues](https://github.com/Vaporjawn/Last-FM-Scrobbler/issues) — bug reports and feature
+  requests (see the [issue templates](https://github.com/Vaporjawn/Last-FM-Scrobbler/issues/new/choose))
+- [Contributing guide](docs/CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security policy](SECURITY.md) — please report vulnerabilities privately, not as a public issue
+- [Contributors](CONTRIBUTORS.md)
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Copyright &copy; [Victor Williams](https://github.com/Vaporjawn).

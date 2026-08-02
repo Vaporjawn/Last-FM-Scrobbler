@@ -136,7 +136,10 @@ export class ScrobbleQueue {
     this.db.prepare(`DELETE FROM pending_scrobbles WHERE id IN (${placeholders})`).run(...ids);
   }
 
-  recordFailure(id: number, options: { readonly retryable: boolean; readonly reason: string }): void {
+  recordFailure(
+    id: number,
+    options: { readonly retryable: boolean; readonly reason: string },
+  ): void {
     if (options.retryable) {
       this.db
         .prepare(
