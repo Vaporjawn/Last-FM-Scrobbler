@@ -45,3 +45,5 @@ export type {
   TrackerOptions,
 } from "./tracker/tracker.js";
 export { computeTrackIdentity } from "./tracker/track-identity.js";
+export { Logger } from "./logging/logger.js";
+export type { LogEntry, LoggerOptions, LogLevel, LogSeverity } from "./logging/logger.js";
