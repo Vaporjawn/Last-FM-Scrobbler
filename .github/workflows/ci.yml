@@ -23,6 +23,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # adapter-linux's MPRIS2 smoke test spawns its own throwaway D-Bus session bus
+      # and skips itself if dbus-daemon isn't found — this just makes sure it's found,
+      # rather than silently degrading to unit-tests-only on the one OS that matters
+      # most for that adapter. ubuntu-latest images usually already have it; installed
+      # defensively rather than assumed.
+      - if: matrix.os == 'ubuntu-latest'
+        name: Ensure dbus-daemon is available (adapter-linux MPRIS2 smoke test)
+        run: command -v dbus-daemon || (sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus)
+
       - if: matrix.pm == 'pnpm'
         uses: pnpm/action-setup@v4
         with:
