@@ -144,6 +144,9 @@ importers:
         specifier: 0.0.0
         version: link:../shared-types
     devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(postcss@8.5.25)(supports-color@10.2.2)(typescript@6.0.3)

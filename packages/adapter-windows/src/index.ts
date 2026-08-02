@@ -1,7 +1,4 @@
-import type { PlaybackSource } from "@lastfm-scrobbler/shared-types";
-
-export function createWindowsPlaybackSource(): PlaybackSource {
-  throw new Error(
-    "createWindowsPlaybackSource is not implemented yet — see docs/modules/adapter-windows.md",
-  );
-}
+export { createWindowsPlaybackSource } from "./smtc/create-windows-playback-source.js";
+export type { CreateWindowsPlaybackSourceOptions } from "./smtc/create-windows-playback-source.js";
+export { SmtcHelperNotBuiltError } from "./smtc/create-windows-playback-source.js";
+export { AdapterWindowsPackageRootNotFoundError } from "./smtc/resolve-helper-path.js";

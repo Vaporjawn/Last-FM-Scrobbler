@@ -9,6 +9,10 @@ native-build/
 release/
 *.tsbuildinfo
 
+# .NET build output (packages/adapter-windows/native/SmtcHelper)
+bin/
+obj/
+
 # Test/coverage
 coverage/
 

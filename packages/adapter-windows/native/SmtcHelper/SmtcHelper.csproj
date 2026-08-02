@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>LastfmScrobbler.SmtcHelper</RootNamespace>
+    <AssemblyName>SmtcHelper</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      Lets this project restore/build on non-Windows hosts (verified during development
+      on macOS via `dotnet build` — real compiler + real WinRT metadata resolution, just
+      no ability to actually run the result). CI's real Windows build/publish happens on
+      windows-latest, where this flag is a no-op since the SDK is native there anyway.
+    -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+</Project>
