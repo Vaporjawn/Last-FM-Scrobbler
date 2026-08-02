@@ -286,6 +286,24 @@ describe("LastfmClient", () => {
       expect(result).toEqual([{ username: "afriend", realName: "A Friend", isSubscriber: false }]);
     });
 
+    it("parses each friend's self-reported location out of user.getFriends", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          friends: {
+            user: [
+              { name: "afriend", country: "United Kingdom" },
+              { name: "nolocation", country: "" },
+            ],
+          },
+        }),
+      );
+      const result = await client.getFriends({ user: "someuser" });
+      expect(result).toEqual([
+        { username: "afriend", location: "United Kingdom", isSubscriber: false },
+        { username: "nolocation", isSubscriber: false },
+      ]);
+    });
+
     it("parses each friend's own avatar photo out of user.getFriends", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({

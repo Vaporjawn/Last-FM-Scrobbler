@@ -307,6 +307,7 @@ export class LastfmClient {
       return {
         username: item.name,
         ...(item.realname ? { realName: item.realname } : {}),
+        ...(item.country ? { location: item.country } : {}),
         ...(avatarUrl ? { avatarUrl } : {}),
         isSubscriber: item.subscriber === "1",
       };
@@ -473,6 +474,9 @@ interface FriendJson {
   /** `"0"`/`"1"` in the real API (verified live) — a string, same convention as the
    * auth session response's `subscriber` field this client already parses elsewhere. */
   readonly subscriber?: string;
+  /** Freeform self-reported location text — empty string, not omitted, when unset
+   * (same convention as every other optional Last.fm user field this client parses). */
+  readonly country?: string;
 }
 
 interface LastfmImageJson {

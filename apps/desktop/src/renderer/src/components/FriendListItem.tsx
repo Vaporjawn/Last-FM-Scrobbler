@@ -46,14 +46,25 @@ export interface FriendListItemProps {
  * back to a letter automatically when it's absent, same as `ProfilePage`'s account
  * card), a small gold star under the avatar for a Last.fm Pro subscriber
  * (`friend.isSubscriber` — also parsed directly out of the same `user.getFriends`
- * response, no separate lookup), plus their most recent activity, passed in via
- * `activity` — see that prop's docstring for why this component doesn't fetch it
- * itself. The activity itself is
+ * response, no separate lookup), their real name and/or self-reported location (see
+ * `formatSecondaryLine` — either, both, or neither, same "no lookup needed" source),
+ * plus their most recent activity, passed in via `activity` — see that prop's
+ * docstring for why this component doesn't fetch it itself. The activity itself is
  * rendered as its own small nested `Paper` card (real album art — `track.imageUrl`,
  * the same real-image field `ScrobbleListItem` already renders for scrobble history,
  * falling back to a note/play icon the same way — plus the status chip/timestamp and
  * track/artist text), visually set apart from the friend's own row above it.
  */
+/** Combines `realName` and `location` onto ListItemText's one `secondary` line
+ * ("Real Name · Location"), rather than adding a third text row for a single extra
+ * field — falls back to whichever one is actually present, and to `undefined` (no
+ * secondary line at all, matching this component's existing behavior) when neither
+ * is. */
+function formatSecondaryLine(friend: Friend): string | undefined {
+  const parts = [friend.realName, friend.location].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
 export function FriendListItem({ friend, activity }: FriendListItemProps): JSX.Element {
   const { track } = activity;
 
@@ -82,7 +93,7 @@ export function FriendListItem({ friend, activity }: FriendListItemProps): JSX.E
             ) : null}
           </Stack>
         </ListItemAvatar>
-        <ListItemText primary={friend.username} secondary={friend.realName} sx={{ my: 0 }} />
+        <ListItemText primary={friend.username} secondary={formatSecondaryLine(friend)} sx={{ my: 0 }} />
       </Stack>
 
       {track ? (

@@ -81,6 +81,14 @@ export interface UserProfile {
 export interface Friend {
   readonly username: string;
   readonly realName?: string;
+  /** The friend's self-reported location, straight off Last.fm's own `user.getFriends`
+   * response (raw field name `country` — confirmed live against Last.fm's own API docs
+   * at https://www.last.fm/api/show/user.getFriends, e.g. `"country": "UK"`) — renamed
+   * to `location` here since that's what it actually represents (freeform text a user
+   * typed, not necessarily an ISO country name/code — Last.fm doesn't validate it).
+   * `undefined` when the friend hasn't set one, same empty-string-means-absent
+   * convention as every other optional field on this type. */
+  readonly location?: string;
   /** Same real-photo guarantee as `UserProfile.avatarUrl` (see its docstring) —
    * friends are Last.fm users too, and `user.getFriends` returns each one's own real
    * avatar directly in the same response, no separate per-friend lookup needed. */
