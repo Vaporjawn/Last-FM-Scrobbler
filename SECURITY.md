@@ -32,7 +32,10 @@ Areas of particular interest for security review, given this project's design (s
 - **Electron security posture**: `contextIsolation`, `nodeIntegration`, preload script
   boundaries, and any remote content loading in `apps/desktop`.
 - **The bug-report relay** (`services/bug-report-relay`): validation of untrusted, anonymous
-  request bodies before they reach the GitHub Issues API.
+  request bodies before they reach the GitHub Issues API. Known, tracked issue: the
+  relay's `GITHUB_PAT` is currently a classic, `public_repo`-scoped token rather than
+  the fine-grained, repo-scoped one originally planned — broader than necessary; see
+  [issue #10](https://github.com/Vaporjawn/Last-FM-Scrobbler/issues/10).
 - **Last.fm API usage**: anything that could leak a user's API key, session key, or scrobble
   history to an unintended party.
 
