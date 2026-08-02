@@ -6,6 +6,7 @@ import type {
   RecentTrack,
   SimilarArtist,
   TopArtist,
+  TrackDetail,
   UserProfile,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
@@ -22,6 +23,8 @@ export interface LastfmDataClient {
   getUserInfo: LastfmClient["getUserInfo"];
   getArtistInfo: LastfmClient["getArtistInfo"];
   getSimilarArtists: LastfmClient["getSimilarArtists"];
+  getTopTags: LastfmClient["getTopTags"];
+  getTrackInfo: LastfmClient["getTrackInfo"];
 }
 
 export interface WireLastfmDataOptions {
@@ -91,11 +94,21 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
 
   ipcMain.handle(
     IPC_CHANNELS.lastfmGetArtistInfo,
-    (_event, artist: unknown): Promise<ArtistInfo> => {
+    (_event, artist: unknown, username: unknown): Promise<ArtistInfo> => {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getArtistInfo({ artist: String(artist) });
+      // `typeof username === "string"`, not `!== undefined`: narrowing `unknown` via
+      // an undefined check alone still leaves the non-undefined branch typed as `{}`
+      // (any non-nullish value), which @typescript-eslint/no-base-to-string correctly
+      // flags — a real caller could still pass something whose `toString()` isn't
+      // meaningful. Requiring an actual `string` sidesteps that for real, not just for
+      // lint: an IPC argument that isn't already a string shouldn't be silently
+      // coerced (e.g. to "[object Object]") into one.
+      return client.getArtistInfo({
+        artist: String(artist),
+        ...(typeof username === "string" ? { username } : {}),
+      });
     },
   );
 
@@ -112,6 +125,31 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
+  ipcMain.handle(
+    IPC_CHANNELS.lastfmGetTopTags,
+    (_event, artist: unknown): Promise<readonly string[]> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      return client.getTopTags({ artist: String(artist) });
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.lastfmGetTrackInfo,
+    (_event, artist: unknown, track: unknown, username?: unknown): Promise<TrackDetail> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      // Same reasoning as getArtistInfo's handler above.
+      return client.getTrackInfo({
+        artist: String(artist),
+        track: String(track),
+        ...(typeof username === "string" ? { username } : {}),
+      });
+    },
+  );
+
   return () => {
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetRecentTracks);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopArtists);
@@ -119,5 +157,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetUserInfo);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetArtistInfo);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetSimilarArtists);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopTags);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTrackInfo);
   };
 }

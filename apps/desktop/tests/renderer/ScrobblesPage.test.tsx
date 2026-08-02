@@ -9,10 +9,10 @@ import { ScrobblesPage } from "../../src/renderer/src/pages/ScrobblesPage.js";
 /** `ScrobblesPage` rows fire snackbars via `useSnackbar()` on love/unlove/addTags — a
  * real `SnackbarProvider` (not present in a bare `render(<ScrobblesPage />)`) is needed
  * for those to actually render and be assertable. */
-function renderWithSnackbar(onNavigateToPreferences = vi.fn()): ReturnType<typeof render> {
+function renderWithSnackbar(onNavigateToSettings = vi.fn()): ReturnType<typeof render> {
   return render(
     <SnackbarProvider>
-      <ScrobblesPage onNavigateToPreferences={onNavigateToPreferences} />
+      <ScrobblesPage onNavigateToSettings={onNavigateToSettings} />
     </SnackbarProvider>,
   );
 }
@@ -41,6 +41,8 @@ function installFakeApis(options: {
     getUserInfo: vi.fn().mockResolvedValue({ username: "someuser" }),
     getArtistInfo: vi.fn(),
     getSimilarArtists: vi.fn(),
+    getTopTags: vi.fn(),
+    getTrackInfo: vi.fn(),
     loveTrack: vi.fn().mockResolvedValue(undefined),
     unloveTrack: vi.fn().mockResolvedValue(undefined),
     addTags: vi.fn().mockResolvedValue(undefined),
@@ -60,20 +62,20 @@ describe("ScrobblesPage", () => {
   it("prompts to log in when no account is active", async () => {
     installFakeApis({});
 
-    render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+    render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
 
-    expect(await screen.findByText(/log in.*preferences/i)).toBeInTheDocument();
+    expect(await screen.findByText(/log in.*settings/i)).toBeInTheDocument();
   });
 
-  it("takes the user to Preferences when the login prompt's button is clicked", async () => {
+  it("takes the user to Settings when the login prompt's button is clicked", async () => {
     installFakeApis({});
-    const onNavigateToPreferences = vi.fn();
+    const onNavigateToSettings = vi.fn();
 
-    render(<ScrobblesPage onNavigateToPreferences={onNavigateToPreferences} />);
+    render(<ScrobblesPage onNavigateToSettings={onNavigateToSettings} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /go to preferences/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /go to settings/i }));
 
-    expect(onNavigateToPreferences).toHaveBeenCalledOnce();
+    expect(onNavigateToSettings).toHaveBeenCalledOnce();
   });
 
   it("shows recent tracks for the active account", async () => {
@@ -91,7 +93,7 @@ describe("ScrobblesPage", () => {
       ],
     });
 
-    render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+    render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
 
     expect(await screen.findByText("Windowlicker")).toBeInTheDocument();
     expect(screen.getByText("Aphex Twin")).toBeInTheDocument();
@@ -102,7 +104,7 @@ describe("ScrobblesPage", () => {
   it("shows an empty-state message when there are no recent tracks", async () => {
     installFakeApis({ activeAccount: "alice", recentTracks: [] });
 
-    render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+    render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
 
     expect(await screen.findByText(/no scrobbles yet/i)).toBeInTheDocument();
   });
@@ -124,7 +126,7 @@ describe("ScrobblesPage", () => {
         ],
       });
 
-      render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
 
       const artwork = await screen.findByAltText("Ghostride");
       expect(artwork).toHaveAttribute("src", "https://lastfm.freetls.fastly.net/i/u/300x300/ghostride.png");
@@ -136,7 +138,7 @@ describe("ScrobblesPage", () => {
         recentTracks: [{ artist: "Crumb", track: "Ghostride", nowPlaying: false, loved: false }],
       });
 
-      render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
 
       await screen.findByText("Ghostride");
       expect(screen.queryByAltText("Ghostride")).not.toBeInTheDocument();
@@ -153,7 +155,7 @@ describe("ScrobblesPage", () => {
         lastfmOverrides: { loveTrack, unloveTrack },
       });
 
-      render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
       const loveButton = await screen.findByRole("button", { name: /love ghostride/i });
 
       act(() => {
@@ -178,7 +180,7 @@ describe("ScrobblesPage", () => {
         recentTracks: [{ artist: "Crumb", track: "Ghostride", nowPlaying: false, loved: true }],
       });
 
-      render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
 
       expect(await screen.findByRole("button", { name: /unlove ghostride/i })).toBeInTheDocument();
     });
@@ -223,7 +225,7 @@ describe("ScrobblesPage", () => {
         ],
       });
 
-      render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
       const loveButton = await screen.findByRole("button", { name: /love ghostride/i });
       act(() => {
         fireEvent.click(loveButton);
@@ -245,7 +247,7 @@ describe("ScrobblesPage", () => {
         lastfmOverrides: { addTags },
       });
 
-      render(<ScrobblesPage onNavigateToPreferences={vi.fn()} />);
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
       const tagButton = await screen.findByRole("button", { name: /add tags to ghostride/i });
       act(() => {
         fireEvent.click(tagButton);

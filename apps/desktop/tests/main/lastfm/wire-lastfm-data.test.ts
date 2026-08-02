@@ -33,6 +33,15 @@ function fakeClient() {
     getUserInfo: vi.fn().mockResolvedValue({ username: "alice", avatarUrl: "https://example.com/a.png" }),
     getArtistInfo: vi.fn().mockResolvedValue({ name: "A", listeners: 100, playCount: 500 }),
     getSimilarArtists: vi.fn().mockResolvedValue([{ name: "B", match: 0.9 }]),
+    getTopTags: vi.fn().mockResolvedValue(["psychedelic"]),
+    getTrackInfo: vi.fn().mockResolvedValue({
+      artist: "A",
+      track: "T",
+      listeners: 100,
+      playCount: 500,
+      loved: false,
+      url: "https://www.last.fm/music/A/_/T",
+    }),
   };
 }
 
@@ -97,6 +106,51 @@ describe("wireLastfmData", () => {
     expect(result).toEqual([{ name: "B", match: 0.9 }]);
   });
 
+  it("getArtistInfo forwards a username when given, for personal stats", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Aphex Twin", "someuser");
+
+    expect(client.getArtistInfo).toHaveBeenCalledWith({
+      artist: "Aphex Twin",
+      username: "someuser",
+    });
+  });
+
+  it("getTopTags forwards the artist name and returns the client's result", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    const result = await invoke(IPC_CHANNELS.lastfmGetTopTags, "Fleece");
+
+    expect(client.getTopTags).toHaveBeenCalledWith({ artist: "Fleece" });
+    expect(result).toEqual(["psychedelic"]);
+  });
+
+  it("getTrackInfo forwards artist/track and returns the client's result", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    const result = await invoke(IPC_CHANNELS.lastfmGetTrackInfo, "A", "T");
+
+    expect(client.getTrackInfo).toHaveBeenCalledWith({ artist: "A", track: "T" });
+    expect(result).toMatchObject({ artist: "A", track: "T" });
+  });
+
+  it("getTrackInfo forwards a username when given, for personal play count", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetTrackInfo, "A", "T", "someuser");
+
+    expect(client.getTrackInfo).toHaveBeenCalledWith({
+      artist: "A",
+      track: "T",
+      username: "someuser",
+    });
+  });
+
   it("all handlers reject when no client is configured", async () => {
     wireLastfmData({ client: undefined });
 
@@ -106,12 +160,16 @@ describe("wireLastfmData", () => {
     await expect(invoke(IPC_CHANNELS.lastfmGetUserInfo, "alice")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "A")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "A")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetTopTags, "A")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetTrackInfo, "A", "T")).rejects.toThrow(/not configured/i);
   });
 
   it("removes all handlers when the returned cleanup function is called", () => {
     const stop = wireLastfmData({ client: fakeClient() });
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetRecentTracks)).toBe(true);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetArtistInfo)).toBe(true);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopTags)).toBe(true);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTrackInfo)).toBe(true);
 
     stop();
 
@@ -121,5 +179,7 @@ describe("wireLastfmData", () => {
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetUserInfo)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetArtistInfo)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetSimilarArtists)).toBe(false);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopTags)).toBe(false);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTrackInfo)).toBe(false);
   });
 });

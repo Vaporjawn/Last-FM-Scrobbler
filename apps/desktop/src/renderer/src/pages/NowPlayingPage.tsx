@@ -1,41 +1,44 @@
 import type { JSX } from "react";
-import { useState } from "react";
 import AlbumIcon from "@mui/icons-material/Album";
-import FavoriteIcon from "@mui/icons-material/Favorite";
-import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
-import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import PauseIcon from "@mui/icons-material/Pause";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
-import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
 import Link from "@mui/material/Link";
-import Popover from "@mui/material/Popover";
 import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { PlaybackState } from "@lastfm-scrobbler/shared-types";
-import { useSnackbar } from "../contexts/snackbar-context.js";
+import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
+import { PageHeader } from "../components/PageHeader.js";
+import { ScrobblingIndicator } from "../components/ScrobblingIndicator.js";
+import { TrackLoveTagControls } from "../components/TrackLoveTagControls.js";
 import { useArtistInfo } from "../hooks/use-artist-info.js";
+import { useAuth } from "../hooks/use-auth.js";
 import { useNowPlaying } from "../hooks/use-now-playing.js";
-import { useTrackActions } from "../hooks/use-track-actions.js";
+import { useTrackDetail } from "../hooks/use-track-detail.js";
 import { resolveSourceAppName } from "../utils/resolve-source-app-name.js";
-import { stripHtml } from "../utils/strip-html.js";
 
 const STATE_LABEL = { playing: "Playing", paused: "Paused", stopped: "Stopped" } as const;
-const SIMILAR_ARTIST_AVATAR_SIZE = 64;
+
+/** Formats a duration in whole seconds as `m:ss` (e.g. 340 -> "5:40"). Track durations
+ * only ever need minutes:seconds here — nothing in this app plays anything long enough
+ * to need an hours component. */
+function formatDuration(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 function StateIcon({ state }: { state: PlaybackState }): JSX.Element {
   switch (state) {
     case "playing":
-      return <PlayArrowIcon fontSize="small" />;
+      // The same animated equalizer ScrobbleListItem/FriendListItem already use for
+      // their own "Now Playing"/"Scrobbling now" chips — this page is the one place
+      // literally called "Now Playing" that hadn't adopted it yet.
+      return <ScrobblingIndicator />;
     case "paused":
       return <PauseIcon fontSize="small" />;
     case "stopped":
@@ -44,87 +47,41 @@ function StateIcon({ state }: { state: PlaybackState }): JSX.Element {
   }
 }
 
-/** Stands in for real album art — no adapter currently surfaces artwork (see
- * docs/modules/desktop.md's "Not yet built" list) — styled as a record so it still
- * reads as "this is the now-playing art slot" rather than a blank box. */
-function ArtworkPlaceholder(): JSX.Element {
+/** The currently-playing track's real album art (via `useTrackImage` — Last.fm's
+ * `track.getInfo`) when one is on file, falling back to a gradient/record-icon
+ * placeholder otherwise — the same `src`-falls-back-to-children `Avatar` pattern
+ * `ScrobbleListItem` already uses for scrobble history's art. */
+function NowPlayingArtwork({ imageUrl, title }: { imageUrl: string | undefined; title: string }): JSX.Element {
   return (
-    <Box
+    <Avatar
+      variant="rounded"
+      src={imageUrl}
+      alt={title}
       sx={{
         width: 200,
         height: 200,
         flexShrink: 0,
         borderRadius: 2,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        boxShadow: 4,
         background: (theme) =>
           `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-        boxShadow: 4,
       }}
     >
       <AlbumIcon sx={{ fontSize: 88, color: "rgba(255,255,255,0.85)" }} />
-    </Box>
-  );
-}
-
-/** Stands in for a real artist/similar-artist photo — Last.fm's API no longer reliably
- * returns usable artist images (most requests get a generic placeholder back due to a
- * rights change years ago), so this app doesn't try to fetch or fake one. */
-function ArtistAvatar({ name, size = 96 }: { name: string; size?: number }): JSX.Element {
-  return (
-    <Avatar
-      sx={{
-        width: size,
-        height: size,
-        fontSize: size / 2.4,
-        bgcolor: "action.selected",
-        color: "text.secondary",
-        flexShrink: 0,
-      }}
-    >
-      {name.slice(0, 1).toUpperCase()}
     </Avatar>
   );
 }
 
 export function NowPlayingPage(): JSX.Element {
   const { track, state } = useNowPlaying();
-  const { info, similarArtists, loading: artistInfoLoading } = useArtistInfo(track?.artist);
-  const { loved, submitting, toggleLove, addTags } = useTrackActions(track?.artist, track?.title);
-  const [tagAnchor, setTagAnchor] = useState<HTMLElement | null>(null);
-  const [tagInput, setTagInput] = useState("");
-  const { notify } = useSnackbar();
-
-  const closeTagPopover = (): void => {
-    setTagAnchor(null);
-    setTagInput("");
-  };
-
-  const handleToggleLove = (): void => {
-    // `toggleLove()` flips whatever `loved` currently is — capture it now so the
-    // success message can say which way it went, rather than racing the hook's own
-    // (necessarily one-render-later) updated value.
-    const wasLoved = loved;
-    void toggleLove().then((result) => {
-      notify(
-        result.success
-          ? { message: wasLoved ? "Unloved." : "Loved.", severity: "success" }
-          : { message: result.error, severity: "error" },
-      );
-    });
-  };
-
-  const handleAddTags = (tags: readonly string[]): void => {
-    void addTags(tags).then((result) => {
-      closeTagPopover();
-      notify(
-        result.success
-          ? { message: "Tags added.", severity: "success" }
-          : { message: result.error, severity: "error" },
-      );
-    });
-  };
+  const { activeAccount } = useAuth();
+  const {
+    info,
+    similarArtists,
+    loading: artistInfoLoading,
+    error: artistInfoError,
+  } = useArtistInfo(track?.artist);
+  const trackDetail = useTrackDetail(track?.artist, track?.title);
 
   if (!track) {
     return (
@@ -147,9 +104,6 @@ export function NowPlayingPage(): JSX.Element {
       </Box>
     );
   }
-
-  const artistLastfmUrl = `https://www.last.fm/music/${encodeURIComponent(track.artist)}`;
-  const bioSummary = info?.bioSummary ? stripHtml(info.bioSummary) : undefined;
 
   return (
     <Box sx={{ height: "100%", overflow: "auto" }}>
@@ -178,17 +132,24 @@ export function NowPlayingPage(): JSX.Element {
       </Stack>
 
       <Box sx={{ p: 4 }}>
+        <PageHeader title="Now Playing" />
         <Stack direction={{ xs: "column", sm: "row" }} spacing={4} sx={{ alignItems: { sm: "flex-start" } }}>
-          <ArtworkPlaceholder />
+          <NowPlayingArtwork imageUrl={trackDetail?.imageUrl} title={track.title} />
           <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Chip
-              icon={<StateIcon state={state} />}
-              label={STATE_LABEL[state]}
-              size="small"
-              color={state === "playing" ? "primary" : "default"}
-              sx={{ mb: 1.5 }}
-            />
-            <Typography variant="h4" sx={{ fontWeight: 600, wordBreak: "break-word" }} gutterBottom>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
+              <Chip
+                icon={<StateIcon state={state} />}
+                label={STATE_LABEL[state]}
+                size="small"
+                color={state === "playing" ? "primary" : "default"}
+              />
+              {track.durationSec !== undefined ? (
+                <Typography variant="caption" color="text.secondary">
+                  {formatDuration(track.durationSec)}
+                </Typography>
+              ) : null}
+            </Stack>
+            <Typography variant="h4" sx={{ wordBreak: "break-word" }} gutterBottom>
               {track.title}
             </Typography>
             <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -200,134 +161,57 @@ export function NowPlayingPage(): JSX.Element {
               </Typography>
             ) : null}
 
-            <Stack direction="row" spacing={0.5}>
-              <Tooltip title={loved ? "Unlove this track" : "Love this track"}>
-                <span>
-                  <IconButton
-                    size="small"
-                    color={loved ? "error" : "default"}
-                    disabled={submitting}
-                    onClick={handleToggleLove}
-                    aria-label={loved ? "Unlove this track" : "Love this track"}
-                  >
-                    {loved ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="Add tags">
-                <IconButton
-                  size="small"
-                  onClick={(event) => {
-                    setTagAnchor(event.currentTarget);
-                  }}
-                  aria-label="Add tags"
-                >
-                  <LocalOfferOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-          </Box>
-        </Stack>
-
-        <Popover
-          open={Boolean(tagAnchor)}
-          anchorEl={tagAnchor}
-          onClose={closeTagPopover}
-          anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        >
-          <Stack direction="row" spacing={1} sx={{ p: 1.5, alignItems: "center" }}>
-            <TextField
-              size="small"
-              placeholder="tags, separated, by commas"
-              value={tagInput}
-              onChange={(event) => {
-                setTagInput(event.target.value);
-              }}
-              autoFocus
-            />
-            <Button
-              size="small"
-              variant="contained"
-              disabled={!tagInput.trim() || submitting}
-              onClick={() => {
-                const tags = tagInput
-                  .split(",")
-                  .map((tag) => tag.trim())
-                  .filter(Boolean);
-                handleAddTags(tags);
-              }}
-            >
-              Add
-            </Button>
-          </Stack>
-        </Popover>
-
-        <Divider sx={{ my: 4 }} />
-
-        <Stack direction="row" spacing={3} sx={{ alignItems: "flex-start" }}>
-          <ArtistAvatar name={track.artist} />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="h6" gutterBottom>
-              {track.artist}
-            </Typography>
-
-            {artistInfoLoading ? (
-              <CircularProgress size={20} />
-            ) : info ? (
-              <>
-                {bioSummary ? (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    {bioSummary}
-                  </Typography>
-                ) : null}
-                <Link href={artistLastfmUrl} target="_blank" rel="noreferrer" sx={{ fontWeight: 600 }}>
-                  Read more on Last.fm
-                </Link>
-
-                <Stack direction="row" spacing={4} sx={{ mt: 2.5 }}>
+            {trackDetail ? (
+              <Box sx={{ mb: 1.5 }}>
+                <Stack direction="row" spacing={3}>
                   <Box>
-                    <Typography variant="h6">{info.listeners.toLocaleString()}</Typography>
+                    <Typography variant="subtitle1">
+                      {trackDetail.listeners.toLocaleString()}
+                    </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Listener(s)
+                      Track listener(s)
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="h6">{info.playCount.toLocaleString()}</Typography>
+                    <Typography variant="subtitle1">
+                      {trackDetail.playCount.toLocaleString()}
+                    </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Play(s)
+                      Track play(s)
                     </Typography>
                   </Box>
                 </Stack>
+                <Link
+                  href={trackDetail.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  sx={{ display: "inline-block", mt: 1, fontWeight: 600 }}
+                >
+                  View on Last.fm
+                </Link>
+              </Box>
+            ) : null}
 
-                {similarArtists.length > 0 ? (
-                  <Box sx={{ mt: 3 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Similar Artists
-                    </Typography>
-                    <Stack direction="row" spacing={2.5} sx={{ flexWrap: "wrap" }}>
-                      {similarArtists.map((similarArtist) => (
-                        <Stack
-                          key={similarArtist.name}
-                          spacing={0.5}
-                          sx={{ alignItems: "center", width: SIMILAR_ARTIST_AVATAR_SIZE + 24 }}
-                        >
-                          <ArtistAvatar name={similarArtist.name} size={SIMILAR_ARTIST_AVATAR_SIZE} />
-                          <Typography variant="caption" align="center" sx={{ wordBreak: "break-word" }}>
-                            {similarArtist.name}
-                          </Typography>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : null}
-              </>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No additional artist info available.
+            <Stack direction="row" spacing={0.5}>
+              <TrackLoveTagControls artist={track.artist} track={track.title} />
+            </Stack>
+            {!activeAccount ? (
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
+                Log in with Last.fm in Settings to love or tag tracks.
               </Typography>
-            )}
+            ) : null}
           </Box>
         </Stack>
+
+        <Divider sx={{ my: 4 }} />
+
+        <ArtistInfoPanel
+          artistName={track.artist}
+          info={info}
+          similarArtists={similarArtists}
+          loading={artistInfoLoading}
+          error={artistInfoError}
+        />
       </Box>
     </Box>
   );
