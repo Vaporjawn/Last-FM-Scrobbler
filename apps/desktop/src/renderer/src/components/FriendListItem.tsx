@@ -106,7 +106,12 @@ export function FriendListItem({ friend, activity, onSelectTrack }: FriendListIt
       </Stack>
 
       {track ? (
-        <Box sx={{ mt: 1.25, ml: `${AVATAR_SIZE + 12}px` }}>
+        // Flush with the friend `Avatar` above (no `ml` indent) — `Paper`'s own `p: 1`
+        // (8px) padding plus the avatar's 8px inset within its 72px-wide
+        // `ListItemAvatar` box happen to match exactly, so `TrackArtworkAvatar` below
+        // lines up left-edge-to-left-edge with the friend's own avatar rather than
+        // sitting indented under their username.
+        <Box sx={{ mt: 1.25 }}>
           <Paper
             {...(onSelectTrack
               ? {
