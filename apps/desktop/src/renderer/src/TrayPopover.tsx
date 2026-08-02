@@ -10,7 +10,7 @@ import Typography from "@mui/material/Typography";
 import { SnackbarProvider } from "./contexts/SnackbarProvider.js";
 import { TrackLoveTagControls } from "./components/shared/TrackLoveTagControls.js";
 import { useNowPlaying } from "./hooks/use-now-playing.js";
-import { useSettings } from "./hooks/use-settings.js";
+import { useSettingsState } from "./hooks/use-settings-state.js";
 import { createAppTheme } from "./theme/index.js";
 
 /**
@@ -29,7 +29,7 @@ import { createAppTheme } from "./theme/index.js";
  * reachable from here regardless.
  */
 export function TrayPopover(): JSX.Element {
-  const { settings } = useSettings();
+  const { settings } = useSettingsState();
   const theme = useMemo(() => createAppTheme(settings.themeMode), [settings.themeMode]);
   const { track } = useNowPlaying();
 
