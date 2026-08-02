@@ -33,9 +33,7 @@ export function parseBugReportRequest(payload: unknown): BugReportRequest {
   return {
     title: title.trim(),
     body: body.trim(),
-    ...(diagnostics !== undefined
-      ? { diagnostics: diagnostics as Record<string, string> }
-      : {}),
+    ...(diagnostics !== undefined ? { diagnostics: diagnostics as Record<string, string> } : {}),
   };
 }
 

@@ -2,17 +2,38 @@
   "name": "lastfm-scrobbler",
   "version": "0.0.0",
   "private": true,
+  "description": "A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux.",
+  "keywords": ["lastfm", "scrobbler", "electron", "desktop", "cross-platform", "media-session"],
+  "homepage": "https://github.com/Vaporjawn/lastfm-scrobbler#readme",
+  "bugs": {
+    "url": "https://github.com/Vaporjawn/lastfm-scrobbler/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vaporjawn/lastfm-scrobbler.git"
+  },
   "license": "MIT",
+  "author": {
+    "name": "Victor Williams",
+    "email": "vrwilliams719@gmail.com",
+    "url": "https://github.com/Vaporjawn"
+  },
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "packageManager": "pnpm@11.18.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
   "scripts": {
-    "build": "pnpm -r --if-present build",
-    "test": "pnpm -r --if-present test",
+    "start": "node scripts/run-workspaces.mjs dev --package @lastfm-scrobbler/desktop",
+    "build": "node scripts/run-workspaces.mjs build",
+    "test": "node scripts/run-workspaces.mjs test",
     "lint": "eslint .",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "typecheck": "node scripts/run-workspaces.mjs typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
@@ -20,6 +41,7 @@
     "@eslint/js": "^10.0.0",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.0",
+    "globals": "^17.8.0",
     "prettier": "^3.9.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0"

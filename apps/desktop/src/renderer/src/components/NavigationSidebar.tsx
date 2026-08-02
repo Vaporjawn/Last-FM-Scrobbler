@@ -25,7 +25,11 @@ const NAV_ITEMS: readonly NavItem[] = [
   { id: "friends", label: "Friends", icon: <PeopleIcon /> },
 ];
 
-const PREFERENCES_ITEM: NavItem = { id: "preferences", label: "Preferences", icon: <SettingsIcon /> };
+const PREFERENCES_ITEM: NavItem = {
+  id: "preferences",
+  label: "Preferences",
+  icon: <SettingsIcon />,
+};
 
 export interface NavigationSidebarProps {
   readonly activeView: ViewId;
@@ -50,7 +54,9 @@ export function NavigationSidebar({
           <ListItemButton
             key={item.id}
             selected={activeView === item.id}
-            onClick={() => onSelectView(item.id)}
+            onClick={() => {
+              onSelectView(item.id);
+            }}
           >
             <ListItemIcon>{item.icon}</ListItemIcon>
             <ListItemText primary={item.label} />
@@ -60,7 +66,9 @@ export function NavigationSidebar({
       <List>
         <ListItemButton
           selected={activeView === PREFERENCES_ITEM.id}
-          onClick={() => onSelectView(PREFERENCES_ITEM.id)}
+          onClick={() => {
+            onSelectView(PREFERENCES_ITEM.id);
+          }}
         >
           <ListItemIcon>{PREFERENCES_ITEM.icon}</ListItemIcon>
           <ListItemText primary={PREFERENCES_ITEM.label} />

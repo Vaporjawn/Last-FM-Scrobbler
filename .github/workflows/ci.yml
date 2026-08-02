@@ -11,35 +11,53 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        pm: [pnpm, npm, bun]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - if: matrix.pm == 'pnpm'
+        uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - if: matrix.pm != 'bun'
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: ${{ matrix.pm == 'pnpm' && 'pnpm' || 'npm' }}
 
-      - name: Install dependencies
+      - if: matrix.pm == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (pnpm)
+        if: matrix.pm == 'pnpm'
         run: pnpm install --frozen-lockfile
+
+      - name: Install dependencies (npm)
+        if: matrix.pm == 'npm'
+        run: npm ci
+
+      - name: Install dependencies (bun)
+        if: matrix.pm == 'bun'
+        run: bun install --frozen-lockfile
 
       # Build first: adapter-* packages' typecheck resolves
       # @lastfm-scrobbler/shared-types via its declared "types" field
       # (dist/index.d.ts), which only exists once that package is built.
-      # pnpm -r respects workspace dependency order, so this single build
-      # step produces every cross-package .d.ts before typecheck needs it.
+      # scripts/run-workspaces.mjs builds packages in dependency order, so this
+      # single build step produces every cross-package .d.ts before typecheck
+      # needs it — same reasoning applies regardless of which pm is running it.
       - name: Build
-        run: pnpm build
+        run: ${{ matrix.pm }} run build
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: ${{ matrix.pm }} run typecheck
 
       - name: Lint
-        run: pnpm lint
+        run: ${{ matrix.pm }} run lint
 
       - name: Test
-        run: pnpm test
+        run: ${{ matrix.pm }} run test

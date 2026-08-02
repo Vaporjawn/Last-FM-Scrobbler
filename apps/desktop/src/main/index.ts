@@ -15,15 +15,15 @@ function createMainWindow(): void {
     },
   });
 
-  const devServerUrl = process.env["ELECTRON_RENDERER_URL"];
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (devServerUrl) {
-    mainWindow.loadURL(devServerUrl);
+    void mainWindow.loadURL(devServerUrl);
   } else {
-    mainWindow.loadFile(join(dirname, "../renderer/index.html"));
+    void mainWindow.loadFile(join(dirname, "../renderer/index.html"));
   }
 }
 
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   createMainWindow();
 
   app.on("activate", () => {

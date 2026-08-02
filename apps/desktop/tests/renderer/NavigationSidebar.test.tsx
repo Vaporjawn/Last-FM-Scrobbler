@@ -4,7 +4,7 @@ import { NavigationSidebar } from "../../src/renderer/src/components/NavigationS
 
 describe("NavigationSidebar", () => {
   it("renders all five navigation destinations", () => {
-    render(<NavigationSidebar activeView="now-playing" onSelectView={() => {}} />);
+    render(<NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />);
 
     expect(screen.getByText("Now Playing")).toBeInTheDocument();
     expect(screen.getByText("Scrobbles")).toBeInTheDocument();

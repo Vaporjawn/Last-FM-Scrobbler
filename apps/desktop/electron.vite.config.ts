@@ -1,13 +1,11 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig, externalizeDepsPlugin } from "electron-vite";
+import { defineConfig } from "electron-vite";
 
 export default defineConfig({
-  main: {
-    plugins: [externalizeDepsPlugin()],
-  },
-  preload: {
-    plugins: [externalizeDepsPlugin()],
-  },
+  // `build.externalizeDeps` defaults to `true`, so main/preload dependencies are
+  // externalized without needing the deprecated `externalizeDepsPlugin()`.
+  main: {},
+  preload: {},
   renderer: {
     root: "src/renderer",
     build: {

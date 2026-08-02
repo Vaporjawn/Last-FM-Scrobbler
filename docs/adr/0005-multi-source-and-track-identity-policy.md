@@ -17,7 +17,7 @@ foobar2000's own tag database.
 
 - **Multiple sources:** an adapter reports whichever session is actively `Playing` and
   most-recently-changed; if several are simultaneously `Playing`, the most recently
-  *started* one wins. A "preferred source app" override is a reasonable future
+  _started_ one wins. A "preferred source app" override is a reasonable future
   Preferences addition.
 - **Track identity:** normalized `artist` + normalized `title` + `album` (if present),
   bucketed by the playback session's start time. "Normalized" means case-folded and
@@ -34,5 +34,5 @@ foobar2000's own tag database.
 
 - No filesystem access is required anywhere in the scrobbling pipeline.
 - The filter DSL's grammar still needs to be designed in detail when `packages/core`'s
-  `filters` module is actually implemented — this ADR fixes the *fields* it operates
+  `filters` module is actually implemented — this ADR fixes the _fields_ it operates
   over, not the full syntax.

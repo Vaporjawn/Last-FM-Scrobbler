@@ -13,26 +13,34 @@ and [docs/adr/](docs/adr/) for the reasoning behind the major decisions.
 
 ## Quick start
 
+Package-manager agnostic — use whichever you already have. All three are tested in CI.
+
 ```bash
-corepack enable
-pnpm install
-pnpm build
-pnpm test
+# pnpm
+corepack enable && pnpm install && pnpm build && pnpm test
+
+# npm
+npm install && npm run build && npm run test
+
+# bun
+bun install && bun run build && bun run test
 ```
 
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the full contributor guide.
+See [docs/adr/0007-package-manager-agnostic.md](docs/adr/0007-package-manager-agnostic.md)
+for how this works, and [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the full
+contributor guide.
 
 ## Packages
 
-| Package | Responsibility |
-|---|---|
-| [`packages/core`](docs/modules/core.md) | Scrobbling engine — rules, offline queue, Last.fm API client, auth, filters, logging |
-| [`packages/shared-types`](docs/modules/shared-types.md) | Shared types and the `PlaybackSource` interface |
-| [`packages/adapter-linux`](docs/modules/adapter-linux.md) | MPRIS2 (D-Bus) playback source |
-| [`packages/adapter-windows`](docs/modules/adapter-windows.md) | SMTC playback source |
-| [`packages/adapter-macos`](docs/modules/adapter-macos.md) | MediaRemote playback source |
-| [`apps/desktop`](docs/modules/desktop.md) | Electron + React + MUI desktop app |
-| [`services/bug-report-relay`](docs/modules/bug-report-relay.md) | Anonymous bug-report → GitHub issue relay |
+| Package                                                         | Responsibility                                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [`packages/core`](docs/modules/core.md)                         | Scrobbling engine — rules, offline queue, Last.fm API client, auth, filters, logging |
+| [`packages/shared-types`](docs/modules/shared-types.md)         | Shared types and the `PlaybackSource` interface                                      |
+| [`packages/adapter-linux`](docs/modules/adapter-linux.md)       | MPRIS2 (D-Bus) playback source                                                       |
+| [`packages/adapter-windows`](docs/modules/adapter-windows.md)   | SMTC playback source                                                                 |
+| [`packages/adapter-macos`](docs/modules/adapter-macos.md)       | MediaRemote playback source                                                          |
+| [`apps/desktop`](docs/modules/desktop.md)                       | Electron + React + MUI desktop app                                                   |
+| [`services/bug-report-relay`](docs/modules/bug-report-relay.md) | Anonymous bug-report → GitHub issue relay                                            |
 
 ## License
 
