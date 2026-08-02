@@ -1,9 +1,13 @@
 name: Deploy Pages
 
+# Source lives at apps/site/ — a sibling of apps/desktop, not part of it. Kept as a
+# small hand-written static HTML/CSS pair (no framework, no build step, no
+# package.json) deliberately — it's a landing page, not an app; see
+# docs/modules/site.md.
 on:
   push:
     branches: [main]
-    paths: [site/**, .github/workflows/pages.yml]
+    paths: [apps/site/**, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -27,10 +31,10 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload site/ as the Pages artifact
+      - name: Upload apps/site/ as the Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: apps/site
 
       - name: Deploy to GitHub Pages
         id: deployment

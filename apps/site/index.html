@@ -8,24 +8,25 @@
       name="description"
       content="A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux that reads 'now playing' directly from your OS's media session — no per-player plugins required."
     />
-    <link rel="icon" href="data:," />
+    <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="hero">
       <div class="wrap">
-        <p class="eyebrow">Early scaffolding — not yet released</p>
+        <p class="eyebrow">Feature-complete — pre-release</p>
         <h1>Last.fm Scrobbler</h1>
         <p class="tagline">
           A native, cross-platform scrobbler for macOS, Windows, and Linux. No per-player plugins —
-          it reads "now playing" straight from your OS's own media session.
+          it reads "now playing" straight from your OS's own media session, and keeps scrobbling in
+          the background from your tray or menu bar.
         </p>
         <div class="cta-row">
           <a class="button primary" href="https://github.com/Vaporjawn/Last-FM-Scrobbler">
             View on GitHub
           </a>
-          <a class="button" href="https://github.com/Vaporjawn/Last-FM-Scrobbler/wiki">
-            Read the wiki
+          <a class="button" href="https://github.com/Vaporjawn/Last-FM-Scrobbler/releases">
+            Releases
           </a>
         </div>
       </div>
@@ -40,6 +41,44 @@
           <strong>SMTC</strong> on Windows, <strong>MediaRemote</strong> on macOS — so it works with
           whatever you're already using to play music, with zero per-player integration.
         </p>
+      </section>
+
+      <section aria-labelledby="features-heading">
+        <h2 id="features-heading">What's built</h2>
+        <ul class="feature-grid">
+          <li>
+            <h3>Now Playing</h3>
+            <p>Live track/artist/album info pulled straight from the OS, with love and tag actions.</p>
+          </li>
+          <li>
+            <h3>Scrobble history</h3>
+            <p>Recent scrobbles with real album art, plus love and tag actions on any past track.</p>
+          </li>
+          <li>
+            <h3>Profile &amp; friends</h3>
+            <p>Top artists and your Last.fm friends' activity, without leaving the app.</p>
+          </li>
+          <li>
+            <h3>Runs in the background</h3>
+            <p>Lives in the tray/menu bar and keeps scrobbling after you close the window.</p>
+          </li>
+          <li>
+            <h3>Bring your own key — or don't</h3>
+            <p>Use your own Last.fm API key via Preferences, or a key baked into the build.</p>
+          </li>
+          <li>
+            <h3>Offline-safe</h3>
+            <p>Scrobbles queue locally and submit once Last.fm is reachable again.</p>
+          </li>
+          <li>
+            <h3>Native notifications</h3>
+            <p>In-app toasts and OS-level notifications for scrobbles, updates, and errors.</p>
+          </li>
+          <li>
+            <h3>In-app bug reports</h3>
+            <p>File a GitHub issue straight from the app — no GitHub account required.</p>
+          </li>
+        </ul>
       </section>
 
       <section aria-labelledby="packages-heading">
@@ -87,7 +126,11 @@
       <section aria-labelledby="status-heading">
         <h2 id="status-heading">Status</h2>
         <p>
-          This project is early scaffolding — see the
+          Every planned piece above is implemented and tested — all three platform adapters, the
+          full scrobbling engine, and the desktop app itself. There are no tagged releases or
+          downloads yet, so for now the only way to run it is
+          <a href="https://github.com/Vaporjawn/Last-FM-Scrobbler#quick-start">from source</a> —
+          follow the repo to be notified when the first packaged build ships. See the
           <a href="https://github.com/Vaporjawn/Last-FM-Scrobbler/blob/main/docs/ARCHITECTURE.md"
             >architecture doc</a
           >
@@ -95,8 +138,7 @@
           <a href="https://github.com/Vaporjawn/Last-FM-Scrobbler/tree/main/docs/adr"
             >architecture decision records</a
           >
-          for the full design and reasoning. There are no tagged releases or downloads yet — follow
-          the repo to be notified when the first build ships.
+          for the full design and reasoning behind it.
         </p>
       </section>
 
