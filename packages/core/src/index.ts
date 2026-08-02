@@ -32,3 +32,5 @@ export type { StoredAccount } from "./auth/account-store.js";
 export type { SecretStorage } from "./auth/secret-storage.js";
 export { AuthFlow, AuthTimeoutError } from "./auth/auth-flow.js";
 export type { AuthFlowClient, AuthFlowOptions } from "./auth/auth-flow.js";
+export { compileFilter, FilterSyntaxError } from "./filters/filter-expression.js";
+export type { CompiledFilter, FilterableTrack } from "./filters/filter-expression.js";
