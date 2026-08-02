@@ -6,6 +6,7 @@ import {
   type AuthFlowClient,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
+import { assertTrustedSender } from "../validate-ipc-sender.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
@@ -21,6 +22,12 @@ const NO_APP_CREDENTIALS_STORAGE_MESSAGE =
   "(see docs/modules/desktop.md).";
 
 export interface WireAuthOptions {
+  /** The origin (dev) or `file:` URL (packaged) every call on this file's channels
+   * must genuinely come from — see `validate-ipc-sender.ts` and
+   * `resolve-expected-renderer-origin.ts`. This is this module's highest-privilege
+   * surface (login, logout, saving/clearing a Last.fm API key), so every handler
+   * below checks it first, before doing anything else. */
+  readonly expectedOrigin: string;
   /** `undefined` when secure storage (Electron's `safeStorage`) isn't available on
    * this system — see `main/auth/create-account-store.ts`. Every handler here reports
    * "not configured" rather than throwing an unhandled error in that case. */
@@ -56,7 +63,7 @@ export interface WireAuthOptions {
    * most commonly `AuthTimeoutError` (nobody clicked "Allow Access" on Last.fm within
    * the poll window) but also any other error `AuthFlow.authenticate()`/the account
    * store throws. This is deliberately separate from the renderer's own error
-   * handling (`PreferencesPage`'s snackbar): that only reaches the user if the window
+   * handling (`SettingsPage`'s snackbar): that only reaches the user if the window
    * is still open and focused when the failure happens, which — since the whole point
    * of this flow is sending them away to a browser — is exactly the case that can't be
    * assumed. Real callers use this to show a native notification, the one signal
@@ -74,6 +81,7 @@ export interface WireAuthOptions {
  */
 export function wireAuth(options: WireAuthOptions): () => void {
   const {
+    expectedOrigin,
     accountStore,
     client,
     openUrl,
@@ -84,14 +92,15 @@ export function wireAuth(options: WireAuthOptions): () => void {
     onLoginFailed,
   } = options;
 
-  ipcMain.handle(
-    IPC_CHANNELS.authIsConfigured,
-    (): boolean => accountStore !== undefined && client !== undefined,
-  );
+  ipcMain.handle(IPC_CHANNELS.authIsConfigured, (event): boolean => {
+    assertTrustedSender(event, expectedOrigin);
+    return accountStore !== undefined && client !== undefined;
+  });
 
   ipcMain.handle(
     IPC_CHANNELS.authCredentialsSource,
-    (): "environment" | "user-supplied" | "none" => {
+    (event): "environment" | "user-supplied" | "none" => {
+      assertTrustedSender(event, expectedOrigin);
       if (!client) {
         return "none";
       }
@@ -99,7 +108,8 @@ export function wireAuth(options: WireAuthOptions): () => void {
     },
   );
 
-  ipcMain.handle(IPC_CHANNELS.authLogin, async (): Promise<{ username: string }> => {
+  ipcMain.handle(IPC_CHANNELS.authLogin, async (event): Promise<{ username: string }> => {
+    assertTrustedSender(event, expectedOrigin);
     if (!accountStore || !client) {
       throw new Error(NOT_CONFIGURED_MESSAGE);
     }
@@ -112,7 +122,7 @@ export function wireAuth(options: WireAuthOptions): () => void {
       return { username: session.username };
     } catch (error) {
       // Reported via onLoginFailed *in addition to* rethrowing below — the renderer's
-      // own promise-rejection handling (PreferencesPage's snackbar) still runs
+      // own promise-rejection handling (SettingsPage's snackbar) still runs
       // unchanged when the window is open and focused; onLoginFailed exists for the
       // case that matters here, where it isn't.
       onLoginFailed?.(error instanceof Error ? error.message : String(error));
@@ -120,14 +130,16 @@ export function wireAuth(options: WireAuthOptions): () => void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.authLogout, async (_event, username: unknown): Promise<void> => {
+  ipcMain.handle(IPC_CHANNELS.authLogout, async (event, username: unknown): Promise<void> => {
+    assertTrustedSender(event, expectedOrigin);
     if (!accountStore) {
       throw new Error(NOT_CONFIGURED_MESSAGE);
     }
     await accountStore.removeAccount(String(username));
   });
 
-  ipcMain.handle(IPC_CHANNELS.authListAccounts, async (): Promise<string[]> => {
+  ipcMain.handle(IPC_CHANNELS.authListAccounts, async (event): Promise<string[]> => {
+    assertTrustedSender(event, expectedOrigin);
     if (!accountStore) {
       return [];
     }
@@ -135,7 +147,8 @@ export function wireAuth(options: WireAuthOptions): () => void {
     return accounts.map((account) => account.username);
   });
 
-  ipcMain.handle(IPC_CHANNELS.authGetActiveAccount, async (): Promise<string | undefined> => {
+  ipcMain.handle(IPC_CHANNELS.authGetActiveAccount, async (event): Promise<string | undefined> => {
+    assertTrustedSender(event, expectedOrigin);
     if (!accountStore) {
       return undefined;
     }
@@ -145,7 +158,8 @@ export function wireAuth(options: WireAuthOptions): () => void {
 
   ipcMain.handle(
     IPC_CHANNELS.authSetActiveAccount,
-    async (_event, username: unknown): Promise<void> => {
+    async (event, username: unknown): Promise<void> => {
+      assertTrustedSender(event, expectedOrigin);
       if (!accountStore) {
         throw new Error(NOT_CONFIGURED_MESSAGE);
       }
@@ -155,7 +169,8 @@ export function wireAuth(options: WireAuthOptions): () => void {
 
   ipcMain.handle(
     IPC_CHANNELS.authSetAppCredentials,
-    async (_event, apiKey: unknown, apiSecret: unknown): Promise<void> => {
+    async (event, apiKey: unknown, apiSecret: unknown): Promise<void> => {
+      assertTrustedSender(event, expectedOrigin);
       if (!appCredentialsStore) {
         throw new Error(NO_APP_CREDENTIALS_STORAGE_MESSAGE);
       }
@@ -168,11 +183,13 @@ export function wireAuth(options: WireAuthOptions): () => void {
     },
   );
 
-  ipcMain.handle(IPC_CHANNELS.authClearAppCredentials, async (): Promise<void> => {
+  ipcMain.handle(IPC_CHANNELS.authClearAppCredentials, async (event): Promise<void> => {
+    assertTrustedSender(event, expectedOrigin);
     await appCredentialsStore?.clear();
   });
 
-  ipcMain.handle(IPC_CHANNELS.appRelaunch, (): void => {
+  ipcMain.handle(IPC_CHANNELS.appRelaunch, (event): void => {
+    assertTrustedSender(event, expectedOrigin);
     relaunch?.();
   });
 

@@ -16,6 +16,11 @@ vi.mock("electron", () => ({ ipcMain, default: { ipcMain } }));
 const { wireAuth } = await import("../../../src/main/auth/wire-auth.js");
 const { IPC_CHANNELS } = await import("../../../src/shared/ipc-channels.js");
 
+/** Matches this test file's default fake `senderFrame` below — every `wireAuth(...)`
+ * call site here passes this so existing tests keep exercising a *trusted* sender by
+ * default; the "untrusted sender" describe block below is what actually varies it. */
+const EXPECTED_ORIGIN = "http://localhost:5173";
+
 function inMemoryStorage(): SecretStorage {
   const data = new Map<string, string>();
   return {
@@ -40,23 +45,38 @@ function fakeAuthFlowClient(username: string) {
   };
 }
 
+/** A trusted sender — matches `EXPECTED_ORIGIN` above — so every existing test in this
+ * file (which calls `invoke()`, not `invokeFrom()`) keeps exercising the "allowed"
+ * path through `assertTrustedSender` unchanged. */
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+  return invokeFrom(TRUSTED_EVENT, channel, ...args);
+}
+
+/** Like `invoke()`, but with an explicit (possibly untrusted, possibly `null`
+ * `senderFrame`) event — for the "untrusted sender" tests below. `async` is
+ * load-bearing, not stylistic: `assertTrustedSender` throws *synchronously* inside
+ * these handlers (they aren't all `async` themselves), so a non-async wrapper here
+ * would let that throw escape as a real exception instead of becoming a promise
+ * rejection `expect(...).rejects.toThrow()` can actually catch. */
+async function invokeFrom(event: unknown, channel: string, ...args: unknown[]): Promise<unknown> {
   const handler = ipcMainHandlers.get(channel);
   if (!handler) {
     throw new Error(`No handler registered for ${channel}`);
   }
-  return Promise.resolve(handler({}, ...args));
+  return await handler(event, ...args);
 }
 
 describe("wireAuth", () => {
   it("isConfigured reports false when no client is configured", async () => {
-    wireAuth({ accountStore: new AccountStore(inMemoryStorage()), client: undefined, openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore: new AccountStore(inMemoryStorage()), client: undefined, openUrl: vi.fn() });
 
     await expect(invoke(IPC_CHANNELS.authIsConfigured)).resolves.toBe(false);
   });
 
   it("isConfigured reports true when a client is configured", async () => {
-    wireAuth({
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
       accountStore: new AccountStore(inMemoryStorage()),
       client: fakeAuthFlowClient("alice"),
       openUrl: vi.fn(),
@@ -68,7 +88,7 @@ describe("wireAuth", () => {
   it("login runs the auth flow, stores the account, and makes it active", async () => {
     const accountStore = new AccountStore(inMemoryStorage());
     const openUrl = vi.fn();
-    wireAuth({ accountStore, client: fakeAuthFlowClient("alice"), openUrl });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: fakeAuthFlowClient("alice"), openUrl });
 
     const result = await invoke(IPC_CHANNELS.authLogin);
 
@@ -83,7 +103,7 @@ describe("wireAuth", () => {
   it("login calls onLoginSuccess with the newly active username once the session is stored", async () => {
     const accountStore = new AccountStore(inMemoryStorage());
     const onLoginSuccess = vi.fn();
-    wireAuth({
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
       accountStore,
       client: fakeAuthFlowClient("alice"),
       openUrl: vi.fn(),
@@ -97,7 +117,7 @@ describe("wireAuth", () => {
 
   it("login doesn't throw when no onLoginSuccess callback was provided", async () => {
     const accountStore = new AccountStore(inMemoryStorage());
-    wireAuth({ accountStore, client: fakeAuthFlowClient("alice"), openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: fakeAuthFlowClient("alice"), openUrl: vi.fn() });
 
     await expect(invoke(IPC_CHANNELS.authLogin)).resolves.toEqual({ username: "alice" });
   });
@@ -110,7 +130,7 @@ describe("wireAuth", () => {
       buildAuthUrl: (token: string) => `https://last.fm/auth?token=${token}`,
       getSession: () => Promise.reject(new Error("Timed out waiting for the user to authorize")),
     };
-    wireAuth({ accountStore, client: failingClient, openUrl: vi.fn(), onLoginFailed });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: failingClient, openUrl: vi.fn(), onLoginFailed });
 
     await expect(invoke(IPC_CHANNELS.authLogin)).rejects.toThrow(/timed out/i);
 
@@ -122,7 +142,7 @@ describe("wireAuth", () => {
   it("login doesn't call onLoginSuccess/onLoginFailed for the 'not configured' guard — the caller is still right there", async () => {
     const onLoginSuccess = vi.fn();
     const onLoginFailed = vi.fn();
-    wireAuth({
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
       accountStore: new AccountStore(inMemoryStorage()),
       client: undefined,
       openUrl: vi.fn(),
@@ -143,19 +163,19 @@ describe("wireAuth", () => {
       buildAuthUrl: (token: string) => `https://last.fm/auth?token=${token}`,
       getSession: () => Promise.reject(new Error("nope")),
     };
-    wireAuth({ accountStore, client: failingClient, openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: failingClient, openUrl: vi.fn() });
 
     await expect(invoke(IPC_CHANNELS.authLogin)).rejects.toThrow("nope");
   });
 
   it("login throws a clear error when the app isn't configured with API credentials", async () => {
-    wireAuth({ accountStore: new AccountStore(inMemoryStorage()), client: undefined, openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore: new AccountStore(inMemoryStorage()), client: undefined, openUrl: vi.fn() });
 
     await expect(invoke(IPC_CHANNELS.authLogin)).rejects.toThrow(/not configured/i);
   });
 
   it("gracefully reports 'not configured' across the board when accountStore is undefined (no secure storage)", async () => {
-    wireAuth({ accountStore: undefined, client: fakeAuthFlowClient("alice"), openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore: undefined, client: fakeAuthFlowClient("alice"), openUrl: vi.fn() });
 
     await expect(invoke(IPC_CHANNELS.authIsConfigured)).resolves.toBe(false);
     await expect(invoke(IPC_CHANNELS.authLogin)).rejects.toThrow(/not configured/i);
@@ -167,7 +187,7 @@ describe("wireAuth", () => {
   it("listAccounts returns usernames only, never session keys", async () => {
     const accountStore = new AccountStore(inMemoryStorage());
     await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
-    wireAuth({ accountStore, client: undefined, openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: undefined, openUrl: vi.fn() });
 
     const result = await invoke(IPC_CHANNELS.authListAccounts);
 
@@ -177,7 +197,7 @@ describe("wireAuth", () => {
   it("getActiveAccount returns the active username", async () => {
     const accountStore = new AccountStore(inMemoryStorage());
     await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
-    wireAuth({ accountStore, client: undefined, openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: undefined, openUrl: vi.fn() });
 
     await expect(invoke(IPC_CHANNELS.authGetActiveAccount)).resolves.toBe("alice");
   });
@@ -185,7 +205,7 @@ describe("wireAuth", () => {
   it("logout removes the account", async () => {
     const accountStore = new AccountStore(inMemoryStorage());
     await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
-    wireAuth({ accountStore, client: undefined, openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: undefined, openUrl: vi.fn() });
 
     await invoke(IPC_CHANNELS.authLogout, "alice");
 
@@ -196,7 +216,7 @@ describe("wireAuth", () => {
     const accountStore = new AccountStore(inMemoryStorage());
     await accountStore.addAccount({ username: "alice", sessionKey: "sk-1" });
     await accountStore.addAccount({ username: "bob", sessionKey: "sk-2" });
-    wireAuth({ accountStore, client: undefined, openUrl: vi.fn() });
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: undefined, openUrl: vi.fn() });
 
     await invoke(IPC_CHANNELS.authSetActiveAccount, "bob");
 
@@ -207,7 +227,7 @@ describe("wireAuth", () => {
   });
 
   it("removes all handlers when the returned cleanup function is called", () => {
-    const stop = wireAuth({
+    const stop = wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
       accountStore: new AccountStore(inMemoryStorage()),
       client: undefined,
       openUrl: vi.fn(),
@@ -227,7 +247,7 @@ describe("wireAuth", () => {
 
   describe("bring your own key (app credentials)", () => {
     it("authCredentialsSource reports 'none' when no client is configured", async () => {
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
@@ -237,7 +257,7 @@ describe("wireAuth", () => {
     });
 
     it("authCredentialsSource reports 'none' when a client is configured but no source was given", async () => {
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: fakeAuthFlowClient("alice"),
         openUrl: vi.fn(),
@@ -247,7 +267,7 @@ describe("wireAuth", () => {
     });
 
     it("authCredentialsSource reports the configured source", async () => {
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: fakeAuthFlowClient("alice"),
         openUrl: vi.fn(),
@@ -259,7 +279,7 @@ describe("wireAuth", () => {
 
     it("authSetAppCredentials persists a trimmed key/secret pair", async () => {
       const appCredentialsStore = new AppCredentialsStore(inMemoryStorage());
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
@@ -276,7 +296,7 @@ describe("wireAuth", () => {
 
     it("authSetAppCredentials rejects an empty key or secret, without persisting anything", async () => {
       const appCredentialsStore = new AppCredentialsStore(inMemoryStorage());
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
@@ -293,7 +313,7 @@ describe("wireAuth", () => {
     });
 
     it("authSetAppCredentials throws a clear error when secure storage isn't available", async () => {
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
@@ -308,7 +328,7 @@ describe("wireAuth", () => {
     it("authClearAppCredentials removes a previously saved key", async () => {
       const appCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       await appCredentialsStore.set({ apiKey: "my-key", apiSecret: "my-secret" });
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
@@ -321,7 +341,7 @@ describe("wireAuth", () => {
     });
 
     it("authClearAppCredentials is a graceful no-op when there's no store", async () => {
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
@@ -333,7 +353,7 @@ describe("wireAuth", () => {
 
     it("appRelaunch invokes the injected relaunch callback", async () => {
       const relaunch = vi.fn();
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
@@ -346,13 +366,89 @@ describe("wireAuth", () => {
     });
 
     it("appRelaunch doesn't throw when no relaunch callback was provided", async () => {
-      wireAuth({
+      wireAuth({ expectedOrigin: EXPECTED_ORIGIN,
         accountStore: new AccountStore(inMemoryStorage()),
         client: undefined,
         openUrl: vi.fn(),
       });
 
       await expect(invoke(IPC_CHANNELS.appRelaunch)).resolves.toBeUndefined();
+    });
+  });
+
+  describe("untrusted sender", () => {
+    it("rejects login() from a senderFrame whose origin doesn't match", async () => {
+      const openUrl = vi.fn();
+      wireAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        accountStore: new AccountStore(inMemoryStorage()),
+        client: fakeAuthFlowClient("alice"),
+        openUrl,
+      });
+
+      await expect(
+        invokeFrom({ senderFrame: { url: "http://evil.example/" } }, IPC_CHANNELS.authLogin),
+      ).rejects.toThrow(/untrusted sender/i);
+      // The real auth flow (which would open a real browser tab) never started.
+      expect(openUrl).not.toHaveBeenCalled();
+    });
+
+    it("rejects logout() when senderFrame is null", async () => {
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      wireAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        accountStore,
+        client: undefined,
+        openUrl: vi.fn(),
+      });
+
+      await expect(invokeFrom({ senderFrame: null }, IPC_CHANNELS.authLogout, "alice")).rejects.toThrow(
+        /no senderFrame/i,
+      );
+      // The account is still there — the rejected call never reached accountStore.removeAccount.
+      await expect(accountStore.listAccounts()).resolves.toEqual([
+        { username: "alice", sessionKey: "sk-123" },
+      ]);
+    });
+
+    it("rejects authSetAppCredentials() from an untrusted sender", async () => {
+      const appCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      wireAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        accountStore: new AccountStore(inMemoryStorage()),
+        client: undefined,
+        openUrl: vi.fn(),
+        appCredentialsStore,
+      });
+
+      await expect(
+        invokeFrom(
+          { senderFrame: { url: "file:///tmp/evil.html" } },
+          IPC_CHANNELS.authSetAppCredentials,
+          "my-key",
+          "my-secret",
+        ),
+      ).rejects.toThrow(/untrusted sender/i);
+      await expect(appCredentialsStore.get()).resolves.toBeUndefined();
+    });
+
+    it("rejects authClearAppCredentials() from an untrusted sender", async () => {
+      const appCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      await appCredentialsStore.set({ apiKey: "key", apiSecret: "secret" });
+      wireAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        accountStore: new AccountStore(inMemoryStorage()),
+        client: undefined,
+        openUrl: vi.fn(),
+        appCredentialsStore,
+      });
+
+      await expect(
+        invokeFrom({ senderFrame: { url: "http://evil.example/" } }, IPC_CHANNELS.authClearAppCredentials),
+      ).rejects.toThrow(/untrusted sender/i);
+      // Still there — the rejected call never reached appCredentialsStore.clear().
+      await expect(appCredentialsStore.get()).resolves.toEqual({ apiKey: "key", apiSecret: "secret" });
     });
   });
 });

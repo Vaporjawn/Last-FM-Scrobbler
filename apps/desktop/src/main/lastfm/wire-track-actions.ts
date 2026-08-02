@@ -1,6 +1,7 @@
 import electron from "electron";
 import type { AccountStore, LastfmClient } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
+import { assertTrustedSender } from "../validate-ipc-sender.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
@@ -14,6 +15,13 @@ export interface TrackActionsClient {
 }
 
 export interface WireTrackActionsOptions {
+  /** The origin (dev) or `file:` URL (packaged) every call on this file's channels
+   * must genuinely come from — see `validate-ipc-sender.ts` and
+   * `resolve-expected-renderer-origin.ts`. Every handler below checks it first: these
+   * calls are signed with the active account's real Last.fm session key, so they're
+   * exactly the kind of higher-privilege operation Electron's security checklist
+   * recommends validating the sender for. */
+  readonly expectedOrigin: string;
   /** `undefined` when secure storage isn't available on this system — see
    * `main/auth/create-account-store.ts`. */
   readonly accountStore: AccountStore | undefined;
@@ -29,7 +37,7 @@ const NOT_CONFIGURED_MESSAGE =
   "LASTFM_API_SECRET, or a saved key) — see docs/modules/desktop.md.";
 
 const NO_ACTIVE_ACCOUNT_MESSAGE =
-  "No Last.fm account is active — log in from Preferences first.";
+  "No Last.fm account is active — log in from Settings first.";
 
 /**
  * Wires the signed, per-account track-action IPC surface (love/unlove/addTags — see
@@ -40,7 +48,7 @@ const NO_ACTIVE_ACCOUNT_MESSAGE =
  * always "whoever's currently active."
  */
 export function wireTrackActions(options: WireTrackActionsOptions): () => void {
-  const { accountStore, createSessionClient } = options;
+  const { expectedOrigin, accountStore, createSessionClient } = options;
 
   async function withActiveClient<T>(
     run: (client: TrackActionsClient) => Promise<T>,
@@ -57,26 +65,32 @@ export function wireTrackActions(options: WireTrackActionsOptions): () => void {
 
   ipcMain.handle(
     IPC_CHANNELS.lastfmLoveTrack,
-    (_event, artist: unknown, track: unknown): Promise<void> =>
-      withActiveClient((client) => client.love({ artist: String(artist), track: String(track) })),
+    (event, artist: unknown, track: unknown): Promise<void> => {
+      assertTrustedSender(event, expectedOrigin);
+      return withActiveClient((client) => client.love({ artist: String(artist), track: String(track) }));
+    },
   );
 
   ipcMain.handle(
     IPC_CHANNELS.lastfmUnloveTrack,
-    (_event, artist: unknown, track: unknown): Promise<void> =>
-      withActiveClient((client) => client.unlove({ artist: String(artist), track: String(track) })),
+    (event, artist: unknown, track: unknown): Promise<void> => {
+      assertTrustedSender(event, expectedOrigin);
+      return withActiveClient((client) => client.unlove({ artist: String(artist), track: String(track) }));
+    },
   );
 
   ipcMain.handle(
     IPC_CHANNELS.lastfmAddTags,
-    (_event, artist: unknown, track: unknown, tags: unknown): Promise<void> =>
-      withActiveClient((client) =>
+    (event, artist: unknown, track: unknown, tags: unknown): Promise<void> => {
+      assertTrustedSender(event, expectedOrigin);
+      return withActiveClient((client) =>
         client.addTags({
           artist: String(artist),
           track: String(track),
           tags: Array.isArray(tags) ? tags.map(String) : [],
         }),
-      ),
+      );
+    },
   );
 
   return () => {
