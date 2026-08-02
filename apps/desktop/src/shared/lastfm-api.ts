@@ -4,6 +4,7 @@ import type {
   RecentTrack,
   SimilarArtist,
   TopArtist,
+  TopArtistsPeriod,
   TrackDetail,
   UserProfile,
 } from "@lastfm-scrobbler/core";
@@ -28,7 +29,14 @@ import type {
  */
 export interface LastfmDataApi {
   getRecentTracks(user: string, limit?: number): Promise<readonly RecentTrack[]>;
-  getTopArtists(user: string, limit?: number): Promise<readonly TopArtist[]>;
+  /** `period` defaults to Last.fm's own `"overall"` when omitted (see
+   * `LastfmClient.getTopArtists`'s docstring) — every call site that wants the
+   * all-time ranking simply doesn't pass one, same as before this parameter existed. */
+  getTopArtists(
+    user: string,
+    limit?: number,
+    period?: TopArtistsPeriod,
+  ): Promise<readonly TopArtist[]>;
   getFriends(user: string): Promise<readonly Friend[]>;
   getUserInfo(user: string): Promise<UserProfile>;
   getArtistInfo(artist: string, username?: string): Promise<ArtistInfo>;

@@ -28,6 +28,7 @@ export type {
   ScrobbleSubmission,
   SimilarArtist,
   TopArtist,
+  TopArtistsPeriod,
   TrackDetail,
   TrackRef,
   UserProfile,

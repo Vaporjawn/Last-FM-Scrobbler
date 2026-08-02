@@ -1,23 +1,38 @@
 import type { JSX } from "react";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import { useState } from "react";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
-import List from "@mui/material/List";
+import MenuItem from "@mui/material/MenuItem";
+import Select, { type SelectChangeEvent } from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import { AsyncState } from "../components/AsyncState.js";
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
-import { TopArtistListItem } from "../components/TopArtistListItem.js";
+import { TopArtistsSection, type TopArtistsViewMode } from "../components/TopArtistsSection.js";
 import { useAuth } from "../hooks/use-auth.js";
 import { useTopArtists } from "../hooks/use-top-artists.js";
 import { useUserProfile } from "../hooks/use-user-profile.js";
 import type { PageProps } from "./page-props.js";
 
+/** Matches the reference Last.fm client's own "This Week" row count — 10 for the
+ * all-time section (this page's original limit, unchanged) reads as too long a list
+ * for a 7-day window that, for most accounts, has far fewer distinct artists anyway. */
+const THIS_WEEK_LIMIT = 5;
+const OVERALL_LIMIT = 10;
+
 export function ProfilePage({ onNavigateToSettings }: PageProps): JSX.Element {
   const { activeAccount } = useAuth();
-  const { artists, loading, error } = useTopArtists(activeAccount);
+  const {
+    artists: weekArtists,
+    loading: weekLoading,
+    error: weekError,
+  } = useTopArtists(activeAccount, THIS_WEEK_LIMIT, "7day");
+  const {
+    artists: overallArtists,
+    loading: overallLoading,
+    error: overallError,
+  } = useTopArtists(activeAccount, OVERALL_LIMIT);
   // Real avatar photo for the account card below — see use-user-profile.ts and
   // UserProfile.avatarUrl's docstring for why this (unlike the per-artist images
   // Last.fm's API returns elsewhere) is a genuine, working image. `profile` stays
@@ -25,6 +40,12 @@ export function ProfilePage({ onNavigateToSettings }: PageProps): JSX.Element {
   // MUI's `Avatar` falls back to the letter children automatically whenever `src` is
   // `undefined` (and self-heals to that fallback if a real `src` fails to load).
   const { profile } = useUserProfile(activeAccount);
+  // Session-only, not persisted to AppSettings — a lighter-weight version of the
+  // reference Last.fm client's own "Chart style" preference (which also configures a
+  // default timeframe and artist count via a whole settings panel); this app just
+  // exposes the one choice that actually changes what's on screen. Revisit if that
+  // fuller settings surface turns out to matter later.
+  const [viewMode, setViewMode] = useState<TopArtistsViewMode>("list");
 
   if (!activeAccount) {
     return (
@@ -38,7 +59,9 @@ export function ProfilePage({ onNavigateToSettings }: PageProps): JSX.Element {
     );
   }
 
-  const maxPlayCount = Math.max(1, ...artists.map((artist) => artist.playCount));
+  const handleViewModeChange = (event: SelectChangeEvent<TopArtistsViewMode>): void => {
+    setViewMode(event.target.value);
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -62,27 +85,39 @@ export function ProfilePage({ onNavigateToSettings }: PageProps): JSX.Element {
         </Stack>
       </Card>
 
-      <Typography variant="subtitle1" gutterBottom>
-        Top Artists
-      </Typography>
-      {loading ? (
-        <AsyncState kind="loading" label="Loading top artists…" />
-      ) : error ? (
-        <AsyncState kind="error" message={error} />
-      ) : artists.length === 0 ? (
-        <AsyncState kind="empty" icon={<TrendingUpIcon sx={{ fontSize: 48 }} />} message="No scrobbles yet." />
-      ) : (
-        <List disablePadding sx={{ maxWidth: 480 }}>
-          {artists.map((artist, index) => (
-            <TopArtistListItem
-              key={artist.name}
-              artist={artist}
-              rank={index + 1}
-              maxPlayCount={maxPlayCount}
-            />
-          ))}
-        </List>
-      )}
+      <Stack
+        direction="row"
+        sx={{ alignItems: "center", justifyContent: "space-between", mb: 1, maxWidth: 480 }}
+      >
+        <Typography variant="subtitle1">Top Artists</Typography>
+        <Select
+          size="small"
+          value={viewMode}
+          onChange={handleViewModeChange}
+          inputProps={{ "aria-label": "Top Artists view" }}
+        >
+          <MenuItem value="list">List</MenuItem>
+          <MenuItem value="tiles">Tiles</MenuItem>
+        </Select>
+      </Stack>
+
+      <TopArtistsSection
+        title="Top Artists This Week"
+        artists={weekArtists}
+        loading={weekLoading}
+        error={weekError}
+        viewMode={viewMode}
+        emptyMessage="No scrobbles this week."
+      />
+
+      <TopArtistsSection
+        title="Top Artists Overall"
+        artists={overallArtists}
+        loading={overallLoading}
+        error={overallError}
+        viewMode={viewMode}
+        emptyMessage="No scrobbles yet."
+      />
     </Box>
   );
 }

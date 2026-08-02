@@ -66,6 +66,15 @@ describe("wireLastfmData", () => {
     expect(result).toEqual([{ name: "A", playCount: 5 }]);
   });
 
+  it("getTopArtists also forwards period when given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice", 5, "7day");
+
+    expect(client.getTopArtists).toHaveBeenCalledWith({ user: "alice", limit: 5, period: "7day" });
+  });
+
   it("getFriends forwards user and returns the client's result", async () => {
     const client = fakeClient();
     wireLastfmData({ client });

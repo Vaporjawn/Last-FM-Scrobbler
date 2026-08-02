@@ -65,6 +65,11 @@ export interface TopArtist {
   readonly playCount: number;
 }
 
+/** `user.getTopArtists`'s own `period` parameter values — Last.fm's API defaults to
+ * `"overall"` when omitted entirely (see `LastfmClient.getTopArtists`'s docstring),
+ * which is why every existing caller of that method simply never passed one. */
+export type TopArtistsPeriod = "overall" | "7day" | "1month" | "3month" | "6month" | "12month";
+
 export interface UserProfile {
   readonly username: string;
   readonly realName?: string;

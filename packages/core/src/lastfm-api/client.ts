@@ -11,6 +11,7 @@ import type {
   ScrobbleSubmission,
   SimilarArtist,
   TopArtist,
+  TopArtistsPeriod,
   TrackDetail,
   TrackRef,
   UserProfile,
@@ -275,7 +276,7 @@ export class LastfmClient {
 
   async getTopArtists(options: {
     readonly user: string;
-    readonly period?: "overall" | "7day" | "1month" | "3month" | "6month" | "12month";
+    readonly period?: TopArtistsPeriod;
     readonly limit?: number;
   }): Promise<TopArtist[]> {
     const params: Record<string, string> = { user: options.user };

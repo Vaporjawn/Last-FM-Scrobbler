@@ -6,6 +6,7 @@ import type {
   RecentTrack,
   SimilarArtist,
   TopArtist,
+  TopArtistsPeriod,
   TrackDetail,
   UserProfile,
 } from "@lastfm-scrobbler/core";
@@ -61,13 +62,19 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
 
   ipcMain.handle(
     IPC_CHANNELS.lastfmGetTopArtists,
-    (_event, user: unknown, limit?: unknown): Promise<readonly TopArtist[]> => {
+    (
+      _event,
+      user: unknown,
+      limit?: unknown,
+      period?: unknown,
+    ): Promise<readonly TopArtist[]> => {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
       return client.getTopArtists({
         user: String(user),
         ...(limit !== undefined ? { limit: Number(limit) } : {}),
+        ...(period !== undefined ? { period: period as TopArtistsPeriod } : {}),
       });
     },
   );

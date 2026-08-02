@@ -65,20 +65,54 @@ describe("ProfilePage", () => {
     expect(onNavigateToSettings).toHaveBeenCalledOnce();
   });
 
-  it("shows the active username and top artists", async () => {
+  it("shows the active username and top artists, split into This Week and Overall", async () => {
     installFakeApis({
       activeAccount: "alice",
-      topArtists: vi.fn().mockResolvedValue([
-        { name: "Aphex Twin", playCount: 120 },
-        { name: "Boards of Canada", playCount: 87 },
-      ]),
+      // ProfilePage now calls getTopArtists twice — once with period "7day" for the
+      // This Week section, once with no period (Last.fm's own "overall" default) —
+      // so the fake needs to answer differently per call, the same way the real IPC
+      // bridge would for two genuinely different Last.fm API requests.
+      topArtists: vi.fn().mockImplementation((_user: string, _limit?: number, period?: string) =>
+        Promise.resolve(
+          period === "7day"
+            ? [{ name: "Men I Trust", playCount: 12 }]
+            : [
+                { name: "Aphex Twin", playCount: 120 },
+                { name: "Boards of Canada", playCount: 87 },
+              ],
+        ),
+      ),
     });
 
     render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
     expect(await screen.findByText("alice")).toBeInTheDocument();
+    expect(screen.getByText("Top Artists This Week")).toBeInTheDocument();
+    expect(await screen.findByText("Men I Trust")).toBeInTheDocument();
+    expect(screen.getByText("12 plays")).toBeInTheDocument();
+    expect(screen.getByText("Top Artists Overall")).toBeInTheDocument();
     expect(await screen.findByText("Aphex Twin")).toBeInTheDocument();
     expect(screen.getByText("120 plays")).toBeInTheDocument();
+  });
+
+  it("switches both sections to the tile grid via the view dropdown", async () => {
+    installFakeApis({
+      activeAccount: "alice",
+      topArtists: vi.fn().mockResolvedValue([{ name: "Aphex Twin", playCount: 120 }]),
+    });
+
+    render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+    // The list view's rank number ("1") only exists in TopArtistListItem, not
+    // TopArtistTile — a real, unambiguous signal of which one actually rendered,
+    // unlike the artist name/play-count text, which reads identically in both.
+    await screen.findAllByText("Aphex Twin");
+    expect(screen.getAllByText("1")).toHaveLength(2);
+
+    fireEvent.mouseDown(screen.getByLabelText("Top Artists view"));
+    fireEvent.click(await screen.findByRole("option", { name: "Tiles" }));
+
+    expect(screen.queryByText("1")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Aphex Twin")).toHaveLength(2);
   });
 
   it("renders the real Last.fm avatar photo when the account has one", async () => {

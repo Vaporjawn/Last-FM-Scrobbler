@@ -94,8 +94,8 @@ const lastfmApi: LastfmDataApi = {
       readonly RecentTrack[]
     >;
   },
-  getTopArtists(user, limit) {
-    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetTopArtists, user, limit) as Promise<
+  getTopArtists(user, limit, period) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetTopArtists, user, limit, period) as Promise<
       readonly TopArtist[]
     >;
   },
