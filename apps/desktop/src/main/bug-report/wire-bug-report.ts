@@ -10,8 +10,10 @@ const NOT_CONFIGURED_MESSAGE =
   "docs/modules/desktop.md.";
 
 export interface WireBugReportOptions {
-  /** `undefined` when this build has no relay URL configured — see
-   * `main/index.ts`'s `BUG_REPORT_RELAY_URL` env var. */
+  /** `undefined` (or `""` — see `main/index.ts`'s `BUG_REPORT_RELAY_URL` env var and
+   * `electron.vite.config.ts`'s build-time `define`, which bakes in `""` rather than
+   * omitting the property entirely when this build has no relay URL configured) when
+   * this build has no relay URL configured. */
   readonly relayUrl: string | undefined;
   /** Attached to every report as `diagnostics` — e.g. platform, app version, recent
    * log lines. Never call anything here that could include a Last.fm session key or
@@ -35,7 +37,10 @@ export function wireBugReport(options: WireBugReportOptions): () => void {
   const { relayUrl, getDiagnostics } = options;
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  ipcMain.handle(IPC_CHANNELS.bugReportIsConfigured, (): boolean => relayUrl !== undefined);
+  // `Boolean(relayUrl)` rather than `relayUrl !== undefined`: a build-time `define` can
+  // bake in `""` instead of an absent/undefined value (see this option's docstring), and
+  // an empty string is exactly as "not configured" as a missing one.
+  ipcMain.handle(IPC_CHANNELS.bugReportIsConfigured, (): boolean => Boolean(relayUrl));
 
   ipcMain.handle(
     IPC_CHANNELS.bugReportSubmit,

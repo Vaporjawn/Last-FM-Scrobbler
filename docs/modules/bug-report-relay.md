@@ -19,6 +19,40 @@ Without this secret configured, the relay still starts and validates requests
 correctly, but responds `503` to well-formed reports rather than crashing or silently
 dropping them.
 
+## Deployment
+
+`.github/workflows/deploy-bug-report-relay.yml` deploys this Worker to Cloudflare
+automatically — on every push to `main` that touches `services/bug-report-relay/**`,
+or manually via that workflow's "Run workflow" button. It needs two repo secrets this
+project never bakes in (same reasoning as `LASTFM_API_KEY` — see
+docs/modules/desktop.md):
+
+- `CLOUDFLARE_API_TOKEN` — a Workers-scoped API token (see
+  https://developers.cloudflare.com/fundamentals/api/get-started/create-token/).
+- `CLOUDFLARE_ACCOUNT_ID` — from the Cloudflare dashboard's account overview page.
+
+Without them, the workflow's deploy step fails clearly (missing credentials) rather
+than silently no-op'ing. The `GITHUB_PAT` secret above is separate and isn't part of
+this workflow — it's set once directly against the Worker via `wrangler secret put
+GITHUB_PAT` (from this directory) and persists across redeploys on Cloudflare's side,
+so the deploy workflow doesn't need to (and shouldn't) touch it.
+
+Once deployed, `wrangler deploy`'s own output (and the Cloudflare dashboard) shows the
+Worker's URL — typically
+`https://lastfm-scrobbler-bug-report-relay.<your-subdomain>.workers.dev`. Append
+`/report` to that (matching this Worker's single POST route) and set the result as a
+`BUG_REPORT_RELAY_URL` repo secret — `.github/workflows/release.yml`'s packaging step
+reads it from there and, via `apps/desktop/electron.vite.config.ts`'s build-time
+`define`, actually bakes it into the packaged binary (see docs/modules/desktop.md's
+"Bug reporting" section for why that extra step is necessary — a real gap, found and
+fixed, not just documentation). For local dev, set it in `apps/desktop/.env` instead —
+see docs/modules/desktop.md.
+
+For local development, `wrangler dev` reads secrets from a `.dev.vars` file in this
+directory (gitignored — never commit one) in the form `GITHUB_PAT=...`; without one,
+local `npm run dev` here behaves the same as a deployment with no `GITHUB_PAT`
+configured (correctly validates requests, responds `503`).
+
 ## Public interface
 
 - `parseBugReportRequest(payload: unknown): BugReportRequest` — validates
@@ -72,6 +106,29 @@ Fully implemented and tested against a real Cloudflare Workers runtime (via
 the platform): 13 tests covering request validation, real issue creation (with the
 outbound `fetch` to `api.github.com` intercepted — no live GitHub calls made in tests),
 diagnostics formatting, error-detail non-leakage, and the rate limiter. `wrangler
-deploy --dry-run` confirms the Worker bundles correctly. Not deployed or verified
-against the real GitHub API or a real Cloudflare account in this development
-environment — no Cloudflare credentials or a real `GITHUB_PAT` were available here.
+deploy --dry-run` confirms the Worker bundles correctly, and deployment itself is now
+automated (see "Deployment" above).
+
+Additionally verified with a real (not vitest-mocked) local run: `wrangler dev` started
+this Worker for real against `workerd` — the same runtime `wrangler deploy` uses, via
+the same `wrangler.toml` — and real `curl` requests confirmed, live: `405`/`400` for
+malformed requests, `503` with no `GITHUB_PAT` bound, a real outbound call to
+`https://api.github.com/repos/Vaporjawn/Last-FM-Scrobbler/issues` that 401s against a
+placeholder PAT and gets correctly wrapped into a non-leaking `502`, and `429` on the
+6th request from one IP within the rate-limit window. This is as far as this feature
+can be verified without a real Cloudflare account or a real fine-grained `GITHUB_PAT` —
+neither is available in this development environment, and this project never generates
+or hardcodes either (same reasoning as `LASTFM_API_KEY`).
+
+Not actually deployed to Cloudflare's edge in this development environment — this
+repo's `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`/`GITHUB_PAT` secrets haven't been
+configured yet, so the deploy workflow above hasn't actually run for real. Until that
+happens, `apps/desktop` has no working `BUG_REPORT_RELAY_URL` to point at, and "Report
+a Bug" correctly (not a bug) shows "not configured" — see docs/modules/desktop.md.
+
+A separate, real bug *was* found and fixed while verifying this: `apps/desktop`
+previously had no mechanism to actually bake a `BUG_REPORT_RELAY_URL` repo secret into
+a packaged build at all (setting it during CI packaging did nothing on its own — see
+docs/modules/desktop.md's "Bug reporting" section for the full story). That's now
+fixed; once this Worker is deployed and `BUG_REPORT_RELAY_URL` is set as a repo secret,
+a packaged `apps/desktop` build will actually have it available.

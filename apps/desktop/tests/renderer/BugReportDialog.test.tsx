@@ -25,6 +25,14 @@ describe("BugReportDialog", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("shows 'not configured' rather than an indefinite spinner when window.bugReport is entirely absent", async () => {
+    // No installFakeBugReportApi() call — simulates a preload script that failed to
+    // load (see docs/modules/desktop.md), where every window.* API is just missing.
+    render(<BugReportDialog open onClose={() => undefined} />);
+
+    expect(await screen.findByText(/not configured/i)).toBeInTheDocument();
+  });
+
   it("shows a 'not configured' message when the app has no relay configured", async () => {
     installFakeBugReportApi({ isConfigured: vi.fn().mockResolvedValue(false) });
 

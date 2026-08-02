@@ -36,6 +36,15 @@ describe("wireBugReport", () => {
     await expect(invoke(IPC_CHANNELS.bugReportIsConfigured)).resolves.toBe(true);
   });
 
+  it("isConfigured reports false for an empty-string relay URL, not just undefined", async () => {
+    // A packaged build's electron.vite.config.ts `define` bakes in "" (not an absent
+    // property) when BUG_REPORT_RELAY_URL wasn't set at build time — see that config's
+    // docstring and this option's. Must be treated identically to undefined.
+    wireBugReport({ relayUrl: "" });
+
+    await expect(invoke(IPC_CHANNELS.bugReportIsConfigured)).resolves.toBe(false);
+  });
+
   it("submit throws a clear error when not configured", async () => {
     wireBugReport({ relayUrl: undefined });
 

@@ -24,6 +24,14 @@ export function useBugReport(): UseBugReportResult {
 
   useEffect(() => {
     if (!window.bugReport) {
+      // No API to check — resolve the "loading" state to `false` rather than leaving
+      // `isConfigured` at its initial `undefined` forever, which the dialog reads as
+      // "still checking" and shows an indefinite spinner for. This matters beyond
+      // component tests: if the preload script ever fails to load in a real build
+      // (see docs/modules/desktop.md's sandboxed-preload gotcha), every `window.*` API
+      // is silently missing exactly like this, and the UI should degrade to a visible
+      // "not configured" state instead of hanging with no explanation.
+      setIsConfigured(false);
       return;
     }
     window.bugReport

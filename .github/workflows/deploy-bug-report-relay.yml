@@ -1,0 +1,62 @@
+name: Deploy bug-report-relay
+
+# Deploys services/bug-report-relay (the Cloudflare Worker apps/desktop's "Report a
+# Bug" feature relays to — see docs/adr/0004-anonymous-bug-report-relay.md) to
+# Cloudflare Workers. Runs automatically whenever that service's own files change on
+# `main`, or manually via workflow_dispatch.
+#
+# Needs two repo secrets this project never bakes in (same reasoning as
+# LASTFM_API_KEY — see docs/modules/desktop.md):
+#   - CLOUDFLARE_API_TOKEN — a Workers-scoped API token, see
+#     https://developers.cloudflare.com/fundamentals/api/get-started/create-token/
+#   - CLOUDFLARE_ACCOUNT_ID — from the Cloudflare dashboard's account overview page
+# Without them, this workflow's `wrangler deploy` step fails clearly rather than
+# silently doing nothing — see docs/modules/bug-report-relay.md's "Deployment" section.
+#
+# `GITHUB_PAT` (the relay's own runtime secret, distinct from the two above — used to
+# actually file issues) is set once via `wrangler secret put GITHUB_PAT` from
+# services/bug-report-relay locally (see that doc), not through this workflow —
+# Wrangler secrets persist on the Cloudflare side across deploys, so this workflow
+# doesn't need to (and shouldn't) touch it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/bug-report-relay/**"
+      - ".github/workflows/deploy-bug-report-relay.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-bug-report-relay-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/bug-report-relay
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test
+
+      - name: Deploy to Cloudflare Workers
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
