@@ -1,4 +1,5 @@
-import { sep } from "node:path";
+import { resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { resolveExpectedRendererOrigin } from "../../src/main/resolve-expected-renderer-origin.js";
 
@@ -26,8 +27,19 @@ describe("resolveExpectedRendererOrigin", () => {
   });
 
   it("resolves the packaged path relative to rendererDirname, one level up into renderer/", () => {
-    const result = resolveExpectedRendererOrigin(`${sep}some${sep}nested${sep}main`, undefined);
+    // `resolve(sep, ...)` rather than a bare `${sep}some${sep}nested${sep}main`
+    // literal: on Windows, a driveless root-relative path like `\some\nested\main`
+    // isn't what a real `rendererDirname` (from `app.getAppPath()`) would ever
+    // actually look like — it always has a drive letter. `pathToFileURL` resolves a
+    // driveless path against `process.cwd()`'s drive internally, which silently
+    // prepended the CI runner's actual drive (e.g. `D:`) and broke an exact-match
+    // assertion against a hardcoded driveless expected string. `resolve()` performs
+    // that same drive-aware resolution up front, for both the input and the expected
+    // value below, so the two agree regardless of platform or CI runner drive letter.
+    const mainDir = resolve(sep, "some", "nested", "main");
 
-    expect(result).toBe("file:///some/nested/renderer/index.html");
+    const result = resolveExpectedRendererOrigin(mainDir, undefined);
+
+    expect(result).toBe(pathToFileURL(resolve(mainDir, "../renderer/index.html")).href);
   });
 });
