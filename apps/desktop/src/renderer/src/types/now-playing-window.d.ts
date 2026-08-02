@@ -1,3 +1,5 @@
+import type { AuthApi } from "../../../shared/auth-api.js";
+import type { LastfmDataApi } from "../../../shared/lastfm-api.js";
 import type { NowPlayingApi } from "../../../shared/now-playing-api.js";
 
 declare global {
@@ -6,6 +8,8 @@ declare global {
      * present inside a real Electron renderer with the preload script attached — not
      * in component tests, hence optional rather than asserted non-null. */
     readonly nowPlaying?: NowPlayingApi;
+    readonly auth?: AuthApi;
+    readonly lastfm?: LastfmDataApi;
   }
 }
 

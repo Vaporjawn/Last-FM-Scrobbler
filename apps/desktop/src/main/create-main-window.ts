@@ -1,8 +1,13 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BrowserWindow } from "electron";
+import electron from "electron";
 import type { PlaybackSource } from "@lastfm-scrobbler/shared-types";
+import type { ScrobbleEligibleEvent } from "@lastfm-scrobbler/core";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
+
+// See main/index.ts for why this is a default import destructured at runtime rather
+// than `import { BrowserWindow } from "electron"`.
+const { BrowserWindow } = electron;
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -10,8 +15,13 @@ const dirname = fileURLToPath(new URL(".", import.meta.url));
  * Creates and shows the app's main window, wiring up now-playing IPC against it when a
  * platform playback source is available (`playbackSource` is `undefined` on platforms
  * without a working adapter yet — see `playback/create-platform-playback-source.ts`).
+ * `onScrobbleEligible`, when provided, receives every play that crosses the scrobble
+ * threshold — see `main/scrobbling/wire-scrobbling.ts` for what a real caller passes.
  */
-export function createMainWindow(playbackSource: PlaybackSource | undefined): BrowserWindow {
+export function createMainWindow(
+  playbackSource: PlaybackSource | undefined,
+  onScrobbleEligible?: (event: ScrobbleEligibleEvent) => void,
+): Electron.BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -37,7 +47,11 @@ export function createMainWindow(playbackSource: PlaybackSource | undefined): Br
   });
 
   if (playbackSource) {
-    wireNowPlaying(playbackSource, mainWindow);
+    if (onScrobbleEligible) {
+      wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible);
+    } else {
+      wireNowPlaying(playbackSource, mainWindow);
+    }
   }
 
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;

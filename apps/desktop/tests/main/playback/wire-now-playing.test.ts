@@ -17,7 +17,7 @@ const ipcMain = {
   }),
 };
 
-vi.mock("electron", () => ({ ipcMain }));
+vi.mock("electron", () => ({ ipcMain, default: { ipcMain } }));
 
 const { wireNowPlaying } = await import("../../../src/main/playback/wire-now-playing.js");
 

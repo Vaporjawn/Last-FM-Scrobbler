@@ -1,9 +1,13 @@
 import type { BrowserWindow } from "electron";
-import { ipcMain } from "electron";
+import electron from "electron";
 import type { PlaybackSource, PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
-import { Tracker } from "@lastfm-scrobbler/core";
+import { Tracker, type ScrobbleEligibleEvent } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import type { NowPlayingSnapshot } from "../../shared/now-playing-snapshot.js";
+
+// See main/index.ts for why this is a default import destructured at runtime rather
+// than `import { ipcMain } from "electron"`.
+const { ipcMain } = electron;
 
 const TRACKER_TICK_INTERVAL_MS = 1000;
 
@@ -20,10 +24,22 @@ const TRACKER_TICK_INTERVAL_MS = 1000;
  * mounting after the source's initial snapshot needs a way to pull current state
  * rather than wait indefinitely for the next change.
  *
+ * `onScrobbleEligible` hands off eligible plays for actual submission — see
+ * `main/scrobbling/wire-scrobbling.ts`. Defaults to logging (not silently dropping)
+ * when omitted, so eligibility is still observable if a caller doesn't wire real
+ * submission (e.g. a future test harness, or a build with no API credentials
+ * configured — see `main/lastfm/create-lastfm-client.ts`).
+ *
  * Returns a cleanup function that stops the tracker, its tick timer, and the
  * `get-current` handler.
  */
-export function wireNowPlaying(source: PlaybackSource, mainWindow: BrowserWindow): () => void {
+export function wireNowPlaying(
+  source: PlaybackSource,
+  mainWindow: BrowserWindow,
+  onScrobbleEligible: (event: ScrobbleEligibleEvent) => void = (event) => {
+    console.log(`Scrobble eligible (not submitted — no handler wired): ${event.track.artist} — ${event.track.title}`);
+  },
+): () => void {
   let currentTrack: TrackInfo | undefined;
   let currentState: PlaybackState = "stopped";
 
@@ -42,14 +58,7 @@ export function wireNowPlaying(source: PlaybackSource, mainWindow: BrowserWindow
 
   const tracker = new Tracker({
     source,
-    events: {
-      onScrobbleEligible: (event) => {
-        // TODO: hand off to ScrobbleQueue + LastfmClient once account/auth UI lands
-        // (packages/core already has both — see docs/modules/core.md). Logged for now
-        // so eligibility is at least observable during development.
-        console.log(`Scrobble eligible: ${event.track.artist} — ${event.track.title}`);
-      },
-    },
+    events: { onScrobbleEligible },
   });
   tracker.start();
   const tickHandle = setInterval(() => {
