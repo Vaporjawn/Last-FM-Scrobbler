@@ -87,7 +87,7 @@ export function FriendsPage({ onNavigateToSettings }: PageProps): JSX.Element {
             onChange={(event) => {
               setSearchQuery(event.target.value);
             }}
-            sx={{ mb: 2, maxWidth: 480 }}
+            sx={{ mb: 1.5, maxWidth: 480 }}
             fullWidth
             slotProps={{
               input: {
