@@ -21,8 +21,9 @@ relay-side secret and never shipped in the app.
 
 - The relay is a public, write-capable endpoint — it needs basic rate limiting at
   minimum; a CAPTCHA (e.g. Cloudflare Turnstile) is a reasonable hardening step if abuse
-  becomes real. Not yet implemented in the initial scaffold — see
-  `docs/modules/bug-report-relay.md`.
+  becomes real. A best-effort per-IP limit is implemented (see
+  `docs/modules/bug-report-relay.md`); a stronger, globally-consistent limit remains a
+  future upgrade.
 - Diagnostics must never include the user's Last.fm session key or any account
   credential.
 - Issue de-duplication (search before create) is a reasonable future enhancement, not
