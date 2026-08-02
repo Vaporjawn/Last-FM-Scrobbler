@@ -32,10 +32,13 @@ jobs:
         name: Ensure dbus-daemon is available (adapter-linux MPRIS2 smoke test)
         run: command -v dbus-daemon || (sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus)
 
+      # No explicit `version:` here on purpose — pnpm/action-setup reads it from
+      # package.json's own `packageManager` field (pnpm@11.18.0) automatically.
+      # Specifying both used to be silently tolerated; a newer pnpm/action-setup now
+      # treats it as an ambiguous conflict and hard-errors ("Multiple versions of pnpm
+      # specified") rather than picking one, which is what actually broke CI here.
       - if: matrix.pm == 'pnpm'
         uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - if: matrix.pm != 'bun'
         uses: actions/setup-node@v4
