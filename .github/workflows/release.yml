@@ -1,0 +1,116 @@
+name: Release
+
+# Builds installers for all three platforms and publishes them to a GitHub Release.
+# Triggered by pushing a `v*` tag (e.g. `v1.0.0`), or manually via workflow_dispatch
+# for a dry run (packages everything but doesn't publish) while testing this workflow
+# itself. See docs/modules/desktop.md's "Packaging & distribution" section for the
+# full story on signing/notarization — both are no-ops here unless this repo's
+# maintainer configures the relevant secrets (this project never bakes in real
+# certificates, same reasoning as LASTFM_API_KEY — see docs/modules/desktop.md).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: package:mac
+          - os: windows-latest
+            script: package:win
+          - os: ubuntu-latest
+            script: package:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Builds every workspace package first, including packages/adapter-macos's real
+      # MediaRemoteAdapter.framework (macOS runner, needs Xcode command line tools —
+      # already present on GitHub's macos-latest image) and packages/adapter-windows's
+      # SmtcHelper.exe (Windows runner, needs the .NET SDK — see
+      # docs/adr/0009-windows-smtc-integration.md; setup-dotnet isn't needed here since
+      # windows-latest ships a .NET SDK already). Both are no-ops on the "wrong" OS —
+      # see each adapter's scripts/build-native.mjs.
+      - name: Build workspace packages
+        run: npm run build
+
+      - name: Determine publish mode
+        id: publish-mode
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "value=always" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=never" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package (and publish on a real tag push)
+        working-directory: apps/desktop
+        run: npm run ${{ matrix.script }} -- --publish ${{ steps.publish-mode.outputs.value }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Baked into the packaged app so it can log in/scrobble without every user
+          # needing their own Last.fm API key (see main/lastfm/resolve-lastfm-
+          # credentials.ts and docs/modules/desktop.md) — read from a repo secret,
+          # never committed to source. Absent (and login/BYOK still works via the
+          # user's own key) on a fork or until this repo's maintainer adds these.
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_API_SECRET: ${{ secrets.LASTFM_API_SECRET }}
+          # Baked into the packaged app the same way, once services/bug-report-relay is
+          # deployed (see docs/modules/bug-report-relay.md) — read from a repo secret,
+          # never committed. Absent (and "Report a Bug" correctly shows "not configured"
+          # rather than a bug) on a fork or until this repo's maintainer deploys the
+          # relay and adds this secret. Actually reaching the packaged binary at all
+          # depends on apps/desktop/electron.vite.config.ts's build-time `define` for
+          # `process.env.BUG_REPORT_RELAY_URL` — setting it here alone, without that,
+          # would silently do nothing (see that config's comment for why).
+          BUG_REPORT_RELAY_URL: ${{ secrets.BUG_REPORT_RELAY_URL }}
+          # macOS code signing + notarization — every var below is optional; each is
+          # simply absent (and the corresponding step skipped, logged, not failed) on
+          # a fork or until this repo's maintainer adds real Apple Developer
+          # credentials as repo secrets.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows code signing — same reasoning, same optionality.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      # Manual (workflow_dispatch) runs don't publish — upload as a normal workflow
+      # artifact instead, so a dry run is still inspectable without touching Releases.
+      - if: github.event_name != 'push'
+        name: Upload unpublished build (dry run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+          if-no-files-found: warn
+          retention-days: 7
