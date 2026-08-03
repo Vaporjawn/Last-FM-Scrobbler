@@ -6,6 +6,7 @@ const ASPECT_RATIO_VALUES: Record<AspectRatioOption, number> = {
   "4:3": 4 / 3,
   "1:1": 1,
   "9:16": 9 / 16,
+  "9:14": 9 / 14,
 };
 
 /**

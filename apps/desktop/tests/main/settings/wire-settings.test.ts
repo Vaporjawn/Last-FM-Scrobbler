@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   closeToTray: true,
   autoUpdateEnabled: true,
   hasShownTrayHint: false,
-  aspectRatio: "free",
+  aspectRatio: "9:16",
   themeMode: "dark",
   notifyOnScrobble: true,
   notifyOnScrobbleFailure: true,
@@ -204,7 +204,7 @@ describe("wireSettings", () => {
 
     await invoke(IPC_CHANNELS.settingsReset);
 
-    expect(onAspectRatioChange).toHaveBeenCalledWith("free");
+    expect(onAspectRatioChange).toHaveBeenCalledWith("9:16");
     expect(onLaunchAtLoginChange).toHaveBeenCalledWith(false);
     expect(onShowDockIconChange).toHaveBeenCalledWith(true);
   });

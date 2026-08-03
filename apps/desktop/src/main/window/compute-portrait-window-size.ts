@@ -4,28 +4,35 @@ export interface ResizedWindowSize {
 }
 
 /**
- * Computes the window size to snap to when the user picks a *portrait* aspect ratio
- * (currently only `"9:16"` — see `shared/settings-api.ts`'s `AspectRatioOption`). See
- * `compute-resized-height.ts`'s docstring for why an immediate resize is needed at all
- * (`setAspectRatio()` only constrains *future* manual resizing).
+ * Computes the window size to snap to when the user picks (or, via
+ * `create-main-window.ts`'s initial sizing, launches straight into) a *portrait*
+ * aspect ratio — `"9:16"`/`"9:14"`, see `shared/settings-api.ts`'s `AspectRatioOption`.
+ * See `compute-resized-height.ts`'s docstring for why an immediate resize is needed at
+ * all when live-switching ratios (`setAspectRatio()` only constrains *future* manual
+ * resizing).
  *
  * Deliberately doesn't anchor on the window's *current* width the way
- * `computeResizedHeight` does for the other three (landscape/square) ratios: this
- * app's window starts out landscape-shaped (1100x720 default, or whatever the user
- * last resized it to), so keeping that width fixed and deriving a matching height from
- * a portrait ratio computes something taller than almost any real screen (e.g. 1100 /
- * (9/16) ≈ 1956px) — a window that mostly falls off the bottom of the screen doesn't
- * read as "went vertical," it reads as broken. Anchors on `minWidth` instead — the
- * narrowest this app's fixed-width sidebar+content layout supports (see
- * `create-main-window.ts`'s own `minWidth` comment for why 680 specifically) — and
- * derives a genuinely taller matching height from *that*, since going vertical is an
- * intentional, real shape change rather than a small ratio-preserving tweak to
- * whatever size the window already happened to be. This is the narrowest, most
- * convincingly portrait window this app's current layout can offer.
+ * `computeResizedHeight` does for the landscape/square ratios: someone switching from,
+ * say, "16:9" (or just manually resized wide) could easily have a window a good deal
+ * wider than this app's 1100-wide default, so keeping that width fixed and deriving a
+ * matching height from a portrait ratio can compute something taller than almost any
+ * real screen (e.g. 1100 / (9/16) ≈ 1956px) — a window that mostly falls off the
+ * bottom of the screen doesn't read as "went vertical," it reads as broken. Anchors on
+ * `minWidth` instead — the narrowest this app's fixed-width sidebar+content layout
+ * supports (see `create-main-window.ts`'s own `minWidth` comment for why 680
+ * specifically) — and derives a genuinely taller matching height from *that*, since
+ * going vertical is an intentional, real shape change rather than a small
+ * ratio-preserving tweak to whatever size the window already happened to be. This is
+ * the narrowest, most convincingly portrait window this app's current layout can
+ * offer.
  *
  * `aspectRatioValue <= 0` is "free" (see `resolve-aspect-ratio.ts`) — nothing to snap
  * to, so the current size is returned unchanged, same convention as
- * `computeResizedHeight`.
+ * `computeResizedHeight`. Callers are expected to only invoke this for an actual
+ * portrait ratio (`0 < aspectRatioValue < 1`) in the first place — see both call sites'
+ * own `isPortraitRatio`/branch checks — so in practice this branch is unreached; it
+ * exists so this function still degrades sensibly (a no-op) rather than computing
+ * nonsense if that ever changes.
  */
 export function computePortraitWindowSize(
   currentWidth: number,

@@ -1173,18 +1173,19 @@ describe("SettingsPage", () => {
   });
 
   describe("window", () => {
-    it("shows the aspect ratio options with 'Free' selected by default", async () => {
+    it("shows the aspect ratio options with '9:16' selected by default", async () => {
       installFakeAuthApi();
       installFakeSettingsApi();
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
 
-      const freeRadio = await screen.findByRole("radio", { name: /free/i });
-      expect(freeRadio).toBeChecked();
+      const verticalRadio = await screen.findByRole("radio", { name: /9:16/i });
+      expect(verticalRadio).toBeChecked();
+      expect(screen.getByRole("radio", { name: /free/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /16:9/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /4:3/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /1:1/i })).not.toBeChecked();
-      expect(screen.getByRole("radio", { name: /9:16/i })).not.toBeChecked();
+      expect(screen.getByRole("radio", { name: /9:14/i })).not.toBeChecked();
     });
 
     it("selecting a different aspect ratio calls window.settings.set and updates the selection", async () => {
@@ -1214,7 +1215,13 @@ describe("SettingsPage", () => {
     it("selecting the vertical (9:16) aspect ratio calls window.settings.set", async () => {
       const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
       installFakeAuthApi();
-      installFakeSettingsApi({ set });
+      // Starts from "free", not the "9:16" default — clicking an already-checked
+      // radio fires no change event at all, so this needs to switch *to* "9:16" from
+      // something else to actually exercise the selection.
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, aspectRatio: "free" }),
+        set,
+      });
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
       const verticalRadio = await screen.findByRole("radio", { name: /9:16/i });

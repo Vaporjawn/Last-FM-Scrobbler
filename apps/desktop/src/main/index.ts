@@ -577,7 +577,7 @@ void app.whenReady().then(async () => {
       // which correctly leaves the current size alone.
       const bounds = mainWindow.getBounds();
       if (aspectRatioValue > 0 && aspectRatioValue < 1) {
-        // Portrait (currently only "9:16" — see AppSettings.aspectRatio's docstring):
+        // Portrait ("9:16"/"9:14" — see AppSettings.aspectRatio's docstring):
         // computePortraitWindowSize anchors differently than the landscape/square
         // branch below, see its own docstring for why.
         const { width, height } = computePortraitWindowSize(

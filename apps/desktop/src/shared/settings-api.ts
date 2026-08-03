@@ -9,17 +9,21 @@ export interface WindowBounds {
 }
 
 /**
- * A user-selectable resize constraint for the main window — `"free"` (the default) is
- * unconstrained resizing, same as before this setting existed; the others lock the
- * window to that width:height ratio. `"9:16"` is the only portrait option (width <
- * height) — the other three are all landscape or square — which is why the immediate
- * resize this triggers derives a new *width* from the current height instead of a new
- * height from the current width; see `main/window/compute-resized-width.ts` and
- * `main/index.ts`'s `onAspectRatioChange` for that branch. See
- * `main/window/resolve-aspect-ratio.ts` for how any of these becomes the numeric ratio
- * `BrowserWindow.setAspectRatio()` expects.
+ * A user-selectable resize constraint for the main window — `"9:16"` is the default
+ * (see `DEFAULT_APP_SETTINGS`), locking the window to a portrait shape out of the box;
+ * `"free"` is unconstrained resizing, this app's *original* default before this
+ * setting existed, still available as an explicit opt-out. `"9:16"` and `"9:14"` are
+ * the only portrait options (width < height) — `"16:9"`/`"4:3"`/`"1:1"` are landscape
+ * or square — which is why the immediate resize either of them triggers anchors on
+ * this window's minimum width and derives a matching height, rather than anchoring on
+ * the current width and deriving height the way the landscape/square options do; see
+ * `main/window/compute-portrait-window-size.ts` and `main/index.ts`'s
+ * `onAspectRatioChange` for that branch, and `create-main-window.ts` for how a
+ * portrait default also changes this window's *initial* size on a fresh install (no
+ * `windowBounds` saved yet). See `main/window/resolve-aspect-ratio.ts` for how any of
+ * these becomes the numeric ratio `BrowserWindow.setAspectRatio()` expects.
  */
-export type AspectRatioOption = "free" | "16:9" | "4:3" | "1:1" | "9:16";
+export type AspectRatioOption = "free" | "16:9" | "4:3" | "1:1" | "9:16" | "9:14";
 
 /**
  * The app's color scheme — `"dark"` (the default, and this app's original and only
@@ -68,9 +72,11 @@ export interface AppSettings {
    */
   readonly windowBounds?: WindowBounds;
   /**
-   * The main window's resize aspect-ratio lock — `"free"` (the default) preserves the
-   * unconstrained resizing this app always had before this setting existed. Settings
-   * → Window offers the other options. See `main/window/resolve-aspect-ratio.ts`.
+   * The main window's resize aspect-ratio lock — `"9:16"` is the default, locking the
+   * window to a portrait shape out of the box; `"free"` (this app's original,
+   * unconstrained-resize default before this setting existed) is still available as an
+   * explicit choice. Settings → Window offers every option. See
+   * `main/window/resolve-aspect-ratio.ts`.
    */
   readonly aspectRatio: AspectRatioOption;
   /**
@@ -180,8 +186,12 @@ export interface AppSettings {
  * `docs/modules/desktop.md`). `hasShownTrayHint` starts `false` — every fresh install
  * gets the one-time explanation once, the first time it actually happens.
  * `windowBounds` starts unset — nothing to restore until a real session saves one.
- * `aspectRatio` starts `"free"` — preserves this app's original unconstrained-resize
- * behavior for anyone who never visits the new setting. `themeMode` starts `"dark"` —
+ * `aspectRatio` starts `"9:16"` — a deliberate default, not this app's original
+ * unconstrained-resize behavior: a fresh install now launches in a locked portrait
+ * window (see `create-main-window.ts`'s portrait-aware initial sizing) rather than the
+ * `"free"` resizing this app shipped with before this setting existed — anyone who
+ * wants that back can switch to "Free" in Settings → Window. `themeMode` starts
+ * `"dark"` —
  * this app's original and only look before this setting existed, so anyone who never
  * visits Settings sees no visual change. `notifyOnScrobble`/`notifyOnScrobbleFailure`
  * start `true` — this app always fired both notifications unconditionally before these
@@ -195,7 +205,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   closeToTray: true,
   autoUpdateEnabled: true,
   hasShownTrayHint: false,
-  aspectRatio: "free",
+  aspectRatio: "9:16",
   themeMode: "dark",
   notifyOnScrobble: true,
   notifyOnScrobbleFailure: true,

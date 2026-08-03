@@ -4,8 +4,15 @@ import electron from "electron";
 import type { PlaybackSource } from "@lastfm-scrobbler/shared-types";
 import type { CompiledFilter, ScrobbleEligibleEvent, TrackChangedEvent } from "@lastfm-scrobbler/core";
 import type { WindowBounds } from "../shared/settings-api.js";
+import { computePortraitWindowSize } from "./window/compute-portrait-window-size.js";
 import { isSafeExternalUrl } from "./window/is-safe-external-url.js";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
+
+/** This window's hardcoded default size, used whenever there's no `initialBounds` to
+ * restore (first launch, or nothing ever saved) — see the `width`/`height` usage
+ * below. */
+const DEFAULT_WIDTH = 1100;
+const DEFAULT_HEIGHT = 720;
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { BrowserWindow, shell } from "electron"`.
@@ -44,7 +51,10 @@ export interface CreateMainWindowOptions {
   readonly iconPath?: string;
   /** Restores the window to its size/position from the end of the last session (see
    * `main/window/persist-window-bounds.ts` and `AppSettings.windowBounds`) — omit to
-   * fall back to this function's own built-in default (1100x720, centered). */
+   * fall back to this function's own built-in default: `DEFAULT_WIDTH`x`DEFAULT_HEIGHT`
+   * (1100x720, centered) normally, or a portrait size derived from `initialAspectRatio`
+   * when that's set to a portrait ratio — see the `isPortraitRatio`/`defaultSize` logic
+   * below for why. */
   readonly initialBounds?: WindowBounds;
   /** Locks the window's resize aspect ratio (width/height) — `0` or omitted means free
    * resizing, Electron's own default. See `main/window/resolve-aspect-ratio.ts` for
@@ -86,12 +96,30 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
     startHidden,
   } = options;
 
+  // `initialBounds` (a prior session's real size/position) takes precedence over any
+  // of this — it only matters on first launch, or if nothing was ever saved (see
+  // `main/window/persist-window-bounds.ts`). Without it, a portrait `initialAspectRatio`
+  // (e.g. the `"9:16"` default — see `AppSettings.aspectRatio`) needs its own default
+  // size, not the hardcoded landscape `DEFAULT_WIDTH`x`DEFAULT_HEIGHT` below: applying
+  // `setAspectRatio()` further down only *constrains future resizing*, it doesn't
+  // resize the window itself, so a fresh install would otherwise launch in a plain
+  // landscape window that merely can't be resized away from 9:16 later — never
+  // visually portrait at all despite that being the whole point of the default.
+  // `computePortraitWindowSize` is the same anchor-on-minWidth logic `main/index.ts`'s
+  // `onAspectRatioChange` uses when the user *changes* to a portrait ratio live; reused
+  // here for the "already set at launch" case. `currentWidth`/`currentHeight` are
+  // irrelevant to its portrait branch (only the "free"/0 no-op branch reads them, which
+  // never applies here since this whole branch is gated on a truthy, portrait ratio) —
+  // passing the landscape defaults through is harmless.
+  const isPortraitRatio =
+    initialAspectRatio !== undefined && initialAspectRatio > 0 && initialAspectRatio < 1;
+  const defaultSize = isPortraitRatio
+    ? computePortraitWindowSize(DEFAULT_WIDTH, DEFAULT_HEIGHT, initialAspectRatio, MIN_WINDOW_WIDTH)
+    : { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+
   const mainWindow = new BrowserWindow({
-    // `initialBounds` (a prior session's real size/position) takes precedence over
-    // these hardcoded defaults, which now only matter on first launch or if nothing
-    // was ever saved — see `main/window/persist-window-bounds.ts`.
-    width: initialBounds?.width ?? 1100,
-    height: initialBounds?.height ?? 720,
+    width: initialBounds?.width ?? defaultSize.width,
+    height: initialBounds?.height ?? defaultSize.height,
     ...(initialBounds ? { x: initialBounds.x, y: initialBounds.y } : {}),
     // No app-level breakpoints reflow the fixed-width sidebar + content layout below
     // this — live-testing every page down from 1100 wide (Playwright, resized in

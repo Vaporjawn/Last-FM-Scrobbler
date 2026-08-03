@@ -23,4 +23,13 @@ describe("computePortraitWindowSize", () => {
       height: 1209,
     });
   });
+
+  it("works the same way for the '9:14' ratio", () => {
+    // 680 / (9/14) = 1057.78, rounded to 1058 — less extreme than 9:16, since 9/14 is
+    // closer to 1 than 9/16 is.
+    expect(computePortraitWindowSize(1100, 720, 9 / 14, 680)).toEqual({
+      width: 680,
+      height: 1058,
+    });
+  });
 });
