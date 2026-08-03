@@ -1,31 +1,83 @@
-# Last.fm Scrobbler
+<div align="center">
+
+# 🎧 Last.fm Scrobbler
+
+**A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux**
 
 [![CI](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/ci.yml/badge.svg)](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/codeql.yml/badge.svg)](https://github.com/Vaporjawn/Last-FM-Scrobbler/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux. Unlike
-player-specific plugins, this app reads "now playing" directly from each OS's native
-media-session API — MPRIS2 on Linux, SMTC on Windows, MediaRemote on macOS — so it works
-with whatever you're already using to play music, with no per-player integration
-required.
+![macOS](https://img.shields.io/badge/macOS-000000?style=flat&logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat&logo=windows11&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)
+![Electron](https://img.shields.io/badge/Electron-191970?style=flat&logo=electron&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+
+</div>
+
+Unlike player-specific plugins, this app reads "now playing" directly from each OS's
+native media-session API — MPRIS2 on Linux, SMTC on Windows, MediaRemote on macOS — so
+it works with whatever you're already using to play music, with no per-player
+integration required.
+
+## Contents
+
+- [Features](#features)
+- [Status](#status)
+- [Quick start](#quick-start)
+- [Packages](#packages)
+- [Community and support](#community-and-support)
+- [License](#license)
+
+## Features
+
+#### 🎵 See what's playing, wherever you are
+
+- **Reads "now playing" natively** — MPRIS2 (Linux), SMTC (Windows), MediaRemote
+  (macOS) — works with whatever's already playing, no per-player plugin required.
+- **Now Playing** — live current-track view with real-time scrobble-threshold progress.
+- **Offline-safe scrobbling** — an on-disk queue means scrobbles are never lost to a
+  dropped connection; they submit automatically once Last.fm is reachable again.
+
+#### 📈 Explore your history
+
+- **Scrobble history** — full history list, click through to a detail page (art,
+  listener/play stats, your own play count) for any scrobble.
+- **Profile** — account stats and Top Artists This Week, in either a list or tile view.
+
+#### 👥 See what friends are playing
+
+- **Activity feed** — what everyone's playing right now, with real avatars,
+  self-reported locations, and a Last.fm Pro badge.
+- Click through to a friend's own profile or their currently-playing track.
+
+#### ⚙️ Make it yours
+
+- **Dark/light mode** — switches live, no restart.
+- A resizable-window aspect-ratio lock.
+- Runs in the background via the tray/menu bar, with an optional mini-player popover.
+- **Launch at login**, and reset everything to defaults in one click.
+
+#### 🛠️ Built to be trusted
+
+- **Bring your own Last.fm API key**, or use one baked into the build — your choice.
+- **In-app bug reporting** — files a GitHub issue directly, anonymously, no account
+  needed.
+- **Auto-updates** in the background, with a prompt before installing.
 
 ## Status
 
 Feature-complete, pre-release — no tagged releases or downloads yet, but every planned
-piece is implemented and tested: all three platform adapters, the full scrobbling
-engine, and a working desktop app (login — either bring your own Last.fm API key or
-one baked into the build, scrobble submission, scrobble history, profile/friends,
-in-app bug reporting, auto-update, and running in the background via a tray/menu bar
-icon so scrobbling keeps working after you close the window). Packaging
-(`electron-builder`, all three platforms) and a GitHub Actions release workflow are
-built too. See each package's linked doc below for exactly what's live-verified
-versus code-complete-but-unverified in this environment (mainly: real Windows/Linux
-hardware, a real code-signing certificate, and a real Cloudflare deployment, none of
-which were available during development). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-for the full design and [docs/adr/](docs/adr/) for the reasoning behind the major
-decisions, or the [project website](https://vaporjawn.dev/Last-FM-Scrobbler/) for a
-lighter-weight overview.
+piece above is implemented and tested, and packaging (`electron-builder`, all three
+platforms) plus a GitHub Actions release workflow are built too. See each package's
+linked doc below for exactly what's live-verified versus code-complete-but-unverified
+in this environment (mainly: real Windows/Linux hardware, a real code-signing
+certificate, and a real Cloudflare deployment, none of which were available during
+development). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and
+[docs/adr/](docs/adr/) for the reasoning behind the major decisions, or the
+[project website](https://vaporjawn.dev/Last-FM-Scrobbler/) for a lighter-weight
+overview.
 
 Still needed before a first _real_ tagged release: pushing a `v*` tag to actually run
 [the release workflow](.github/workflows/release.yml) for the first time, a real code
