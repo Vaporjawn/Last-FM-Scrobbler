@@ -20,6 +20,39 @@ npm install && npm run build && npm run test
 bun install && bun run build && bun run test
 ```
 
+## Environment variables for local development
+
+`apps/desktop` runs and builds fine with zero environment variables set — Last.fm
+login falls back to "bring your own key" (a form in Settings → Accounts), and features
+that need a service this repo hasn't configured (Libre.fm, the bug-report relay)
+degrade to a clear "not configured" state rather than erroring. If you want a baked-in
+Last.fm key, Libre.fm support, or a working "Report a Bug" button during local
+development, create a git-ignored `apps/desktop/.env` — see
+[docs/modules/desktop.md](modules/desktop.md)'s "Required environment variables" for
+the exact variable names and where to obtain each value. Never commit a real key/secret
+to any tracked file.
+
+## Native adapter prerequisites (only if you're touching an adapter)
+
+`packages/adapter-macos` and `packages/adapter-windows` each have a native build step
+that only runs on their matching OS (a no-op elsewhere, so the rest of the workspace's
+`build`/`test` is unaffected) — you only need these if you're changing that specific
+adapter's native helper:
+
+- **macOS** (`adapter-macos`): CMake + Xcode command line tools, to compile the
+  vendored `MediaRemoteAdapter.framework`. Run
+  `pnpm --filter @lastfm-scrobbler/adapter-macos build:native` (or just `build`, which
+  runs it first) — see [docs/modules/adapter-macos.md](modules/adapter-macos.md).
+- **Windows** (`adapter-windows`): the .NET 8 SDK, to compile/publish `SmtcHelper.exe`.
+  Run `pnpm --filter @lastfm-scrobbler/adapter-windows build:native` (or just `build`)
+  — see [docs/modules/adapter-windows.md](modules/adapter-windows.md). The C# side can
+  be compiler-verified from any OS (`EnableWindowsTargeting=true`, see
+  [ADR 0009](adr/0009-windows-smtc-integration.md)), but actually running the published
+  helper needs real Windows.
+- **Linux** (`adapter-linux`): no native build step (pure JS), but its real-D-Bus smoke
+  test needs a `dbus-daemon` binary on `PATH` — it skips itself, rather than failing,
+  when one isn't found.
+
 ## Workspace commands
 
 Run a script in every package: `<pm> run build` / `test` / `lint` / `typecheck` (or
