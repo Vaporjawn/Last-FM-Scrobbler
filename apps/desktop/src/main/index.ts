@@ -30,7 +30,8 @@ import { wireArtistImage } from "./artist-images/wire-artist-image.js";
 import { createAccountStore } from "./auth/create-account-store.js";
 import { wireFilterValidation } from "./filters/wire-filter-validation.js";
 import { wireAuth } from "./auth/wire-auth.js";
-import { buildLibrefmClient, wireSecondaryAuth } from "./auth/wire-secondary-auth.js";
+import { buildLibrefmClient } from "./auth/build-librefm-client.js";
+import { wireSecondaryAuth } from "./auth/wire-secondary-auth.js";
 import {
   resolveLibrefmCredentials,
   type ResolvedLibrefmCredentials,
@@ -44,15 +45,15 @@ import { showNotification } from "./notifications/show-notification.js";
 import { resolveAppIconPath } from "./resolve-app-icon-path.js";
 import { resolveExpectedRendererOrigin } from "./resolve-expected-renderer-origin.js";
 import { createTray } from "./tray/create-tray.js";
-import { createTrayPopoverWindow, resolvePopoverScreenBounds } from "./tray/create-tray-popover-window.js";
+import { createTrayPopoverWindow } from "./tray/create-tray-popover-window.js";
+import { resolvePopoverScreenBounds } from "./tray/resolve-popover-screen-bounds.js";
 import { resolveTrayIconPath } from "./tray/resolve-tray-icon-path.js";
 import { wireCloseToTray } from "./tray/wire-close-to-tray.js";
 import { createUpdaterClient } from "./updates/create-updater-client.js";
 import { showRestartPrompt } from "./updates/show-restart-prompt.js";
 import { wireUpdates } from "./updates/wire-updates.js";
+import { applyAspectRatio } from "./window/apply-aspect-ratio.js";
 import { bringAppToForeground } from "./window/bring-app-to-foreground.js";
-import { computePortraitWindowSize } from "./window/compute-portrait-window-size.js";
-import { computeResizedHeight } from "./window/compute-resized-height.js";
 import { isSafeExternalUrl } from "./window/is-safe-external-url.js";
 import { persistWindowBounds } from "./window/persist-window-bounds.js";
 import { resolveAspectRatioValue } from "./window/resolve-aspect-ratio.js";
@@ -63,7 +64,7 @@ import { resolveStartHidden } from "./window/resolve-start-hidden.js";
 // defined in a way `cjs-module-lexer` misses) — importing the default and destructuring
 // at runtime sidesteps that entirely. See docs/modules/desktop.md for the exact error
 // this fixes if reverted.
-const { app, BrowserWindow, safeStorage, shell } = electron;
+const { app, BrowserWindow, safeStorage, screen, shell } = electron;
 
 // Mirrors create-main-window.ts's own `dirname` — both files live in `src/main/`, so
 // the same "one level up into renderer/" relative resolution
@@ -499,6 +500,7 @@ void app.whenReady().then(async () => {
   }
 
   wireBugReport({
+    expectedOrigin: expectedRendererOrigin,
     relayUrl: process.env.BUG_REPORT_RELAY_URL,
     getDiagnostics: () => ({
       platform: process.platform,
@@ -538,7 +540,9 @@ void app.whenReady().then(async () => {
   // handler further down calls this with no argument, correctly defaulting to
   // `false` — a dock-icon click while the app has no windows is always a manual,
   // explicit request to see it, never something that should stay hidden.
-  function createAndWireMainWindow(windowOptions?: { startHidden?: boolean }): Electron.BrowserWindow {
+  function createAndWireMainWindow(windowOptions?: {
+    startHidden?: boolean;
+  }): Electron.BrowserWindow {
     const { windowBounds, aspectRatio, filterExpression, skipNonMusicVideos } = settingsStore.get();
     // Compiled once, here, not live-updated: unlike aspectRatio/themeMode above,
     // `Tracker` (packages/core) has no way to swap its filter after construction, so
@@ -562,7 +566,7 @@ void app.whenReady().then(async () => {
       isQuitting: () => isQuitting,
       onHide: handleTrayHide,
     });
-    persistWindowBounds({
+    const stopPersistingBounds = persistWindowBounds({
       // Adapts the real `BrowserWindow`'s Node-`EventEmitter`-style `on(event,
       // listener)` to `BoundsTrackedWindow`'s two separate methods — see that
       // interface's docstring for why persist-window-bounds.ts doesn't just take a
@@ -579,6 +583,12 @@ void app.whenReady().then(async () => {
       },
       settingsStore,
     });
+    // Cancels any still-pending debounced save when the window actually closes —
+    // low-impact to skip (the pending timer's own isDestroyed() guard already makes a
+    // stray post-close fire a no-op), but the same discarded-cleanup pattern that
+    // caused a real bug for wireNowPlaying's cleanup above, so it's captured here too
+    // for consistency/defense-in-depth rather than left as a dangling timer handle.
+    window.once("closed", stopPersistingBounds);
     return window;
   }
 
@@ -605,44 +615,20 @@ void app.whenReady().then(async () => {
     // Applies a Settings → Window aspect-ratio change to the already-open window
     // immediately, rather than waiting for the user to restart the app — reads the
     // live `mainWindow` binding below, not a stale reference, so this keeps working
-    // correctly after the `activate` handler further down replaces it.
+    // correctly after the `activate` handler further down replaces it. See
+    // `applyAspectRatio`'s own docstring for why it clears the constraint before
+    // resizing rather than resizing directly to the new ratio, and why it needs the
+    // *current* display's work area (not a cached one — the window may have moved to
+    // a different display since the last change) to keep the minimum size it enforces
+    // from exceeding what that screen can actually fit.
     onAspectRatioChange: (aspectRatio) => {
-      const aspectRatioValue = resolveAspectRatioValue(aspectRatio);
-      mainWindow.setAspectRatio(aspectRatioValue);
-      // setAspectRatio() alone only *constrains future manual resizing* — it doesn't
-      // itself resize the window (Electron's own docs: "This will not resize the
-      // window"), which without the branches below would make picking a ratio
-      // visually do nothing until the user happened to drag an edge, reading as
-      // broken even though it already applied. Snaps to the new ratio right now
-      // instead — a no-op for both branches when `aspectRatioValue` is 0 ("free"),
-      // which correctly leaves the current size alone.
-      const bounds = mainWindow.getBounds();
-      if (aspectRatioValue > 0 && aspectRatioValue < 1) {
-        // Portrait ("9:16"/"9:14" — see AppSettings.aspectRatio's docstring):
-        // computePortraitWindowSize anchors differently than the landscape/square
-        // branch below, see its own docstring for why.
-        const { width, height } = computePortraitWindowSize(
-          bounds.width,
-          bounds.height,
-          aspectRatioValue,
-          MIN_WINDOW_WIDTH,
-        );
-        if (width !== bounds.width || height !== bounds.height) {
-          mainWindow.setSize(width, height);
-        }
-      } else {
-        // Landscape or square — keeps the current width fixed and derives height from
-        // it (see computeResizedHeight's docstring).
-        const resizedHeight = computeResizedHeight(
-          bounds.width,
-          bounds.height,
-          aspectRatioValue,
-          MIN_WINDOW_HEIGHT,
-        );
-        if (resizedHeight !== bounds.height) {
-          mainWindow.setSize(bounds.width, resizedHeight);
-        }
-      }
+      const { workArea } = screen.getDisplayMatching(mainWindow.getBounds());
+      applyAspectRatio(mainWindow, aspectRatio, {
+        minWidth: MIN_WINDOW_WIDTH,
+        minHeight: MIN_WINDOW_HEIGHT,
+        availableWidth: workArea.width,
+        availableHeight: workArea.height,
+      });
     },
     // Keeps the OS login-item registration in sync the moment the setting changes,
     // rather than only applying it on the next launch — same live-update reasoning as
@@ -666,7 +652,13 @@ void app.whenReady().then(async () => {
   const updaterClient = createUpdaterClient({ logger });
   wireUpdates({
     client: updaterClient,
-    mainWindow,
+    // Live accessor, not the `mainWindow` value at this point in time — the main
+    // window can be closed and recreated (see `app.on("activate")` below) for as long
+    // as this stays wired; reading through the outer `let mainWindow` binding here
+    // keeps status pushes targeting whichever window is actually current, matching
+    // `wireAppInfo`'s `onShowMainWindow`/`wireSettings`'s `onAspectRatioChange` right
+    // above.
+    getMainWindow: () => mainWindow,
     isAutoCheckEnabled: () => settingsStore.get().autoUpdateEnabled,
     promptToRestart: (version) => showRestartPrompt(mainWindow, version),
     onUpdateAvailable: (version) => {

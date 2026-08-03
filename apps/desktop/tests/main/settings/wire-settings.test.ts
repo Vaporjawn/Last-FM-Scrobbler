@@ -101,6 +101,26 @@ describe("wireSettings", () => {
     expect(result).toMatchObject({ aspectRatio: "4:3" });
   });
 
+  it("rejects a set() patch with an invalid aspectRatio instead of persisting it", () => {
+    // Regression test: an invalid aspectRatio (a stale/removed option from an older
+    // settings.json, a malformed IPC payload) used to flow straight through to
+    // store.set() and onAspectRatioChange, cascading into NaN window-geometry math
+    // downstream (resolveAspectRatioValue's Record lookup, then
+    // computeMinimumSizeForAspectRatio). Validated here, at the IPC boundary, before
+    // any of that.
+    const store = fakeStore(DEFAULT_SETTINGS);
+    const onAspectRatioChange = vi.fn();
+    wireSettings({ store, onAspectRatioChange });
+    const handler = ipcMainHandlers.get(IPC_CHANNELS.settingsSet);
+
+    // Electron's real ipcMain.handle contract accepts either a synchronous throw or a
+    // rejected promise from a handler — this is a synchronous throw, so it must be
+    // caught via a wrapping function, not `await ... rejects`.
+    expect(() => handler?.({}, { aspectRatio: "21:9" })).toThrow(/invalid aspectRatio/i);
+    expect(store.set).not.toHaveBeenCalled();
+    expect(onAspectRatioChange).not.toHaveBeenCalled();
+  });
+
   it("calls onLaunchAtLoginChange with the new value when a set() patch changes launchAtLogin", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
     const onLaunchAtLoginChange = vi.fn();

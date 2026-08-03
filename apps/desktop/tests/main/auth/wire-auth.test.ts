@@ -100,6 +100,52 @@ describe("wireAuth", () => {
     });
   });
 
+  it("returns the same result to two concurrent login calls instead of racing two AuthFlows", async () => {
+    // Regression test: two authLogin calls landing before the first resolves (e.g. a
+    // fast double-invoke before the renderer's own button-disable state commits) used
+    // to each construct an independent AuthFlow, with whichever completed last —
+    // not the user's actual intended action — deciding which account ends up active.
+    const accountStore = new AccountStore(inMemoryStorage());
+    let resolveToken: ((token: string) => void) | undefined;
+    const getAuthToken = vi.fn(
+      () => new Promise<string>((resolve) => { resolveToken = resolve; }),
+    );
+    const client = {
+      getAuthToken,
+      buildAuthUrl: (token: string) => `https://last.fm/auth?token=${token}`,
+      getSession: () =>
+        Promise.resolve({ username: "alice", sessionKey: "sk-123", isSubscriber: false }),
+    };
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client, openUrl: vi.fn() });
+
+    const first = invoke(IPC_CHANNELS.authLogin);
+    const second = invoke(IPC_CHANNELS.authLogin);
+    resolveToken?.("token123");
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult).toEqual({ username: "alice" });
+    expect(secondResult).toEqual({ username: "alice" });
+    // Only one AuthFlow ever actually ran — the second call reused the first's
+    // in-flight promise rather than starting its own.
+    expect(getAuthToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts a genuinely new login after the previous one has fully completed", async () => {
+    const accountStore = new AccountStore(inMemoryStorage());
+    wireAuth({
+      expectedOrigin: EXPECTED_ORIGIN,
+      accountStore,
+      client: fakeAuthFlowClient("alice"),
+      openUrl: vi.fn(),
+    });
+
+    await invoke(IPC_CHANNELS.authLogin);
+    const second = await invoke(IPC_CHANNELS.authLogin);
+
+    // Not stale — a login after the in-flight guard has cleared still works normally.
+    expect(second).toEqual({ username: "alice" });
+  });
+
   it("login calls onLoginSuccess with the newly active username once the session is stored", async () => {
     const accountStore = new AccountStore(inMemoryStorage());
     const onLoginSuccess = vi.fn();

@@ -1,6 +1,6 @@
 import electron from "electron";
-import { TRAY_POPOVER_SIZE } from "./create-tray-popover-window.js";
 import { positionTrayPopover } from "./position-tray-popover.js";
+import { TRAY_POPOVER_SIZE } from "./tray-popover-size.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { Menu, Tray, nativeImage } from "electron"`.
@@ -59,9 +59,19 @@ export function createTray(options: CreateTrayOptions): Electron.Tray {
   tray.setToolTip("Last.fm Scrobbler");
 
   const menu = Menu.buildFromTemplate([
-    { label: "Show Last.fm Scrobbler", click: () => { onShow(); } },
+    {
+      label: "Show Last.fm Scrobbler",
+      click: () => {
+        onShow();
+      },
+    },
     { type: "separator" },
-    { label: "Quit", click: () => { onQuit(); } },
+    {
+      label: "Quit",
+      click: () => {
+        onQuit();
+      },
+    },
   ]);
 
   if (popover && resolvePopoverScreenBounds) {
@@ -90,7 +100,9 @@ export function createTray(options: CreateTrayOptions): Electron.Tray {
     // right-click does) — wire it to reopen the window directly, which is the
     // behavior users expect from a tray icon. On macOS, setContextMenu already makes
     // any click open the menu, so this listener simply never fires there.
-    tray.on("click", () => { onShow(); });
+    tray.on("click", () => {
+      onShow();
+    });
   }
 
   return tray;

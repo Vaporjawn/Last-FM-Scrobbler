@@ -196,6 +196,82 @@ describe("wireSecondaryAuth", () => {
       expect(onLibrefmLoginSuccess).toHaveBeenCalledExactlyOnceWith("alice");
     });
 
+    it("returns the same result to two concurrent librefmLogin calls instead of racing two AuthFlows", async () => {
+      // Regression test, same reasoning as wire-auth.ts's authLogin: two librefmLogin
+      // calls landing before the first resolves used to each construct an
+      // independent AuthFlow, racing on which account ends up active.
+      const librefmAccountStore = new AccountStore(inMemoryStorage());
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      await librefmAppCredentialsStore.set({ apiKey: "key", apiSecret: "secret" });
+      let resolveToken: ((token: string) => void) | undefined;
+      const getAuthToken = vi.fn(
+        () => new Promise<string>((resolve) => { resolveToken = resolve; }),
+      );
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore,
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
+        listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+        openUrl: vi.fn(),
+        createLibrefmAuthFlowClient: () => ({
+          getAuthToken,
+          buildAuthUrl: (token: string) => `https://libre.fm/auth?token=${token}`,
+          getSession: () =>
+            Promise.resolve({ username: "alice", sessionKey: "sk-123", isSubscriber: false }),
+        }),
+      });
+
+      const first = invoke(IPC_CHANNELS.librefmLogin);
+      const second = invoke(IPC_CHANNELS.librefmLogin);
+      // librefmLogin awaits resolveLibrefmCredentials() before ever reaching
+      // getAuthToken() (unlike wire-auth.ts's authLogin, whose "not configured" guard
+      // is synchronous) — wait for that to actually happen before resolving the
+      // deferred token, rather than assuming it's already been called.
+      await vi.waitFor(() => {
+        expect(getAuthToken).toHaveBeenCalled();
+      });
+      resolveToken?.("token123");
+      const [firstResult, secondResult] = await Promise.all([first, second]);
+
+      expect(firstResult).toEqual({ username: "alice" });
+      expect(secondResult).toEqual({ username: "alice" });
+      expect(getAuthToken).toHaveBeenCalledTimes(1);
+    });
+
+    it("logging into a second Libre.fm account doesn't resurrect the first after logging out", async () => {
+      // Regression test, same failure mode as the ListenBrainz one above: logging
+      // into account B without first logging out of account A used to leave A
+      // orphaned but still stored, then silently resurrected as active once B logs
+      // out.
+      const librefmAccountStore = new AccountStore(inMemoryStorage());
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      await librefmAppCredentialsStore.set({ apiKey: "key", apiSecret: "secret" });
+      let authFlowClient = fakeAuthFlowClient("alice");
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore,
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
+        listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+        openUrl: vi.fn(),
+        createLibrefmAuthFlowClient: () => authFlowClient,
+      });
+
+      await invoke(IPC_CHANNELS.librefmLogin);
+      authFlowClient = fakeAuthFlowClient("bob");
+      await invoke(IPC_CHANNELS.librefmLogin);
+
+      await expect(librefmAccountStore.getActiveAccount()).resolves.toMatchObject({
+        username: "bob",
+      });
+
+      await invoke(IPC_CHANNELS.librefmLogout);
+
+      await expect(librefmAccountStore.getActiveAccount()).resolves.toBeUndefined();
+      await expect(librefmAccountStore.listAccounts()).resolves.toEqual([]);
+    });
+
     it("librefmLogin works from baked-in environment credentials with nothing saved", async () => {
       const librefmAccountStore = new AccountStore(inMemoryStorage());
       const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
@@ -305,6 +381,46 @@ describe("wireSecondaryAuth", () => {
         username: "alice",
         sessionKey: "lb-token",
       });
+    });
+
+    it("connecting a second account without disconnecting the first doesn't resurrect it after disconnecting the second", async () => {
+      // Regression test: connecting account B without first disconnecting account A
+      // used to leave A orphaned but still stored. Disconnecting B would then
+      // silently auto-promote A back to active (AccountStore.removeAccount always
+      // leaves *some* account active if one remains on disk) — resurrecting an
+      // account the user believed was gone, with no way to discover or purge it.
+      const listenbrainzAccountStore = new AccountStore(inMemoryStorage());
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      let validateToken = vi.fn().mockResolvedValue({ valid: true, username: "alice" });
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore: new AccountStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
+        listenbrainzAccountStore,
+        openUrl: vi.fn(),
+        createListenBrainzClient: () => ({ validateToken }),
+      });
+
+      // Connect alice (token A), then connect bob (token B) without disconnecting
+      // alice first.
+      await invoke(IPC_CHANNELS.listenbrainzConnect, "token-a");
+      validateToken = vi.fn().mockResolvedValue({ valid: true, username: "bob" });
+      await invoke(IPC_CHANNELS.listenbrainzConnect, "token-b");
+
+      await expect(listenbrainzAccountStore.getActiveAccount()).resolves.toEqual({
+        username: "bob",
+        sessionKey: "token-b",
+      });
+      await expect(listenbrainzAccountStore.listAccounts()).resolves.toEqual([
+        { username: "bob", sessionKey: "token-b" },
+      ]);
+
+      // Disconnecting bob must leave NO account active — not silently resurrect alice.
+      await invoke(IPC_CHANNELS.listenbrainzDisconnect);
+
+      await expect(listenbrainzAccountStore.getActiveAccount()).resolves.toBeUndefined();
+      await expect(listenbrainzAccountStore.listAccounts()).resolves.toEqual([]);
     });
 
     it("listenbrainzConnect throws a friendly error for an invalid token", async () => {

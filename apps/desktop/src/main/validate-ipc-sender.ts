@@ -7,10 +7,12 @@
  * window's IPC surface in normal operation. Electron's own security checklist still
  * lists sender validation as standard practice specifically for the regressions this
  * guards against instead (a dependency accidentally loading remote content, a future
- * feature adding an iframe, etc.) — see the three highest-privilege handler modules,
- * `auth/wire-auth.ts`, `auth/wire-secondary-auth.ts`, and `lastfm/wire-track-actions.ts`,
- * for where this is actually wired in (every `ipcMain.handle` in all three calls this
- * first, before doing anything else).
+ * feature adding an iframe, etc.) — see the highest-privilege/highest-side-effect
+ * handler modules this is actually wired into: `auth/wire-auth.ts`,
+ * `auth/wire-secondary-auth.ts`, and `lastfm/wire-track-actions.ts` check it on every
+ * `ipcMain.handle` they register; `bug-report/wire-bug-report.ts` checks it only on
+ * `bugReportSubmit` (the one handler there with a real external side effect — filing a
+ * GitHub issue via the relay — unlike its sibling `bugReportIsConfigured`, a plain read).
  *
  * **The `file:` origin gotcha this exists to get right**: per RFC 6454, a URL with no
  * scheme/host/port triple — which includes every `file:` URL — serializes to the

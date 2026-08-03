@@ -1,5 +1,6 @@
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
+import { assertTrustedSender } from "../validate-ipc-sender.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
@@ -10,6 +11,13 @@ const NOT_CONFIGURED_MESSAGE =
   "docs/modules/desktop.md.";
 
 export interface WireBugReportOptions {
+  /** Checked on `bugReportSubmit` specifically (not `bugReportIsConfigured`, a plain
+   * read with no side effect) — see `validate-ipc-sender.ts`. Unlike the other
+   * unguarded read-only handlers in this app, submitting a bug report has a real
+   * external side effect (files a genuine GitHub issue via the relay), making it the
+   * one worth the same defense-in-depth every other side-effecting handler already
+   * has. */
+  readonly expectedOrigin: string;
   /** `undefined` (or `""` — see `main/index.ts`'s `BUG_REPORT_RELAY_URL` env var and
    * `electron.vite.config.ts`'s build-time `define`, which bakes in `""` rather than
    * omitting the property entirely when this build has no relay URL configured) when
@@ -34,7 +42,7 @@ interface RelayResponse {
  * creation — this just forwards the report and diagnostics to it.
  */
 export function wireBugReport(options: WireBugReportOptions): () => void {
-  const { relayUrl, getDiagnostics } = options;
+  const { expectedOrigin, relayUrl, getDiagnostics } = options;
   const fetchImpl = options.fetchImpl ?? fetch;
 
   // `Boolean(relayUrl)` rather than `relayUrl !== undefined`: a build-time `define` can
@@ -44,7 +52,8 @@ export function wireBugReport(options: WireBugReportOptions): () => void {
 
   ipcMain.handle(
     IPC_CHANNELS.bugReportSubmit,
-    async (_event, title: unknown, body: unknown): Promise<RelayResponse> => {
+    async (event, title: unknown, body: unknown): Promise<RelayResponse> => {
+      assertTrustedSender(event, expectedOrigin);
       if (!relayUrl) {
         throw new Error(NOT_CONFIGURED_MESSAGE);
       }

@@ -70,7 +70,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
     });
@@ -83,7 +83,7 @@ describe("wireUpdates", () => {
     const mainWindow = fakeMainWindow();
     wireUpdates({
       client,
-      mainWindow: mainWindow as never,
+      getMainWindow: () => mainWindow as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
     });
@@ -109,13 +109,47 @@ describe("wireUpdates", () => {
     );
   });
 
+  it("pushes status to the replacement window after the main window is recreated", () => {
+    // Regression test: `getMainWindow` used to be a plain captured `mainWindow`
+    // value, not a live accessor — after the main window was closed and recreated
+    // (main/index.ts's `app.on("activate")` reassigning its own `mainWindow`
+    // variable), status pushes silently kept targeting the original, now-destroyed
+    // window forever, since its own `isDestroyed()` guard permanently short-circuited
+    // every future send.
+    const client = fakeUpdaterClient();
+    let currentWindow = fakeMainWindow();
+    wireUpdates({
+      client,
+      getMainWindow: () => currentWindow as never,
+      isAutoCheckEnabled: () => false,
+      promptToRestart: vi.fn(),
+    });
+
+    client.emit("checking-for-update");
+    expect(currentWindow.webContents.send).toHaveBeenCalledTimes(1);
+
+    // The window is closed and replaced — same effect as main/index.ts reassigning
+    // its own `mainWindow` variable in the `activate` handler.
+    const oldWindow = currentWindow;
+    oldWindow.isDestroyed.mockReturnValue(true);
+    currentWindow = fakeMainWindow();
+
+    client.emit("update-available", { version: "1.2.3" });
+
+    expect(oldWindow.webContents.send).toHaveBeenCalledTimes(1); // unchanged, still 1
+    expect(currentWindow.webContents.send).toHaveBeenCalledWith(
+      IPC_CHANNELS.updatesStatusChanged,
+      { phase: "available", version: "1.2.3" },
+    );
+  });
+
   it("doesn't push to a destroyed window", () => {
     const client = fakeUpdaterClient();
     const mainWindow = fakeMainWindow();
     mainWindow.isDestroyed.mockReturnValue(true);
     wireUpdates({
       client,
-      mainWindow: mainWindow as never,
+      getMainWindow: () => mainWindow as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
     });
@@ -129,7 +163,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
     });
@@ -147,7 +181,7 @@ describe("wireUpdates", () => {
     const onUpdateCheckFailed = vi.fn();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
       onUpdateCheckFailed,
@@ -162,7 +196,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
     });
@@ -177,7 +211,7 @@ describe("wireUpdates", () => {
     const onUpdateAvailable = vi.fn();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
       onUpdateAvailable,
@@ -192,7 +226,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
     });
@@ -207,7 +241,7 @@ describe("wireUpdates", () => {
     const promptToRestart = vi.fn().mockResolvedValue(true);
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart,
     });
@@ -226,7 +260,7 @@ describe("wireUpdates", () => {
     const promptToRestart = vi.fn().mockResolvedValue(false);
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart,
     });
@@ -243,7 +277,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
     });
@@ -257,7 +291,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => true,
       promptToRestart: vi.fn(),
       initialCheckDelayMs: 10_000,
@@ -275,7 +309,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
       promptToRestart: vi.fn(),
       initialCheckDelayMs: 10_000,
@@ -291,7 +325,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => true,
       promptToRestart: vi.fn(),
       initialCheckDelayMs: 1_000,
@@ -312,7 +346,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     const stop = wireUpdates({
       client,
-      mainWindow: fakeMainWindow() as never,
+      getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => true,
       promptToRestart: vi.fn(),
       initialCheckDelayMs: 1_000,

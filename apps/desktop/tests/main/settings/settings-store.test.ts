@@ -1,4 +1,13 @@
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -108,6 +117,25 @@ describe("createSettingsStore", () => {
     const second = createSettingsStore({ filePath });
 
     expect(second.get()).toEqual(DEFAULT_APP_SETTINGS);
+  });
+
+  it("writes atomically — the real file always has complete, valid content, and no temp file is left behind", () => {
+    // Regression test: writeSettings used to write directly to the target path with
+    // no temp-file-then-rename. A process killed mid-write could leave settings.json
+    // truncated/invalid — silently losing every persisted setting on the next read
+    // (readSettings falls back to defaults with no user-visible warning). This can't
+    // directly simulate a kill mid-write, but it does verify the write path actually
+    // goes through a temp file that gets cleaned up via rename, not left dangling —
+    // the mechanism that makes the write atomic in the first place.
+    const store = createSettingsStore({ filePath });
+
+    store.set({ closeToTray: false });
+
+    expect(JSON.parse(readFileSync(filePath, "utf8"))).toMatchObject({ closeToTray: false });
+    expect(existsSync(`${filePath}.tmp`)).toBe(false);
+    // Only the real settings.json should exist in the directory — no leftover temp
+    // file from the rename.
+    expect(readdirSync(dir)).toEqual(["settings.json"]);
   });
 
   // Mode bits aren't meaningful on Windows the way they are on POSIX systems — skip

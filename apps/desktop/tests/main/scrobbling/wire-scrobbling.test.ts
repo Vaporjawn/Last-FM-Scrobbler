@@ -191,6 +191,71 @@ describe("wireScrobbling", () => {
     queue.close();
   });
 
+  it("drainOnce routes a rejected getClient() through the same consecutive-failure accounting as a network outage, instead of an unhandled rejection", async () => {
+    // Regression test: connectedServices() awaited accountStore.getActiveAccount()
+    // with no try/catch, and drainOnce is always invoked via a bare `void drainOnce()`
+    // on the interval with no `.catch()` anywhere — a rejection here (e.g.
+    // ElectronSecretStorage.get() throwing because safeStorage.decryptString() fails:
+    // revoked Keychain access, a corrupted secrets file, the profile copied to
+    // another machine) used to escape as an unhandled promise rejection every single
+    // cycle, forever, completely bypassing this exact consecutiveFailures/
+    // onScrobbleFailed accounting.
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const failingStorage: SecretStorage = {
+      get: () => Promise.reject(new Error("Keychain access denied")),
+      set: () => Promise.resolve(),
+      delete: () => Promise.resolve(),
+      list: () => Promise.resolve([]),
+    };
+    const accountStore = new AccountStore(failingStorage);
+    const onScrobbleFailed = vi.fn();
+    const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+      queue,
+      accountStore,
+      createSessionClient: vi.fn(),
+      onScrobbleFailed,
+    });
+    onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+    await expect(drainOnce()).resolves.toBeUndefined();
+    expect(onScrobbleFailed).not.toHaveBeenCalled();
+    await expect(drainOnce()).resolves.toBeUndefined();
+    await expect(drainOnce()).resolves.toBeUndefined();
+
+    expect(onScrobbleFailed).toHaveBeenCalledTimes(1);
+    expect(onScrobbleFailed).toHaveBeenCalledWith(expect.stringContaining("Keychain access denied"));
+    // The item stays queued — nothing was actually submitted or dropped.
+    expect(queue.count()).toBe(1);
+
+    stop();
+    queue.close();
+  });
+
+  it("onTrackChanged never throws when getClient() rejects", async () => {
+    // Regression test, same underlying bug as drainOnce's above, for the other bare
+    // `void`-invoked call site (main/index.ts's `void scrobbling.onTrackChanged(event)`).
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const failingStorage: SecretStorage = {
+      get: () => Promise.reject(new Error("Keychain access denied")),
+      set: () => Promise.resolve(),
+      delete: () => Promise.resolve(),
+      list: () => Promise.resolve([]),
+    };
+    const accountStore = new AccountStore(failingStorage);
+    const { onTrackChanged, stop } = wireScrobbling({
+      queue,
+      accountStore,
+      createSessionClient: vi.fn(),
+    });
+
+    await expect(
+      onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 }),
+    ).resolves.toBeUndefined();
+
+    stop();
+    queue.close();
+  });
+
   it("a successful drain resets the consecutive-failure count, so a later outage notifies again", async () => {
     const queue = new ScrobbleQueue({ databasePath: ":memory:" });
     const accountStore = new AccountStore(inMemoryStorage());

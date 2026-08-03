@@ -1,40 +1,21 @@
 import electron from "electron";
 import {
   AuthFlow,
-  LastfmClient,
   ListenBrainzClient,
   type AccountStore,
   type AppCredentials,
   type AppCredentialsStore,
   type AuthFlowClient,
+  type StoredAccount,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import { assertTrustedSender } from "../validate-ipc-sender.js";
+import { createLibrefmAuthFlowClient } from "./create-librefm-auth-flow-client.js";
 import type { ResolvedLibrefmCredentials } from "./resolve-librefm-credentials.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
-
-/** Libre.fm's own equivalent of Last.fm's `ws.audioscrobbler.com` API endpoint —
- * protocol-identical (see `LastfmClient`'s own docstring on `baseUrl`), so this
- * reuses `LastfmClient` directly rather than a parallel implementation. **Not
- * independently live-verified this session** beyond `auth.getToken` tolerating a
- * garbage/missing `api_key` (lax validation at that specific step) — the full signed
- * flow (`auth.getSession`, `track.scrobble`) was not confirmed end-to-end (a real
- * verification attempt hit Cloudflare rate-limiting before completing, and wasn't
- * retried further to avoid hammering a real third-party service). If Libre.fm turns
- * out to reject requests signed with an unregistered key/secret pair, the fix is
- * purely a documentation one (users need a real Libre.fm-issued key) — nothing about
- * this client's shape would need to change. */
-const LIBREFM_BASE_URL = "https://libre.fm/2.0/";
-/** Libre.fm's presumed equivalent of Last.fm's `www.last.fm/api/auth/` authorization
- * page, by analogy with Last.fm's own API/auth-page domain split (see
- * `LastfmClientOptions.authUrl`'s docstring) — **not independently live-verified this
- * session**, unlike the `/2.0/` API endpoint behaviors above. If this path is wrong,
- * `login()` below will open a browser to a broken page; the fix is a one-line change
- * to this constant once the real URL is confirmed. */
-const LIBREFM_AUTH_URL = "https://libre.fm/api/auth/";
 
 const LIBREFM_NOT_CONFIGURED_MESSAGE =
   "Libre.fm login is not configured this run — either no Libre.fm API key/secret has " +
@@ -95,31 +76,34 @@ export interface WireSecondaryAuthOptions {
   readonly createListenBrainzClient?: (token: string) => Pick<ListenBrainzClient, "validateToken">;
 }
 
-/** Builds a `LastfmClient` pointed at Libre.fm instead of Last.fm, from an
- * already-resolved key/secret pair (see `resolve-librefm-credentials.ts` — this
- * function itself does no env/storage lookups, just client construction). Shared by
- * both the login flow (`createLibrefmAuthFlowClient` below — no `sessionKey` yet,
- * since login is how one gets minted) and `main/index.ts`'s scrobbling wiring (a
- * session-keyed client, once an account is connected) — `LastfmClient` satisfies both
- * `AuthFlowClient` and `ScrobblingClient` structurally, so one factory covers both
- * call sites. */
-export function buildLibrefmClient(
-  credentials: AppCredentials,
-  options: { readonly sessionKey?: string } = {},
-): LastfmClient {
-  return new LastfmClient({
-    apiKey: credentials.apiKey,
-    apiSecret: credentials.apiSecret,
-    baseUrl: LIBREFM_BASE_URL,
-    authUrl: LIBREFM_AUTH_URL,
-    ...(options.sessionKey !== undefined ? { sessionKey: options.sessionKey } : {}),
-  });
-}
-
-/** The real default for `WireSecondaryAuthOptions.createLibrefmAuthFlowClient` — see
- * `buildLibrefmClient` above. */
-export function createLibrefmAuthFlowClient(credentials: AppCredentials): AuthFlowClient {
-  return buildLibrefmClient(credentials);
+/**
+ * Removes every *other* stored account before adding/activating this one, then does
+ * so. This app's model for Libre.fm/ListenBrainz (unlike Last.fm — see
+ * `shared/secondary-auth-api.ts`) is "at most one connected account per service at a
+ * time", but `AccountStore` itself is a general multi-account primitive (shared with
+ * Last.fm's own genuinely-multi-account `wire-auth.ts`) with no such constraint built
+ * in — enforcing it here, not there, keeps that shared primitive honest about what it
+ * actually is.
+ *
+ * Without this, connecting a new account (e.g. pasting a different ListenBrainz token)
+ * without first explicitly disconnecting the previous one left the old account
+ * orphaned but still stored. Disconnecting the *new* one would then silently
+ * auto-promote the orphaned old account back to active — `AccountStore.removeAccount`
+ * always leaves *some* account active if one remains on disk — resurrecting an account
+ * the user believed was gone, with scrobbles then silently submitted under it. Neither
+ * `librefmGetActiveAccount`/`listenbrainzGetActiveAccount` (nor anything else this
+ * module exposes) can discover or purge that orphaned entry, so this has to prevent it
+ * from ever existing rather than clean it up after the fact.
+ */
+async function connectSingleAccount(store: AccountStore, account: StoredAccount): Promise<void> {
+  const existing = await store.listAccounts();
+  for (const stored of existing) {
+    if (stored.username !== account.username) {
+      await store.removeAccount(stored.username);
+    }
+  }
+  await store.addAccount(account);
+  await store.setActiveAccount(account.username);
 }
 
 /**
@@ -184,27 +168,41 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
     await librefmAppCredentialsStore?.clear();
   });
 
-  ipcMain.handle(IPC_CHANNELS.librefmLogin, async (event): Promise<{ username: string }> => {
+  // Tracks a single in-flight librefmLogin call — same reasoning as wire-auth.ts's
+  // authLogin: the main process shouldn't rely on renderer-side debouncing alone to
+  // prevent two overlapping logins racing on which account ends up active.
+  let inFlightLibrefmLogin: Promise<{ username: string }> | undefined;
+
+  ipcMain.handle(IPC_CHANNELS.librefmLogin, (event): Promise<{ username: string }> => {
     assertTrustedSender(event, expectedOrigin);
-    const credentials = await resolveLibrefmCredentials();
-    if (!librefmAccountStore || !credentials) {
-      throw new Error(LIBREFM_NOT_CONFIGURED_MESSAGE);
+    if (inFlightLibrefmLogin) {
+      return inFlightLibrefmLogin;
     }
-    const client = buildLibrefmAuthFlowClient(credentials);
-    const authFlow = new AuthFlow({ client, openUrl });
-    try {
-      const session = await authFlow.authenticate();
-      await librefmAccountStore.addAccount({
-        username: session.username,
-        sessionKey: session.sessionKey,
-      });
-      await librefmAccountStore.setActiveAccount(session.username);
-      onLibrefmLoginSuccess?.(session.username);
-      return { username: session.username };
-    } catch (error) {
-      onLibrefmLoginFailed?.(error instanceof Error ? error.message : String(error));
-      throw error;
-    }
+    inFlightLibrefmLogin = (async () => {
+      try {
+        const credentials = await resolveLibrefmCredentials();
+        if (!librefmAccountStore || !credentials) {
+          throw new Error(LIBREFM_NOT_CONFIGURED_MESSAGE);
+        }
+        const client = buildLibrefmAuthFlowClient(credentials);
+        const authFlow = new AuthFlow({ client, openUrl });
+        try {
+          const session = await authFlow.authenticate();
+          await connectSingleAccount(librefmAccountStore, {
+            username: session.username,
+            sessionKey: session.sessionKey,
+          });
+          onLibrefmLoginSuccess?.(session.username);
+          return { username: session.username };
+        } catch (error) {
+          onLibrefmLoginFailed?.(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      } finally {
+        inFlightLibrefmLogin = undefined;
+      }
+    })();
+    return inFlightLibrefmLogin;
   });
 
   ipcMain.handle(IPC_CHANNELS.librefmLogout, async (event): Promise<void> => {
@@ -243,11 +241,10 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
       if (!validation.valid || !validation.username) {
         throw new Error("That ListenBrainz token isn't valid — check it and try again.");
       }
-      await listenbrainzAccountStore.addAccount({
+      await connectSingleAccount(listenbrainzAccountStore, {
         username: validation.username,
         sessionKey: trimmedToken,
       });
-      await listenbrainzAccountStore.setActiveAccount(validation.username);
       return { username: validation.username };
     },
   );

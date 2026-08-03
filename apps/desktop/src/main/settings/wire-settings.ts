@@ -1,5 +1,6 @@
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
+import { isAspectRatioOption } from "../../shared/settings-api.js";
 import type { AppSettings, AspectRatioOption } from "../../shared/settings-api.js";
 import type { SettingsStore } from "./settings-store.js";
 
@@ -41,6 +42,14 @@ export function wireSettings(options: WireSettingsOptions): () => void {
 
   ipcMain.handle(IPC_CHANNELS.settingsSet, (_event, patch: unknown): AppSettings => {
     const typedPatch = patch as Partial<AppSettings>;
+    // Validated here, at the trust boundary, rather than trusting the renderer (or a
+    // stale/corrupted settings.json migrated forward via a prior `store.set()` call)
+    // to only ever send a real AspectRatioOption — an invalid value used to flow
+    // straight through into NaN window-geometry math (see `isAspectRatioOption`'s own
+    // docstring for the full failure chain).
+    if (typedPatch.aspectRatio !== undefined && !isAspectRatioOption(typedPatch.aspectRatio)) {
+      throw new Error(`settings:set received an invalid aspectRatio: ${String(typedPatch.aspectRatio)}`);
+    }
     const updated = store.set(typedPatch);
     if (typedPatch.aspectRatio !== undefined) {
       onAspectRatioChange?.(updated.aspectRatio);

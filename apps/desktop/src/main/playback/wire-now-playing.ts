@@ -50,8 +50,10 @@ const TRACKER_TICK_INTERVAL_MS = 1000;
  * renderer's "Now Playing" view exactly as it's actually playing; only scrobbling
  * itself is suppressed for it.
  *
- * Returns a cleanup function that stops the tracker, its tick timer, and the
- * `get-current` handler.
+ * Returns a cleanup function that stops the tracker, its tick timer, the `get-current`
+ * handler, and — critically, since `source` is normally a shared, module-level
+ * singleton (see `main/index.ts`) that outlives any one window — this function's own
+ * subscriptions to it, so a destroyed window's `webContents` is never written to again.
  */
 export function wireNowPlaying(
   source: PlaybackSource,
@@ -65,11 +67,16 @@ export function wireNowPlaying(
   let currentTrack: TrackInfo | undefined;
   let currentState: PlaybackState = "stopped";
 
-  source.onTrackChanged((track) => {
+  // Captured so the cleanup returned below can actually unsubscribe from the shared
+  // `playbackSource` singleton (see main/index.ts) — without this, recreating the main
+  // window (close-to-tray disabled, then reopened via the Dock icon) left the old,
+  // destroyed window's `webContents.send` callback still subscribed, which throws the
+  // next time a track/state change fires it against a now-destroyed BrowserWindow.
+  const unsubscribeTrack = source.onTrackChanged((track) => {
     currentTrack = track;
     mainWindow.webContents.send(IPC_CHANNELS.nowPlayingTrackChanged, track);
   });
-  source.onPlaybackStateChanged((state) => {
+  const unsubscribeState = source.onPlaybackStateChanged((state) => {
     currentState = state;
     mainWindow.webContents.send(IPC_CHANNELS.nowPlayingStateChanged, state);
   });
@@ -113,6 +120,8 @@ export function wireNowPlaying(
   return () => {
     clearInterval(tickHandle);
     tracker.stop();
+    unsubscribeTrack();
+    unsubscribeState();
     ipcMain.removeHandler(IPC_CHANNELS.nowPlayingGetCurrent);
   };
 }

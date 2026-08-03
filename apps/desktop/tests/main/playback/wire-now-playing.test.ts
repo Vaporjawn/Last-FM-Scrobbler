@@ -28,6 +28,8 @@ function createFakeSource(): {
   source: PlaybackSource;
   emitTrackChanged: (track: TrackInfo) => void;
   emitPlaybackStateChanged: (state: PlaybackState) => void;
+  trackListenerCount: () => number;
+  stateListenerCount: () => number;
 } {
   const trackListeners = new Set<(track: TrackInfo) => void>();
   const stateListeners = new Set<(state: PlaybackState) => void>();
@@ -52,6 +54,8 @@ function createFakeSource(): {
     emitPlaybackStateChanged: (state) => {
       for (const listener of stateListeners) listener(state);
     },
+    trackListenerCount: () => trackListeners.size,
+    stateListenerCount: () => stateListeners.size,
   };
 }
 
@@ -219,6 +223,28 @@ describe("wireNowPlaying", () => {
 
     expect(onTrackChanged).toHaveBeenCalledWith(expect.objectContaining({ track: TRACK }));
     stop();
+  });
+
+  it("unsubscribes from the source's track/state listeners on stop", () => {
+    // Regression test: `source` is normally a shared, module-level singleton that
+    // outlives any one window (see main/index.ts) — the cleanup returned by
+    // wireNowPlaying used to only stop the tracker/tick timer/get-current handler,
+    // never actually unsubscribing from the source itself. Every window recreation
+    // left the previous, destroyed window's `webContents.send` callback still
+    // subscribed, throwing the next time a track/state change fired it.
+    const { source, trackListenerCount, stateListenerCount } = createFakeSource();
+    const mainWindow = createFakeWindow();
+
+    // Two of each: wireNowPlaying's own relay-to-renderer subscription, plus the
+    // Tracker's independent subscription (tracker.start() inside wireNowPlaying).
+    const stop = wireNowPlaying(source, mainWindow as never);
+    expect(trackListenerCount()).toBe(2);
+    expect(stateListenerCount()).toBe(2);
+
+    stop();
+
+    expect(trackListenerCount()).toBe(0);
+    expect(stateListenerCount()).toBe(0);
   });
 
   it("removes the get-current handler on stop", () => {

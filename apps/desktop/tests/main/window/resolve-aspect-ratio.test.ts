@@ -25,4 +25,14 @@ describe("resolveAspectRatioValue", () => {
   it("returns 9/14 for '9:14'", () => {
     expect(resolveAspectRatioValue("9:14")).toBeCloseTo(9 / 14, 10);
   });
+
+  it("falls back to 0 for a value that isn't a real AspectRatioOption", () => {
+    // Regression test: this used to be a plain Record lookup with no fallback — an
+    // invalid value (a stale/removed option from an older settings.json, or anything
+    // that reached here without going through wire-settings.ts's own IPC-boundary
+    // validation) returned `undefined` despite this function's declared `number`
+    // return type, cascading into NaN throughout the window-geometry math downstream.
+    // `as never` bypasses the compile-time type check to exercise the runtime guard.
+    expect(resolveAspectRatioValue("21:9" as never)).toBe(0);
+  });
 });

@@ -108,26 +108,49 @@ export function wireAuth(options: WireAuthOptions): () => void {
     },
   );
 
-  ipcMain.handle(IPC_CHANNELS.authLogin, async (event): Promise<{ username: string }> => {
+  // Tracks a single in-flight authLogin call — see the handler below for why.
+  let inFlightLogin: Promise<{ username: string }> | undefined;
+
+  ipcMain.handle(IPC_CHANNELS.authLogin, (event): Promise<{ username: string }> => {
     assertTrustedSender(event, expectedOrigin);
     if (!accountStore || !client) {
       throw new Error(NOT_CONFIGURED_MESSAGE);
     }
-    const authFlow = new AuthFlow({ client, openUrl });
-    try {
-      const session = await authFlow.authenticate();
-      await accountStore.addAccount({ username: session.username, sessionKey: session.sessionKey });
-      await accountStore.setActiveAccount(session.username);
-      onLoginSuccess?.(session.username);
-      return { username: session.username };
-    } catch (error) {
-      // Reported via onLoginFailed *in addition to* rethrowing below — the renderer's
-      // own promise-rejection handling (SettingsPage's snackbar) still runs
-      // unchanged when the window is open and focused; onLoginFailed exists for the
-      // case that matters here, where it isn't.
-      onLoginFailed?.(error instanceof Error ? error.message : String(error));
-      throw error;
+    // The main process is the actual trust boundary here and shouldn't rely on
+    // renderer-side debouncing alone to prevent two overlapping logins. Without this
+    // guard, two authLogin calls landing before the first resolves (e.g. a fast
+    // double-invoke before the renderer's own button-disable state commits) would
+    // each construct an independent AuthFlow; whichever completes last — not the
+    // user's actual intended final action — decides which account ends up active,
+    // since both independently call addAccount()/setActiveAccount() with no
+    // synchronization between them. Returning the *same* in-flight promise to every
+    // caller until it settles means there's only ever one AuthFlow running at a time.
+    if (inFlightLogin) {
+      return inFlightLogin;
     }
+    const authFlow = new AuthFlow({ client, openUrl });
+    inFlightLogin = (async () => {
+      try {
+        const session = await authFlow.authenticate();
+        await accountStore.addAccount({
+          username: session.username,
+          sessionKey: session.sessionKey,
+        });
+        await accountStore.setActiveAccount(session.username);
+        onLoginSuccess?.(session.username);
+        return { username: session.username };
+      } catch (error) {
+        // Reported via onLoginFailed *in addition to* rethrowing below — the
+        // renderer's own promise-rejection handling (SettingsPage's snackbar) still
+        // runs unchanged when the window is open and focused; onLoginFailed exists
+        // for the case that matters here, where it isn't.
+        onLoginFailed?.(error instanceof Error ? error.message : String(error));
+        throw error;
+      } finally {
+        inFlightLogin = undefined;
+      }
+    })();
+    return inFlightLogin;
   });
 
   ipcMain.handle(IPC_CHANNELS.authLogout, async (event, username: unknown): Promise<void> => {

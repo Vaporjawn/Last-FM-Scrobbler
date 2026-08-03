@@ -2,9 +2,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 import type { PlaybackSource } from "@lastfm-scrobbler/shared-types";
-import type { CompiledFilter, ScrobbleEligibleEvent, TrackChangedEvent } from "@lastfm-scrobbler/core";
+import type {
+  CompiledFilter,
+  ScrobbleEligibleEvent,
+  TrackChangedEvent,
+} from "@lastfm-scrobbler/core";
 import type { WindowBounds } from "../shared/settings-api.js";
-import { computePortraitWindowSize } from "./window/compute-portrait-window-size.js";
+import { computeMinimumSizeForAspectRatio } from "./window/compute-minimum-size-for-aspect-ratio.js";
 import { isSafeExternalUrl } from "./window/is-safe-external-url.js";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
 
@@ -15,8 +19,8 @@ const DEFAULT_WIDTH = 1100;
 const DEFAULT_HEIGHT = 720;
 
 // See main/index.ts for why this is a default import destructured at runtime rather
-// than `import { BrowserWindow, shell } from "electron"`.
-const { BrowserWindow, shell } = electron;
+// than `import { BrowserWindow, screen, shell } from "electron"`.
+const { BrowserWindow, screen, shell } = electron;
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -31,6 +35,18 @@ export const MIN_WINDOW_HEIGHT = 480;
  * aspect-ratio change handler needs it to clamp a portrait ratio's (e.g. `"9:16"`)
  * derived width, the same way it already clamps a landscape ratio's derived height. */
 export const MIN_WINDOW_WIDTH = 680;
+
+/** Whether rectangle `a` overlaps rectangle `b` at all (touching edges don't count —
+ * matches the everyday sense of "is any part of this actually visible on that
+ * screen"). Used below to decide whether a restored window position is still usable. */
+function rectanglesIntersect(
+  a: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  b: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+): boolean {
+  return (
+    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+  );
+}
 
 export interface CreateMainWindowOptions {
   /** `undefined` on platforms without a working adapter yet — see
@@ -99,28 +115,91 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
   // `initialBounds` (a prior session's real size/position) takes precedence over any
   // of this — it only matters on first launch, or if nothing was ever saved (see
   // `main/window/persist-window-bounds.ts`). Without it, a portrait `initialAspectRatio`
-  // (e.g. the `"9:16"` default — see `AppSettings.aspectRatio`) needs its own default
+  // (e.g. the `"9:14"` default — see `AppSettings.aspectRatio`) needs its own default
   // size, not the hardcoded landscape `DEFAULT_WIDTH`x`DEFAULT_HEIGHT` below: applying
   // `setAspectRatio()` further down only *constrains future resizing*, it doesn't
   // resize the window itself, so a fresh install would otherwise launch in a plain
-  // landscape window that merely can't be resized away from 9:16 later — never
-  // visually portrait at all despite that being the whole point of the default.
-  // `computePortraitWindowSize` is the same anchor-on-minWidth logic `main/index.ts`'s
-  // `onAspectRatioChange` uses when the user *changes* to a portrait ratio live; reused
-  // here for the "already set at launch" case. `currentWidth`/`currentHeight` are
-  // irrelevant to its portrait branch (only the "free"/0 no-op branch reads them, which
-  // never applies here since this whole branch is gated on a truthy, portrait ratio) —
-  // passing the landscape defaults through is harmless.
+  // landscape window that merely can't be resized away from the default later — never
+  // visually portrait at all despite that being the whole point of the default. See
+  // `computeMinimumSizeForAspectRatio` below for how that default size is derived.
   const isPortraitRatio =
     initialAspectRatio !== undefined && initialAspectRatio > 0 && initialAspectRatio < 1;
+
+  // The display this window will actually land on — `getDisplayMatching` against the
+  // real restored position when there is one, since a multi-monitor setup's displays
+  // can have different available sizes; `getPrimaryDisplay()` as the best available
+  // guess before the window (and therefore any real position) exists yet.
+  const targetDisplay = initialBounds
+    ? screen.getDisplayMatching({
+        x: initialBounds.x,
+        y: initialBounds.y,
+        width: initialBounds.width,
+        height: initialBounds.height,
+      })
+    : screen.getPrimaryDisplay();
+
+  // Reconciles the flat, content-driven `MIN_WINDOW_WIDTH`/`MIN_WINDOW_HEIGHT` floors
+  // below against `initialAspectRatio` (when locked to one) and the target display's
+  // real capacity — see `computeMinimumSizeForAspectRatio`'s own docstring for why
+  // this matters even at launch, not just for a *live* ratio change: this app's
+  // default ratio (`"9:14"`) is wildly disproportionate to the flat floors alone (a
+  // 680-wide window at that ratio needs to be over 1000px tall), so without this, a
+  // freshly launched *or restored* window would start out already sitting exactly at
+  // its own width floor with a locked aspect ratio — meaning the very first inward
+  // resize drag a user makes would immediately hit the native macOS corruption this
+  // function exists to avoid (verified live — see that function's docstring).
+  const minimumSize = computeMinimumSizeForAspectRatio(
+    initialAspectRatio ?? 0,
+    MIN_WINDOW_WIDTH,
+    MIN_WINDOW_HEIGHT,
+    targetDisplay.workArea.width,
+    targetDisplay.workArea.height,
+  );
+
+  // `minimumSize` is already both ratio-consistent and screen-safe (see
+  // computeMinimumSizeForAspectRatio) — for a portrait ratio, it's directly the
+  // narrowest, most convincingly portrait size this app's current layout can offer on
+  // this display, so it's used as-is rather than deriving a second, separate size.
+  // The landscape/square/free-ratio default, unlike the portrait one, used to be the
+  // flat DEFAULT_WIDTH/DEFAULT_HEIGHT with no clamp against the target display at all
+  // — fine on an ordinary monitor, but a user who changes AppSettings.aspectRatio away
+  // from the portrait default *before* ever resizing/moving the window (so
+  // windowBounds is still unset) and then relaunches on a smaller screen (an older/
+  // smaller laptop, a projector, a small external monitor) would get a window
+  // constructed wider/taller than the visible screen, with nothing to clamp it.
   const defaultSize = isPortraitRatio
-    ? computePortraitWindowSize(DEFAULT_WIDTH, DEFAULT_HEIGHT, initialAspectRatio, MIN_WINDOW_WIDTH)
-    : { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+    ? minimumSize
+    : {
+        width: Math.min(DEFAULT_WIDTH, Math.floor(targetDisplay.workArea.width * 0.9)),
+        height: Math.min(DEFAULT_HEIGHT, Math.floor(targetDisplay.workArea.height * 0.9)),
+      };
+
+  // A restored position from a prior session (`AppSettings.windowBounds`) can point
+  // at a display that's no longer connected (a second monitor unplugged/reconfigured
+  // since the window was last positioned there) — using it verbatim would construct
+  // (and, for a non-hidden launch, show) the window fully off any visible screen,
+  // making the app appear completely unreachable. `targetDisplay` was already chosen
+  // as the closest match for this position via `getDisplayMatching` above, which
+  // never returns nothing — so the only way to detect "this position isn't actually
+  // usable" is to check whether it overlaps that display's own work area at all.
+  const restoredPositionIsOnScreen =
+    initialBounds !== undefined &&
+    rectanglesIntersect(
+      {
+        x: initialBounds.x,
+        y: initialBounds.y,
+        width: initialBounds.width,
+        height: initialBounds.height,
+      },
+      targetDisplay.workArea,
+    );
 
   const mainWindow = new BrowserWindow({
     width: initialBounds?.width ?? defaultSize.width,
     height: initialBounds?.height ?? defaultSize.height,
-    ...(initialBounds ? { x: initialBounds.x, y: initialBounds.y } : {}),
+    ...(initialBounds && restoredPositionIsOnScreen
+      ? { x: initialBounds.x, y: initialBounds.y }
+      : {}),
     // No app-level breakpoints reflow the fixed-width sidebar + content layout below
     // this — live-testing every page down from 1100 wide (Playwright, resized in
     // steps) showed content was still fully readable at 680x480 but visibly degraded
@@ -130,9 +209,10 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
     // way down to phone widths, matches how desktop apps in this genre (and the
     // official Last.fm client this project's UI is modeled on) handle it — the
     // existing sidebar-collapse control already covers reclaiming space below that
-    // for users who want it.
-    minWidth: MIN_WINDOW_WIDTH,
-    minHeight: MIN_WINDOW_HEIGHT,
+    // for users who want it. `minimumSize` (not the flat MIN_WINDOW_WIDTH/
+    // MIN_WINDOW_HEIGHT directly) is what's actually enforced — see above.
+    minWidth: minimumSize.width,
+    minHeight: minimumSize.height,
     ...(iconPath ? { icon: iconPath } : {}),
     // Don't paint the window until the renderer has produced its first frame —
     // avoids the blank/white-flash window Electron otherwise shows immediately, and
@@ -202,11 +282,20 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
   });
 
   if (playbackSource) {
-    if (onScrobbleEligible) {
-      wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible, onTrackChanged, filter);
-    } else {
-      wireNowPlaying(playbackSource, mainWindow, undefined, onTrackChanged, filter);
-    }
+    // `wireNowPlaying`'s returned cleanup MUST be captured and invoked when this
+    // specific window goes away, not discarded — `playbackSource` is normally a
+    // shared, module-level singleton (see main/index.ts) that outlives any one
+    // window. Previously this cleanup was thrown away entirely: recreating the main
+    // window (e.g. "close to tray" off, window closed for real, then reopened via the
+    // Dock icon on macOS) hit Electron's "second handler for the same channel" throw
+    // inside wireNowPlaying's own `ipcMain.handle(nowPlayingGetCurrent, ...)`, since
+    // the first window's handler was never unregistered — and even once that's fixed,
+    // the first window's now-destroyed `webContents.send` callback would still be
+    // subscribed to the shared source, throwing on the next track/state change.
+    const cleanupNowPlaying = onScrobbleEligible
+      ? wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible, onTrackChanged, filter)
+      : wireNowPlaying(playbackSource, mainWindow, undefined, onTrackChanged, filter);
+    mainWindow.once("closed", cleanupNowPlaying);
   }
 
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;

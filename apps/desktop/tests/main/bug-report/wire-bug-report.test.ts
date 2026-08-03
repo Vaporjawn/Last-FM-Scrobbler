@@ -15,23 +15,35 @@ vi.mock("electron", () => ({ ipcMain, default: { ipcMain } }));
 const { wireBugReport } = await import("../../../src/main/bug-report/wire-bug-report.js");
 const { IPC_CHANNELS } = await import("../../../src/shared/ipc-channels.js");
 
+const EXPECTED_ORIGIN = "http://localhost:5173";
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
+  return invokeFrom(TRUSTED_EVENT, channel, ...args);
+}
+
+/** Like `invoke()`, but with an explicit (possibly untrusted, possibly `null`
+ * `senderFrame`) event — `async` is load-bearing here, not stylistic: `bugReportSubmit`
+ * throws `assertTrustedSender`'s error *synchronously*, so a non-async wrapper would
+ * let that throw escape as a real exception instead of becoming a promise rejection —
+ * same convention `wire-auth.test.ts`/`wire-secondary-auth.test.ts` already use. */
+async function invokeFrom(event: unknown, channel: string, ...args: unknown[]): Promise<unknown> {
   const handler = ipcMainHandlers.get(channel);
   if (!handler) {
     throw new Error(`No handler registered for ${channel}`);
   }
-  return Promise.resolve(handler({}, ...args));
+  return await handler(event, ...args);
 }
 
 describe("wireBugReport", () => {
   it("isConfigured reports false when no relay URL is set", async () => {
-    wireBugReport({ relayUrl: undefined });
+    wireBugReport({ expectedOrigin: EXPECTED_ORIGIN, relayUrl: undefined });
 
     await expect(invoke(IPC_CHANNELS.bugReportIsConfigured)).resolves.toBe(false);
   });
 
   it("isConfigured reports true when a relay URL is set", async () => {
-    wireBugReport({ relayUrl: "https://relay.example/report" });
+    wireBugReport({ expectedOrigin: EXPECTED_ORIGIN, relayUrl: "https://relay.example/report" });
 
     await expect(invoke(IPC_CHANNELS.bugReportIsConfigured)).resolves.toBe(true);
   });
@@ -40,13 +52,13 @@ describe("wireBugReport", () => {
     // A packaged build's electron.vite.config.ts `define` bakes in "" (not an absent
     // property) when BUG_REPORT_RELAY_URL wasn't set at build time — see that config's
     // docstring and this option's. Must be treated identically to undefined.
-    wireBugReport({ relayUrl: "" });
+    wireBugReport({ expectedOrigin: EXPECTED_ORIGIN, relayUrl: "" });
 
     await expect(invoke(IPC_CHANNELS.bugReportIsConfigured)).resolves.toBe(false);
   });
 
   it("submit throws a clear error when not configured", async () => {
-    wireBugReport({ relayUrl: undefined });
+    wireBugReport({ expectedOrigin: EXPECTED_ORIGIN, relayUrl: undefined });
 
     await expect(invoke(IPC_CHANNELS.bugReportSubmit, "Title", "Body")).rejects.toThrow(
       /not configured/i,
@@ -60,6 +72,7 @@ describe("wireBugReport", () => {
       }),
     );
     wireBugReport({
+      expectedOrigin: EXPECTED_ORIGIN,
       relayUrl: "https://relay.example/report",
       getDiagnostics: () => ({ platform: "darwin" }),
       fetchImpl,
@@ -82,18 +95,59 @@ describe("wireBugReport", () => {
 
   it("submit throws when the relay responds with a non-2xx status", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response("relay error", { status: 502 }));
-    wireBugReport({ relayUrl: "https://relay.example/report", fetchImpl });
+    wireBugReport({
+      expectedOrigin: EXPECTED_ORIGIN,
+      relayUrl: "https://relay.example/report",
+      fetchImpl,
+    });
 
     await expect(invoke(IPC_CHANNELS.bugReportSubmit, "Title", "Body")).rejects.toThrow(/502/);
   });
 
   it("removes both handlers when the returned cleanup function is called", () => {
-    const stop = wireBugReport({ relayUrl: "https://relay.example/report" });
+    const stop = wireBugReport({
+      expectedOrigin: EXPECTED_ORIGIN,
+      relayUrl: "https://relay.example/report",
+    });
     expect(ipcMainHandlers.has(IPC_CHANNELS.bugReportSubmit)).toBe(true);
 
     stop();
 
     expect(ipcMainHandlers.has(IPC_CHANNELS.bugReportIsConfigured)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.bugReportSubmit)).toBe(false);
+  });
+
+  describe("untrusted sender", () => {
+    it("rejects submit when senderFrame doesn't match expectedOrigin", async () => {
+      // Regression test: bugReportSubmit is the one handler in this module with a
+      // real external side effect (files a genuine GitHub issue via the relay) —
+      // previously the only one in the app with no sender-trust check at all.
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "https://relay.example/report",
+        fetchImpl: vi.fn(),
+      });
+
+      await expect(
+        invokeFrom(
+          { senderFrame: { url: "http://evil.example/" } },
+          IPC_CHANNELS.bugReportSubmit,
+          "Title",
+          "Body",
+        ),
+      ).rejects.toThrow(/untrusted sender/i);
+    });
+
+    it("rejects submit when senderFrame is null", async () => {
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "https://relay.example/report",
+        fetchImpl: vi.fn(),
+      });
+
+      await expect(
+        invokeFrom({ senderFrame: null }, IPC_CHANNELS.bugReportSubmit, "Title", "Body"),
+      ).rejects.toThrow(/no senderFrame/i);
+    });
   });
 });

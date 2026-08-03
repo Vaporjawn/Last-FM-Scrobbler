@@ -19,7 +19,16 @@ const INITIAL_CHECK_DELAY_MS = 10_000;
 
 export interface WireUpdatesOptions {
   readonly client: UpdaterClient;
-  readonly mainWindow: BrowserWindow;
+  /** A live accessor for the current main window, not a captured value — this window
+   * can be destroyed and replaced (main window closed with "close to tray" off, then
+   * reopened via the Dock icon on macOS) for as long as this module stays wired.
+   * Reading through a function on every status push (rather than closing over a
+   * `BrowserWindow` reference at wiring time, the way `promptToRestart` below already
+   * correctly does via its own closure) keeps `setStatus` targeting whichever window
+   * is actually current, matching every other live-updating wiring call in
+   * `main/index.ts` (`wireAppInfo`'s `onShowMainWindow`, `wireSettings`'s
+   * `onAspectRatioChange`). */
+  readonly getMainWindow: () => BrowserWindow;
   /** Reads the live `AppSettings.autoUpdateEnabled` value — a function rather than a
    * snapshot boolean, so a Settings toggle takes effect on the next scheduled
    * check without needing to re-wire anything. */
@@ -61,7 +70,7 @@ export interface WireUpdatesOptions {
 export function wireUpdates(options: WireUpdatesOptions): () => void {
   const {
     client,
-    mainWindow,
+    getMainWindow,
     isAutoCheckEnabled,
     promptToRestart,
     checkIntervalMs = DEFAULT_CHECK_INTERVAL_MS,
@@ -74,6 +83,7 @@ export function wireUpdates(options: WireUpdatesOptions): () => void {
 
   function setStatus(next: UpdateStatus): void {
     status = next;
+    const mainWindow = getMainWindow();
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_CHANNELS.updatesStatusChanged, status);
     }

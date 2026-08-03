@@ -17,13 +17,39 @@ export interface WindowBounds {
  * or square — which is why the immediate resize either of them triggers anchors on
  * this window's minimum width and derives a matching height, rather than anchoring on
  * the current width and deriving height the way the landscape/square options do; see
- * `main/window/compute-portrait-window-size.ts` and `main/index.ts`'s
- * `onAspectRatioChange` for that branch, and `create-main-window.ts` for how a
+ * `main/window/compute-minimum-size-for-aspect-ratio.ts` and `main/window/
+ * apply-aspect-ratio.ts` for that branch, and `create-main-window.ts` for how a
  * portrait default also changes this window's *initial* size on a fresh install (no
  * `windowBounds` saved yet). See `main/window/resolve-aspect-ratio.ts` for how any of
  * these becomes the numeric ratio `BrowserWindow.setAspectRatio()` expects.
  */
 export type AspectRatioOption = "free" | "16:9" | "4:3" | "1:1" | "9:16" | "9:14";
+
+/** Every valid `AspectRatioOption` value — the runtime companion to the type above,
+ * since a type alone can't validate a value arriving from outside TypeScript-checked
+ * code (an IPC payload from the renderer, a stale/corrupted persisted settings.json
+ * from an older version of this app that supported a different set of options). See
+ * `isAspectRatioOption` below for the actual validation check. */
+export const ASPECT_RATIO_OPTIONS: readonly AspectRatioOption[] = [
+  "free",
+  "16:9",
+  "4:3",
+  "1:1",
+  "9:16",
+  "9:14",
+];
+
+/** Validates an unknown value as a real `AspectRatioOption` before it's trusted —
+ * `main/settings/wire-settings.ts` uses this at the `settings:set` IPC boundary.
+ * Without this check, an invalid value (typo'd, a removed option from an older
+ * version, a malformed IPC payload) used to flow straight through
+ * `main/window/resolve-aspect-ratio.ts`'s `Record` lookup as `undefined` — despite
+ * that function's own return type claiming `number` — and cascade into `NaN` in the
+ * native window-geometry math downstream (`computeMinimumSizeForAspectRatio`,
+ * `BrowserWindow.setAspectRatio`/`setMinimumSize`). */
+export function isAspectRatioOption(value: unknown): value is AspectRatioOption {
+  return ASPECT_RATIO_OPTIONS.includes(value as AspectRatioOption);
+}
 
 /** `true` for `"9:16"`/`"9:14"` (width < height, see `AspectRatioOption`'s own
  * docstring), `false` for every landscape/square option and `"free"`. A plain set

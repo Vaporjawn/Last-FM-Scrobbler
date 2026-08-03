@@ -193,7 +193,19 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
   }
 
   async function onTrackChanged(event: TrackChangedEvent): Promise<void> {
-    const connected = await connectedServices();
+    let connected: readonly ConnectedService[];
+    try {
+      connected = await connectedServices();
+    } catch (error) {
+      // A service's getClient() can genuinely reject (see drainOnce's matching catch
+      // for the full failure-mode writeup) — best-effort here too, matching this
+      // function's own per-service catch below and its own docstring: a "now playing"
+      // push failing is never worth crashing over or leaving as an unhandled
+      // rejection (this is always invoked via a bare, uncaught
+      // `void scrobbling.onTrackChanged(event)` in main/index.ts).
+      console.error("scrobbling: failed to resolve connected services for now-playing update:", error);
+      return;
+    }
     if (connected.length === 0) {
       return;
     }
@@ -218,7 +230,31 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
   }
 
   async function drainOnce(): Promise<void> {
-    const connected = await connectedServices();
+    let connected: readonly ConnectedService[];
+    try {
+      connected = await connectedServices();
+    } catch (error) {
+      // A service's getClient() can genuinely reject — e.g. OS keychain/secret-
+      // storage access revoked, a corrupted secrets file, or the profile copied to
+      // another machine (ElectronSecretStorage.get()'s safeStorage.decryptString()
+      // call is not itself wrapped, so it throws synchronously into
+      // AccountStore.getActiveAccount()'s rejection). This used to reject
+      // connectedServices() as a whole and escape as an unhandled promise rejection
+      // every single drain cycle forever — drainOnce is always invoked via a bare
+      // `void drainOnce()` on the interval below, with no `.catch()` anywhere and no
+      // global `unhandledRejection` handler in this app — bypassing the
+      // consecutiveFailures/onScrobbleFailed accounting entirely, so scrobbling would
+      // silently and permanently stop working with zero user-facing notification.
+      // Routing it through that same accounting instead means a keychain/storage
+      // failure eventually surfaces to the user exactly like a real network outage
+      // would, rather than disappearing silently.
+      consecutiveFailures += 1;
+      if (consecutiveFailures === FAILURE_NOTIFICATION_THRESHOLD) {
+        const reason = error instanceof Error ? error.message : String(error);
+        onScrobbleFailed?.(`Unable to check connected accounts: ${reason}`);
+      }
+      return;
+    }
     if (connected.length === 0) {
       return;
     }

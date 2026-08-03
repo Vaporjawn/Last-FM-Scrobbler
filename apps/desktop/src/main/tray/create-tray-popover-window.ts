@@ -1,17 +1,13 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
+import { TRAY_POPOVER_SIZE } from "./tray-popover-size.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
-// than `import { BrowserWindow, screen } from "electron"`.
-const { BrowserWindow, screen } = electron;
+// than `import { BrowserWindow } from "electron"`.
+const { BrowserWindow } = electron;
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
-
-/** Small enough to feel like a quick glance, not a second copy of the main window —
- * roughly matches the reference menu-bar-app sizing (album art + two lines of text +
- * a couple of buttons) this popover is modeled on. */
-export const TRAY_POPOVER_SIZE = { width: 320, height: 180 };
 
 /**
  * Creates the tray/menu-bar mini-player popover window — hidden by default, shown and
@@ -26,7 +22,7 @@ export const TRAY_POPOVER_SIZE = { width: 320, height: 180 };
  * `frame: false` + fixed, non-resizable size + `skipTaskbar: true` are what make this
  * read as a transient popover rather than a second real window — closer to how a
  * native macOS/Windows tray/menu-bar popover behaves than a normal titled window
- * would. Hidden on blur (see `wireTrayPopoverAutoHide` in `create-tray.ts`) the same
+ * would. Hidden on blur (see this function's own `"blur"` listener below) the same
  * way, matching that same convention (click the icon, glance at it, click away to
  * dismiss).
  */
@@ -72,19 +68,4 @@ export function createTrayPopoverWindow(): Electron.BrowserWindow {
   });
 
   return popover;
-}
-
-/**
- * Where the popover's *screen* (not just position within it) is — `screen.
- * getDisplayNearestPoint()` keyed on the tray icon's own bounds, so a popover on a
- * multi-monitor setup clamps to whichever display the tray icon actually lives on,
- * not always the primary one. Exported separately from `positionTrayPopover` itself
- * (a pure function, easy to unit test) since resolving *this* value requires the real
- * Electron `screen` module, which isn't available outside a running Electron process.
- */
-export function resolvePopoverScreenBounds(trayBounds: Electron.Rectangle): Electron.Rectangle {
-  return screen.getDisplayNearestPoint({
-    x: trayBounds.x + trayBounds.width / 2,
-    y: trayBounds.y + trayBounds.height / 2,
-  }).bounds;
 }
