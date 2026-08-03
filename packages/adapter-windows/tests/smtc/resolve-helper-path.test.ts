@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import {
-  AdapterWindowsPackageRootNotFoundError,
-  resolveHelperPath,
-} from "../../src/smtc/resolve-helper-path.js";
+import { AdapterWindowsPackageRootNotFoundError } from "../../src/smtc/adapter-windows-package-root-not-found-error.js";
+import { resolveHelperPath } from "../../src/smtc/resolve-helper-path.js";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 

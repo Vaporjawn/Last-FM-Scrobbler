@@ -48,22 +48,26 @@ describe("mapPayloadToTrackInfo", () => {
     expect(track?.albumArtist).toBeUndefined();
   });
 
-  it("omits durationSec and marks isStream when durationSec is missing", () => {
-    const track = mapPayloadToTrackInfo({ title: "Live Radio", sourceAppUserModelId: "App.exe" });
+  it("omits durationSec when missing, without inferring isStream from it", () => {
+    // Regression test: SMTC has no dedicated "this is a live stream" field, unlike
+    // macOS's MediaRemote — deriving isStream from "no duration reported" used to
+    // misclassify an ordinary track (queried before TimelineProperties populates) as
+    // a stream. Duration-unknown and is-a-stream are two distinct concepts.
+    const track = mapPayloadToTrackInfo({ title: "Some Song", sourceAppUserModelId: "App.exe" });
 
     expect(track?.durationSec).toBeUndefined();
-    expect(track?.isStream).toBe(true);
+    expect(track?.isStream).toBe(false);
   });
 
-  it("omits durationSec and marks isStream when durationSec is zero or negative", () => {
+  it("omits durationSec when zero or negative, without inferring isStream from it", () => {
     const track = mapPayloadToTrackInfo({
-      title: "Live Radio",
+      title: "Some Song",
       sourceAppUserModelId: "App.exe",
       durationSec: 0,
     });
 
     expect(track?.durationSec).toBeUndefined();
-    expect(track?.isStream).toBe(true);
+    expect(track?.isStream).toBe(false);
   });
 
   it("marks isStream false when a positive durationSec is present", () => {

@@ -14,6 +14,14 @@ export interface SpawnSmtcHelperOptions {
   readonly onEvent: (payload: NowPlayingPayload | null) => void;
   readonly onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
   readonly onStderr?: (line: string) => void;
+  /** Called when the process itself fails to spawn (missing/misplaced exe, wrong
+   * architecture, blocked by AV, etc). Without a listener here, Node's `ChildProcess`
+   * — an `EventEmitter` — throws on an unhandled `'error'` event by default, which
+   * crashes the entire host (Electron main) process; this is the one lifecycle event
+   * this helper has never actually been run/tested against in this sandbox (no
+   * Windows toolchain available), making it the single highest-risk gap to leave
+   * unhandled. */
+  readonly onError?: (error: unknown) => void;
   /** Injectable for testing; defaults to `node:child_process`'s `spawn`. */
   readonly spawnImpl?: typeof nodeSpawn;
 }
@@ -30,6 +38,15 @@ export function spawnSmtcHelper(options: SpawnSmtcHelperOptions): SmtcHelperHand
   const child = spawnImpl(options.helperPath, [], {
     stdio: ["ignore", "pipe", "pipe"],
   }) as ChildProcess;
+
+  // Always attach a listener, even with no `onError` given, so a spawn failure never
+  // crashes the host process by falling through to EventEmitter's unhandled-'error'
+  // default (see the option's own docstring above for why this matters here
+  // specifically). Mirrors `packages/adapter-macos`'s equivalent `child.on("error", ...)`.
+  const onError = options.onError;
+  child.on("error", (error: unknown) => {
+    onError?.(error);
+  });
 
   if (child.stdout) {
     const stdoutLines = createInterface({ input: child.stdout });

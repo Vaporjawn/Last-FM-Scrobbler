@@ -1,22 +1,12 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { AdapterWindowsPackageRootNotFoundError } from "./adapter-windows-package-root-not-found-error.js";
 
 export interface ResolvedHelperPath {
   /** Absolute path to the (possibly not-yet-built) SmtcHelper.exe. */
   readonly helperPath: string;
   /** Whether `helperPath` currently exists on disk. */
   readonly helperBuilt: boolean;
-}
-
-export class AdapterWindowsPackageRootNotFoundError extends Error {
-  constructor(startDir: string) {
-    super(
-      `Could not locate the @lastfm-scrobbler/adapter-windows package root by walking up ` +
-        `from "${startDir}" (expected to find a package.json). If this path looks right, ` +
-        `the package layout may have changed.`,
-    );
-    this.name = "AdapterWindowsPackageRootNotFoundError";
-  }
 }
 
 /** Walks upward from `startDir` until a directory containing a package.json is found. */

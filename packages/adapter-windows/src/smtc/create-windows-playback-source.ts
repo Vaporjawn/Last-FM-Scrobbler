@@ -10,19 +10,9 @@ import type {
 import { mapPayloadToTrackInfo } from "./map-payload-to-track-info.js";
 import { mapPayloadToPlaybackState } from "./map-payload-to-playback-state.js";
 import { resolveHelperPath, type ResolvedHelperPath } from "./resolve-helper-path.js";
+import { SmtcHelperNotBuiltError } from "./smtc-helper-not-built-error.js";
 import { spawnSmtcHelper, type SmtcHelperHandle } from "./spawn-smtc-helper.js";
 import type { NowPlayingPayload } from "./now-playing-payload.js";
-
-export class SmtcHelperNotBuiltError extends Error {
-  constructor(helperPath: string) {
-    super(
-      `SmtcHelper.exe has not been built yet (expected at "${helperPath}"). Run ` +
-        `"pnpm --filter @lastfm-scrobbler/adapter-windows build:native" (Windows + the ` +
-        `.NET 8 SDK required) before starting the Windows adapter.`,
-    );
-    this.name = "SmtcHelperNotBuiltError";
-  }
-}
 
 export interface CreateWindowsPlaybackSourceOptions {
   /** Injectable for testing; defaults to `node:child_process`'s `spawn`. */
@@ -30,6 +20,27 @@ export interface CreateWindowsPlaybackSourceOptions {
   /** Injectable for testing; defaults to the real filesystem-based resolver. */
   readonly resolveHelperPathImpl?: (startDir: string) => ResolvedHelperPath;
   readonly onStderr?: (line: string) => void;
+  /** Called when the helper process fails to spawn or exits unexpectedly — see
+   * `spawnSmtcHelper`'s `onError` docstring. */
+  readonly onError?: (error: unknown) => void;
+}
+
+function trackInfoEqual(a: TrackInfo | undefined, b: TrackInfo | undefined): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.title === b.title &&
+    a.artist === b.artist &&
+    a.album === b.album &&
+    a.albumArtist === b.albumArtist &&
+    a.durationSec === b.durationSec &&
+    a.sourceApp === b.sourceApp &&
+    a.isStream === b.isStream
+  );
 }
 
 /**
@@ -58,13 +69,24 @@ export function createWindowsPlaybackSource(
   const stateListeners = new Set<(state: PlaybackState) => void>();
   let latestPayload: NowPlayingPayload | null = null;
   let helperHandle: SmtcHelperHandle | undefined;
+  let lastEmittedTrack: TrackInfo | undefined;
+  let lastEmittedState: PlaybackState | undefined;
 
   function handleEvent(payload: NowPlayingPayload | null): void {
     latestPayload = payload;
 
+    // SMTC fires `TimelinePropertiesChanged` on ordinary playback-position ticks
+    // (roughly once/sec for most players), not just on genuine track/state changes —
+    // unlike this adapter, both siblings (macOS/MediaRemote, Linux/MPRIS) already
+    // dedupe before notifying listeners. Without this, a single 4-minute song used to
+    // fire `onTrackChanged` ~240 times and `onPlaybackStateChanged` "playing"
+    // repeatedly with no real change, spamming any consumer that treats either event
+    // as "something actually changed" (a Last.fm now-playing update, a scrobble-
+    // eligibility timer reset).
     if (payload) {
       const track = mapPayloadToTrackInfo(payload);
-      if (track) {
+      if (track && !trackInfoEqual(track, lastEmittedTrack)) {
+        lastEmittedTrack = track;
         for (const listener of trackListeners) {
           listener(track);
         }
@@ -72,8 +94,11 @@ export function createWindowsPlaybackSource(
     }
 
     const state = payload ? mapPayloadToPlaybackState(payload) : "stopped";
-    for (const listener of stateListeners) {
-      listener(state);
+    if (state !== lastEmittedState) {
+      lastEmittedState = state;
+      for (const listener of stateListeners) {
+        listener(state);
+      }
     }
   }
 
@@ -88,18 +113,40 @@ export function createWindowsPlaybackSource(
       throw new SmtcHelperNotBuiltError(helperPath);
     }
 
-    helperHandle = spawnSmtcHelper({
+    // Captured by reference in `onExit` below (rather than reading the outer
+    // `helperHandle` variable directly) so a *stale* exit notification — the old
+    // process's `exit` event finally firing after a stop-then-immediate-restart has
+    // already assigned a new handle — can't clobber the new, still-live handle.
+    const handle: SmtcHelperHandle = spawnSmtcHelper({
       helperPath,
       onEvent: handleEvent,
+      // If the helper process crashes or is externally killed after successfully
+      // starting, clear `helperHandle` so a later `ensureStarted()` call (the next
+      // subscription, or a caller that notices playback has gone stale and re-
+      // subscribes) can actually respawn it — without this, `helperHandle` stayed
+      // truthy forever and the adapter was permanently stuck reporting the last-known
+      // (stale) track/state with nothing logged or surfaced anywhere.
+      onExit: () => {
+        if (helperHandle === handle) {
+          helperHandle = undefined;
+        }
+      },
       ...(options.spawnImpl ? { spawnImpl: options.spawnImpl } : {}),
       ...(options.onStderr ? { onStderr: options.onStderr } : {}),
+      ...(options.onError ? { onError: options.onError } : {}),
     });
+    helperHandle = handle;
   }
 
   function stopIfNoSubscribers(): void {
     if (trackListeners.size === 0 && stateListeners.size === 0) {
       helperHandle?.stop();
       helperHandle = undefined;
+      // Clear the dedup baseline too, so a later restart doesn't skip re-emitting the
+      // first track/state it sees just because it happens to match whatever was last
+      // reported before the previous stop.
+      lastEmittedTrack = undefined;
+      lastEmittedState = undefined;
     }
   }
 

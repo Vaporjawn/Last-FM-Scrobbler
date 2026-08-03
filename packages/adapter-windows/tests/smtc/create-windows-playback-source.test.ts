@@ -1,10 +1,8 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import {
-  createWindowsPlaybackSource,
-  SmtcHelperNotBuiltError,
-} from "../../src/smtc/create-windows-playback-source.js";
+import { createWindowsPlaybackSource } from "../../src/smtc/create-windows-playback-source.js";
+import { SmtcHelperNotBuiltError } from "../../src/smtc/smtc-helper-not-built-error.js";
 
 function createFakeChild() {
   const child = new EventEmitter() as EventEmitter & {
@@ -191,6 +189,119 @@ describe("createWindowsPlaybackSource", () => {
     const unsubscribe = source.onTrackChanged(() => undefined);
     unsubscribe();
     source.onTrackChanged(() => undefined);
+
+    expect(spawnImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not re-notify listeners for consecutive payload lines reporting the same track/state", async () => {
+    // Regression test: SMTC fires TimelinePropertiesChanged on ordinary playback-
+    // position ticks (~1/sec), not just on genuine track/state changes — a single
+    // payload line for the same track used to fire onTrackChanged/
+    // onPlaybackStateChanged every time, spamming any consumer that treats either
+    // event as "something actually changed."
+    const fakeChild = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValue(fakeChild);
+    const source = createWindowsPlaybackSource({
+      resolveHelperPathImpl: fakeResolveHelperPath(true),
+      spawnImpl,
+    });
+
+    const tracks: unknown[] = [];
+    const states: unknown[] = [];
+    source.onTrackChanged((t) => tracks.push(t));
+    source.onPlaybackStateChanged((s) => states.push(s));
+
+    const payload = {
+      title: "Windowlicker",
+      artist: "Aphex Twin",
+      durationSec: 320,
+      playbackStatus: "Playing",
+      sourceAppUserModelId: "Spotify.exe",
+    };
+    // Same track/state reported three times in a row, as a position-tick update would.
+    writeLine(fakeChild, { ...payload, elapsedSec: 10 });
+    writeLine(fakeChild, { ...payload, elapsedSec: 11 });
+    writeLine(fakeChild, { ...payload, elapsedSec: 12 });
+    await flush();
+
+    expect(tracks).toHaveLength(1);
+    expect(states).toEqual(["playing"]);
+  });
+
+  it("does still re-notify onTrackChanged when the track genuinely changes", async () => {
+    const fakeChild = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValue(fakeChild);
+    const source = createWindowsPlaybackSource({
+      resolveHelperPathImpl: fakeResolveHelperPath(true),
+      spawnImpl,
+    });
+
+    const tracks: unknown[] = [];
+    source.onTrackChanged((t) => tracks.push(t));
+
+    writeLine(fakeChild, {
+      title: "Windowlicker",
+      sourceAppUserModelId: "Spotify.exe",
+      playbackStatus: "Playing",
+    });
+    writeLine(fakeChild, {
+      title: "Come to Daddy",
+      sourceAppUserModelId: "Spotify.exe",
+      playbackStatus: "Playing",
+    });
+    await flush();
+
+    expect(tracks).toHaveLength(2);
+  });
+
+  it("surfaces a spawn failure via onError instead of throwing unhandled", () => {
+    // Regression test: without a child.on("error", ...) listener, Node's ChildProcess
+    // (an EventEmitter) throws on an unhandled 'error' event by default, crashing the
+    // host process. This is the one lifecycle event the SMTC helper has never actually
+    // been run against anywhere (no Windows toolchain in this sandbox).
+    const fakeChild = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValue(fakeChild);
+    const onError = vi.fn();
+    const source = createWindowsPlaybackSource({
+      resolveHelperPathImpl: fakeResolveHelperPath(true),
+      spawnImpl,
+      onError,
+    });
+
+    source.onTrackChanged(() => undefined);
+    const spawnError = new Error("spawn ENOENT");
+
+    expect(() => {
+      fakeChild.emit("error", spawnError);
+    }).not.toThrow();
+    expect(onError).toHaveBeenCalledWith(spawnError);
+  });
+
+  it("respawns after the helper process exits unexpectedly, without requiring an unsubscribe/resubscribe", () => {
+    // Regression test: ensureStarted() used to never wire onExit, so a crashed/killed
+    // helper left helperHandle truthy forever — the adapter was permanently stuck
+    // reporting stale state, since a later subscription's ensureStarted() call was a
+    // silent no-op.
+    const firstChild = createFakeChild();
+    const secondChild = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValueOnce(firstChild).mockReturnValueOnce(secondChild);
+    const source = createWindowsPlaybackSource({
+      resolveHelperPathImpl: fakeResolveHelperPath(true),
+      spawnImpl,
+    });
+
+    source.onTrackChanged(() => undefined);
+    expect(spawnImpl).toHaveBeenCalledTimes(1);
+
+    // The helper crashes on its own — not via unsubscribe, so helperHandle isn't
+    // cleared by stopIfNoSubscribers().
+    firstChild.emit("exit", 1, null);
+
+    // A still-subscribed caller has no way to know the process died; the adapter
+    // itself should notice on the next event-producing opportunity. Simulate the
+    // subscription layer asking for a fresh start the way `ensureStarted()` is
+    // exercised elsewhere in this suite (a new subscription).
+    source.onPlaybackStateChanged(() => undefined);
 
     expect(spawnImpl).toHaveBeenCalledTimes(2);
   });

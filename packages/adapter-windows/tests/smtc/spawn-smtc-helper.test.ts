@@ -73,6 +73,42 @@ describe("spawnSmtcHelper", () => {
     expect(onExit).toHaveBeenCalledWith(1, null);
   });
 
+  it("forwards a spawn/runtime error via onError instead of leaving it unhandled", () => {
+    // Regression test: without an attached 'error' listener, Node's ChildProcess
+    // throws by default on an unhandled 'error' event, crashing the host process.
+    const fakeChild = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValue(fakeChild);
+    const onError = vi.fn();
+
+    spawnSmtcHelper({
+      helperPath: "C:\\SmtcHelper.exe",
+      onEvent: () => undefined,
+      onError,
+      spawnImpl,
+    });
+
+    const error = new Error("spawn ENOENT");
+    expect(() => {
+      fakeChild.emit("error", error);
+    }).not.toThrow();
+    expect(onError).toHaveBeenCalledWith(error);
+  });
+
+  it("never throws on an unhandled 'error' event even with no onError given", () => {
+    const fakeChild = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValue(fakeChild);
+
+    spawnSmtcHelper({
+      helperPath: "C:\\SmtcHelper.exe",
+      onEvent: () => undefined,
+      spawnImpl,
+    });
+
+    expect(() => {
+      fakeChild.emit("error", new Error("spawn ENOENT"));
+    }).not.toThrow();
+  });
+
   it("stop() kills the child process", () => {
     const fakeChild = createFakeChild();
     const spawnImpl = vi.fn().mockReturnValue(fakeChild);
