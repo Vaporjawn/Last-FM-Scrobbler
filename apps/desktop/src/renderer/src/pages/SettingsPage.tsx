@@ -13,6 +13,7 @@ import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
+import Divider from "@mui/material/Divider";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import InputAdornment from "@mui/material/InputAdornment";
 import Link from "@mui/material/Link";
@@ -994,33 +995,45 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   }
                 />
               ) : librefmIsConfigured ? (
-                <Box sx={{ py: 1.25, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-                    Libre.fm
-                  </Typography>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={handleLibrefmLoginOnly}
-                      disabled={librefmIsLoggingIn}
-                    >
-                      {librefmIsLoggingIn ? "Waiting for approval on Libre.fm…" : "Log in with Libre.fm"}
-                    </Button>
-                    {librefmCredentialsSource === "user-supplied" ? (
+                // A compact label + button-row control — the exact shape
+                // `SettingsRow` (see line ~987's "already connected" branch above, and
+                // the account rows above that) exists for, unlike the bring-your-own-
+                // key form just below, which stays its own free-form `Box` (see that
+                // branch's own comment for why).
+                <SettingsRow
+                  label="Libre.fm"
+                  control={
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                       <Button
                         size="small"
                         variant="outlined"
-                        color="inherit"
-                        onClick={handleLibrefmClearCredentials}
+                        onClick={handleLibrefmLoginOnly}
+                        disabled={librefmIsLoggingIn}
                       >
-                        Remove saved key
+                        {librefmIsLoggingIn ? "Waiting for approval on Libre.fm…" : "Log in with Libre.fm"}
                       </Button>
-                    ) : null}
-                  </Stack>
-                </Box>
+                      {librefmCredentialsSource === "user-supplied" ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="inherit"
+                          onClick={handleLibrefmClearCredentials}
+                        >
+                          Remove saved key
+                        </Button>
+                      ) : null}
+                    </Stack>
+                  }
+                />
               ) : (
-                <Box sx={{ py: 1.25, borderBottom: 1, borderColor: "divider" }}>
+                // Deliberately not a `SettingsRow` like the two branches above/below
+                // it: this is a two-field form plus a submit button, not a single
+                // compact control — squeezed into `SettingsRow`'s label-left/
+                // control-right row it would either overflow narrow widths or read as
+                // oddly cramped next to a one-word "Libre.fm" label. Keeps its own
+                // vertical layout, but a real `Divider` (matching every other section
+                // boundary on this page) instead of a manually-styled `borderBottom`.
+                <Box sx={{ py: 1.25 }}>
                   <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                     Libre.fm
                   </Typography>
@@ -1071,6 +1084,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                         ? "Saving…"
                         : "Connect to Libre.fm"}
                   </Button>
+                  <Divider sx={{ mt: 1.25 }} />
                 </Box>
               )}
 

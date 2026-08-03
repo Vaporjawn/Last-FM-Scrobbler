@@ -132,8 +132,6 @@ export function NowPlayingPage(): JSX.Element {
           alignItems: "center",
           px: 3,
           py: 1.5,
-          borderBottom: 1,
-          borderColor: "divider",
         }}
       >
         <Avatar sx={{ width: 32, height: 32, bgcolor: "action.selected", color: "text.secondary" }}>
@@ -148,6 +146,7 @@ export function NowPlayingPage(): JSX.Element {
           </Typography>
         </Box>
       </Stack>
+      <Divider />
 
       <Box sx={{ p: 4 }}>
         <PageHeader

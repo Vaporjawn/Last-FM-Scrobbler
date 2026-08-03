@@ -111,8 +111,6 @@ export function ScrobbleDetailPage({
           justifyContent: "space-between",
           px: 3,
           py: 1.5,
-          borderBottom: 1,
-          borderColor: "divider",
         }}
       >
         <Button
@@ -125,6 +123,7 @@ export function ScrobbleDetailPage({
         </Button>
         <RefreshButton onRefresh={refetchAll} refreshing={refreshing} label="Refresh track info" />
       </Stack>
+      <Divider />
 
       <Box sx={{ p: 4 }}>
         {/* `md` rather than MUI's usual `sm` here on purpose: this breakpoint reacts to
