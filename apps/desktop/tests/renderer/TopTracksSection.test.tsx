@@ -84,4 +84,20 @@ describe("TopTracksSection", () => {
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
   });
+
+  it("doesn't pluralize a single play", async () => {
+    installFakeArtistImageApi();
+
+    render(
+      <TopTracksSection
+        title="Top Tracks"
+        tracks={[{ name: "Windowlicker", artist: "Aphex Twin", playCount: 1 }]}
+        loading={false}
+        error={undefined}
+        emptyMessage="No scrobbles yet."
+      />,
+    );
+
+    expect(await screen.findByText("Aphex Twin — 1 play")).toBeInTheDocument();
+  });
 });

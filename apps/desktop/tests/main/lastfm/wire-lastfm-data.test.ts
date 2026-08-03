@@ -67,6 +67,15 @@ describe("wireLastfmData", () => {
     expect(client.getRecentTracks).toHaveBeenCalledWith({ user: "alice", limit: 10, page: 2 });
   });
 
+  it("getRecentTracks omits limit/page entirely when neither is given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice");
+
+    expect(client.getRecentTracks).toHaveBeenCalledWith({ user: "alice" });
+  });
+
   it("getTopArtists forwards user/limit and returns the client's result", async () => {
     const client = fakeClient();
     wireLastfmData({ client });
@@ -84,6 +93,15 @@ describe("wireLastfmData", () => {
     await invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice", 5, "7day");
 
     expect(client.getTopArtists).toHaveBeenCalledWith({ user: "alice", limit: 5, period: "7day" });
+  });
+
+  it("getTopArtists omits limit entirely when not given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice");
+
+    expect(client.getTopArtists).toHaveBeenCalledWith({ user: "alice" });
   });
 
   it("getTopTracks forwards user/limit and returns the client's result", async () => {
@@ -105,6 +123,15 @@ describe("wireLastfmData", () => {
     expect(client.getTopTracks).toHaveBeenCalledWith({ user: "alice", limit: 5, period: "7day" });
   });
 
+  it("getTopTracks omits limit entirely when not given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice");
+
+    expect(client.getTopTracks).toHaveBeenCalledWith({ user: "alice" });
+  });
+
   it("getTopAlbums forwards user/limit and returns the client's result", async () => {
     const client = fakeClient();
     wireLastfmData({ client });
@@ -122,6 +149,15 @@ describe("wireLastfmData", () => {
     await invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice", 5, "7day");
 
     expect(client.getTopAlbums).toHaveBeenCalledWith({ user: "alice", limit: 5, period: "7day" });
+  });
+
+  it("getTopAlbums omits limit entirely when not given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice");
+
+    expect(client.getTopAlbums).toHaveBeenCalledWith({ user: "alice" });
   });
 
   it("getFriends forwards user and returns the client's result", async () => {
@@ -162,6 +198,15 @@ describe("wireLastfmData", () => {
 
     expect(client.getSimilarArtists).toHaveBeenCalledWith({ artist: "Aphex Twin", limit: 4 });
     expect(result).toEqual([{ name: "B", match: 0.9 }]);
+  });
+
+  it("getSimilarArtists omits limit entirely when not given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "Aphex Twin");
+
+    expect(client.getSimilarArtists).toHaveBeenCalledWith({ artist: "Aphex Twin" });
   });
 
   it("getArtistInfo forwards a username when given, for personal stats", async () => {

@@ -336,5 +336,34 @@ describe("wireNowPlaying", () => {
 
       expect(getPosition).not.toHaveBeenCalled();
     });
+
+    it("doesn't crash the tick loop when getPosition rejects", async () => {
+      // Defensive-only path — every current adapter's getPosition() already never
+      // rejects (see wireNowPlaying's own comment on this catch), but the tick
+      // interval itself must keep running (and the scrobble tracker with it) even if
+      // a future/misbehaving adapter's getPosition() ever did.
+      vi.useFakeTimers();
+      const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+      source.getPosition = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("transient error"))
+        .mockResolvedValue(7);
+      const mainWindow = createFakeWindow();
+
+      const stop = wireNowPlaying(source, mainWindow as never);
+      emitTrackChanged(TRACK);
+      emitPlaybackStateChanged("playing");
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // The second tick's successful position still reaches the renderer — one
+      // rejected poll doesn't permanently break the interval.
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith(
+        IPC_CHANNELS.nowPlayingPositionChanged,
+        7,
+      );
+      stop();
+    });
   });
 });

@@ -83,6 +83,22 @@ describe("TopAlbumsSection", () => {
     expect(screen.getByText("2")).toBeInTheDocument();
   });
 
+  it("doesn't pluralize a single play in list view", () => {
+    render(
+      <TopAlbumsSection
+        title="Top Albums"
+        albums={[{ name: "In Rainbows", artist: "Radiohead", playCount: 1 }]}
+        loading={false}
+        error={undefined}
+        viewMode="list"
+        onViewModeChange={vi.fn()}
+        emptyMessage="No scrobbles yet."
+      />,
+    );
+
+    expect(screen.getByText("Radiohead — 1 play")).toBeInTheDocument();
+  });
+
   it("renders tiles instead of list rows when viewMode is 'tiles'", () => {
     render(
       <TopAlbumsSection
