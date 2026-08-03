@@ -77,20 +77,39 @@ export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JS
         </>
       )}
 
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", ml: 1, mr: onSelect ? 2 : 0, flexShrink: 0 }}>
-        <TrackLoveTagControls
-          artist={track.artist}
-          track={track.track}
-          initialLoved={track.loved}
-          trackLabel={track.track}
-          tagPopoverAnchorHorizontal="right"
-        />
+      {/* Love/tag stacked above the timestamp chip, both right-aligned, and the whole
+          block pinned to the row's top-right corner (`alignSelf: "flex-start"`
+          overrides ListItem's own vertical centering) rather than vertically centered
+          against it — this row's title/artist text can wrap to two or three lines
+          (long titles, long artist — album combos), so centering this block against
+          that variable height put it at a different vertical position row to row.
+          Anchoring it to a fixed corner instead keeps it in the same place regardless
+          of how tall any given row's text ends up being. */}
+      <Stack
+        spacing={0.5}
+        sx={{
+          alignItems: "flex-end",
+          alignSelf: "flex-start",
+          ml: 1,
+          mr: onSelect ? 2 : 0,
+          mt: 1,
+          flexShrink: 0,
+        }}
+      >
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
+          <TrackLoveTagControls
+            artist={track.artist}
+            track={track.track}
+            initialLoved={track.loved}
+            trackLabel={track.track}
+            tagPopoverAnchorHorizontal="right"
+          />
+        </Stack>
 
         <PlaybackStatusChip
           nowPlaying={track.nowPlaying}
           timestamp={track.timestamp}
           nowPlayingLabel="Now Playing"
-          sx={{ ml: 1 }}
         />
       </Stack>
     </ListItem>
