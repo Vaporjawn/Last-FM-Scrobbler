@@ -14,6 +14,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
+import { PlaybackStatusChip } from "../components/shared/PlaybackStatusChip.js";
 import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { TrackLoveTagControls } from "../components/shared/TrackLoveTagControls.js";
 import { useArtistInfo } from "../hooks/use-artist-info.js";
@@ -158,6 +159,12 @@ export function ScrobbleDetailPage({
             <Typography variant="h6" color="text.secondary" gutterBottom>
               by {track.artist}
             </Typography>
+
+            <PlaybackStatusChip
+              nowPlaying={track.nowPlaying}
+              timestamp={track.timestamp}
+              nowPlayingLabel="Now Playing"
+            />
 
             <Stack direction="row" spacing={0.5} sx={{ my: 1 }}>
               <TrackLoveTagControls artist={track.artist} track={track.track} initialLoved={track.loved} />

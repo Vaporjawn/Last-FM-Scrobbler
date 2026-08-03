@@ -86,6 +86,29 @@ describe("ScrobbleDetailPage", () => {
     expect(screen.getByText(/from voyager/i)).toBeInTheDocument();
   });
 
+  describe("playback status", () => {
+    it("shows when the track was scrobbled as the shared PlaybackStatusChip", () => {
+      installFakeLastfmApi();
+
+      renderWithSnackbar();
+
+      expect(
+        screen.getByText(new Date(1_700_000_000 * 1000).toLocaleString()),
+      ).toBeInTheDocument();
+    });
+
+    it("shows a 'Now Playing' status chip instead of a timestamp for the currently-playing track", () => {
+      installFakeLastfmApi();
+
+      renderWithSnackbar({ track: { ...TRACK, nowPlaying: true } });
+
+      expect(screen.getByText("Now Playing")).toBeInTheDocument();
+      expect(
+        screen.queryByText(new Date(1_700_000_000 * 1000).toLocaleString()),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("calls onBack when 'Back to Scrobbles' is clicked", () => {
     installFakeLastfmApi();
     const onBack = vi.fn();

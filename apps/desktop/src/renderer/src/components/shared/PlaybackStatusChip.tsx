@@ -28,6 +28,13 @@ export interface PlaybackStatusChipProps {
  * byte-for-byte identically apart from the label. Unified into one chip-shaped
  * element for both states, and pulled out here since both rows need the exact same
  * choice between them.
+ *
+ * `role="status"` on the `nowPlaying` chip specifically (not the timestamp one — a
+ * static "when this happened" fact isn't a live status update ARIA's `status` role is
+ * for) means assistive tech announces it the moment a row's live state changes,
+ * without the caller needing its own wrapping element for that — `FriendListItem`'s
+ * activity card used to hand-roll exactly this (a `role="status"` `Box` around a bare
+ * `ScrobblingIndicator`) before it adopted this shared chip instead.
  */
 export function PlaybackStatusChip({
   nowPlaying,
@@ -37,7 +44,15 @@ export function PlaybackStatusChip({
 }: PlaybackStatusChipProps): JSX.Element | null {
   if (nowPlaying) {
     return (
-      <Chip icon={<ScrobblingIndicator />} label={nowPlayingLabel} size="small" color="primary" sx={sx} />
+      <Chip
+        role="status"
+        aria-label={nowPlayingLabel}
+        icon={<ScrobblingIndicator />}
+        label={nowPlayingLabel}
+        size="small"
+        color="primary"
+        sx={sx}
+      />
     );
   }
   if (timestamp !== undefined) {

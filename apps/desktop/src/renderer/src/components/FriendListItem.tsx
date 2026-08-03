@@ -8,9 +8,9 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { Friend, RecentTrack } from "@lastfm-scrobbler/core";
-import type { FriendActivityState } from "../hooks/use-friends-activity.js";
+import type { FriendActivityState } from "../hooks/friend-activity-state.js";
 import { formatRealNameAndLocation } from "../utils/format-real-name-and-location.js";
-import { ScrobblingIndicator } from "./ScrobblingIndicator.js";
+import { PlaybackStatusChip } from "./shared/PlaybackStatusChip.js";
 import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
 
 /** Both halves of the card share one avatar size — deliberately equal, not the
@@ -32,10 +32,6 @@ const AVATAR_SIZE = 48;
  * can't quite promise. Exported so `FriendsPage` and this file can't drift out of
  * sync on the value. */
 export const FRIEND_COLUMN_WIDTH = 190;
-
-function formatTimestamp(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
-}
 
 export interface FriendListItemProps {
   readonly friend: Friend;
@@ -76,11 +72,9 @@ export interface FriendListItemProps {
  * itself — on the right, when there is any: real album art (`track.imageUrl`, the same
  * real-image field `ScrobbleListItem` already renders for scrobble history, falling
  * back to a note/play icon the same way) plus the track title and, on the line below
- * it, the artist and either a live equalizer indicator (`ScrobblingIndicator`, while
- * `track.nowPlaying`) or when it was last scrobbled — deliberately not the padded
- * `PlaybackStatusChip` pill `ScrobbleListItem` uses: with two avatar-and-text blocks
- * already sharing one row, a full chip left almost no width for the track title
- * itself, forcing it onto its own cramped, heavily-truncated line under the chip.
+ * it, the artist and the same `PlaybackStatusChip` pill `ScrobbleListItem` uses for
+ * "Now Playing"/when it was last scrobbled — the app-wide standard for that fact
+ * everywhere it appears, not a bespoke text-only rendering local to this component.
  * The two halves are independently clickable: the avatar/name half through to the
  * friend's own `ProfilePage` when `onSelectFriend` is given, the activity half through
  * to that track's `ScrobbleDetailPage` when `onSelectTrack` is given — since the two
@@ -236,23 +230,25 @@ export function FriendListItem({
               >
                 {track.track}
               </Typography>
-              <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", minWidth: 0 }}>
-                {track.nowPlaying ? (
-                  <Box
-                    role="status"
-                    aria-label="Scrobbling now"
-                    sx={{ color: "primary.main", display: "inline-flex" }}
-                  >
-                    <ScrobblingIndicator size={11} />
-                  </Box>
-                ) : null}
-                <Typography variant="caption" color="text.secondary" noWrap>
-                  {track.nowPlaying
-                    ? track.artist
-                    : track.timestamp !== undefined
-                      ? `${track.artist} · ${formatTimestamp(track.timestamp)}`
-                      : track.artist}
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
+                {/* The artist name truncates first (minWidth: 0) if space is tight —
+                    the chip's own content (a live "Scrobbling now" or a specific
+                    timestamp) is the more load-bearing of the two here, so it keeps
+                    its full width rather than being squeezed by a long artist name. */}
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  noWrap
+                  sx={{ minWidth: 0 }}
+                >
+                  {track.artist}
                 </Typography>
+                <PlaybackStatusChip
+                  nowPlaying={track.nowPlaying}
+                  timestamp={track.timestamp}
+                  nowPlayingLabel="Scrobbling now"
+                  sx={{ flexShrink: 0 }}
+                />
               </Stack>
             </Box>
           </Box>
