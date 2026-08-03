@@ -2,14 +2,10 @@ import { useState, type JSX } from "react";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import LibraryMusicIcon from "@mui/icons-material/LibraryMusic";
-import PeopleIcon from "@mui/icons-material/People";
-import PersonIcon from "@mui/icons-material/Person";
-import PlayCircleIcon from "@mui/icons-material/PlayCircle";
-import SettingsIcon from "@mui/icons-material/Settings";
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
+import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -17,35 +13,7 @@ import ListItemText from "@mui/material/ListItemText";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-
-export type ViewId = "now-playing" | "scrobbles" | "profile" | "friends" | "settings";
-
-interface NavItem {
-  readonly id: ViewId;
-  readonly label: string;
-  readonly icon: JSX.Element;
-}
-
-const NAV_ITEMS: readonly NavItem[] = [
-  { id: "now-playing", label: "Now Playing", icon: <PlayCircleIcon /> },
-  { id: "scrobbles", label: "Scrobbles", icon: <LibraryMusicIcon /> },
-  { id: "profile", label: "Profile", icon: <PersonIcon /> },
-  { id: "friends", label: "Friends", icon: <PeopleIcon /> },
-];
-
-const SETTINGS_ITEM: NavItem = {
-  id: "settings",
-  label: "Settings",
-  icon: <SettingsIcon />,
-};
-
-/** The sidebar's own display label for a view — exported so `App.tsx` can build a
- * context-aware "Back to {label}" for `ScrobbleDetailPage` (reachable from more than
- * one view's list now — see `PageProps.onSelectScrobble`) without a second, separately
- * maintained id-to-label mapping drifting from this one. */
-export function getViewLabel(view: ViewId): string {
-  return view === "settings" ? SETTINGS_ITEM.label : (NAV_ITEMS.find((item) => item.id === view)?.label ?? view);
-}
+import { NAV_ITEMS, SETTINGS_ITEM, type NavItem, type ViewId } from "./nav-items.js";
 
 const WIDTH_EXPANDED = 200;
 const WIDTH_COLLAPSED = 64;
@@ -172,6 +140,53 @@ function ReportBugButton({
   );
 }
 
+/** The collapse toggle used to be its own full-width row in the bottom `List`,
+ * visually indistinguishable from a real navigation destination (same icon+label
+ * treatment as Settings/Report a Bug) even though it isn't one. Floating it on the
+ * sidebar's own trailing edge instead — half in, half out, vertically centered — is
+ * the same pattern VS Code/Notion/Slack use for a collapsible sidebar: it reads
+ * immediately as "a control for the sidebar itself," stays in one predictable spot
+ * regardless of how many nav items or how much scrolling is above it, and doesn't
+ * compete for space in an already-narrow expanded width (200px) that this app's
+ * default *vertical* window makes even more precious than before. */
+function CollapseToggle({
+  collapsed,
+  onClick,
+}: {
+  readonly collapsed: boolean;
+  readonly onClick: () => void;
+}): JSX.Element {
+  const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  return (
+    <Tooltip title={label} placement="right">
+      <IconButton
+        onClick={onClick}
+        aria-label={label}
+        size="small"
+        sx={{
+          position: "absolute",
+          top: "50%",
+          right: -12,
+          transform: "translateY(-50%)",
+          width: 24,
+          height: 24,
+          bgcolor: "background.paper",
+          border: 1,
+          borderColor: "divider",
+          boxShadow: 2,
+          "&:hover": { bgcolor: "action.hover" },
+        }}
+      >
+        {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
+      </IconButton>
+    </Tooltip>
+  );
+}
+
+/** The app's persistent left-hand navigation chrome: an icon+label list of every
+ * `ViewId` destination, a pinned Settings/Report-a-Bug section beneath a divider, and a
+ * floating collapse toggle (see `CollapseToggle`) that shrinks the whole drawer to
+ * icon-only. */
 export function NavigationSidebar({
   activeView,
   onSelectView,
@@ -190,7 +205,13 @@ export function NavigationSidebar({
         "& .MuiDrawer-paper": {
           width,
           boxSizing: "border-box",
-          overflowX: "hidden",
+          // `visible`, not `hidden`: the toggle below intentionally sits half outside
+          // this paper's own right edge, and `overflow: hidden` would clip it. Nothing
+          // here actually overflows otherwise — collapsed labels are omitted outright
+          // (see SidebarButton/SidebarHeader), not just visually hidden past an edge —
+          // so there's no longer anything for `hidden` to have been protecting against.
+          overflow: "visible",
+          position: "relative",
           transition: (theme) => theme.transitions.create("width"),
         },
       }}
@@ -220,22 +241,14 @@ export function NavigationSidebar({
             onSelectView(SETTINGS_ITEM.id);
           }}
         />
-        {onReportBug ? (
-          <ReportBugButton collapsed={collapsed} onClick={onReportBug} />
-        ) : null}
-        <ListItemButton
-          onClick={() => {
-            setCollapsed((previous) => !previous);
-          }}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          sx={{ justifyContent: collapsed ? "center" : "flex-start", px: collapsed ? 2 : 3 }}
-        >
-          <ListItemIcon sx={{ minWidth: collapsed ? 0 : undefined, justifyContent: "center" }}>
-            {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-          </ListItemIcon>
-          {collapsed ? null : <ListItemText primary="Collapse" sx={{ ml: 1 }} />}
-        </ListItemButton>
+        {onReportBug ? <ReportBugButton collapsed={collapsed} onClick={onReportBug} /> : null}
       </List>
+      <CollapseToggle
+        collapsed={collapsed}
+        onClick={() => {
+          setCollapsed((previous) => !previous);
+        }}
+      />
     </Drawer>
   );
 }
