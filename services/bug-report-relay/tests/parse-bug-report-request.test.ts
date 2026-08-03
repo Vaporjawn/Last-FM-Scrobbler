@@ -48,4 +48,54 @@ describe("parseBugReportRequest", () => {
       parseBugReportRequest({ title: "x", body: "y", diagnostics: { count: 5 } }),
     ).toThrow("`diagnostics` values must all be strings");
   });
+
+  describe("length limits", () => {
+    it("accepts a title at exactly the limit", () => {
+      const title = "x".repeat(256);
+
+      expect(parseBugReportRequest({ title, body: "y" }).title).toBe(title);
+    });
+
+    it("rejects a title over the limit", () => {
+      const title = "x".repeat(257);
+
+      expect(() => parseBugReportRequest({ title, body: "y" })).toThrow(
+        "`title` must be 256 characters or fewer",
+      );
+    });
+
+    it("accepts a body at exactly the limit", () => {
+      const body = "x".repeat(60_000);
+
+      expect(parseBugReportRequest({ title: "x", body }).body).toBe(body);
+    });
+
+    it("rejects a body over the limit", () => {
+      const body = "x".repeat(60_001);
+
+      expect(() => parseBugReportRequest({ title: "x", body })).toThrow(
+        "`body` must be 60000 characters or fewer",
+      );
+    });
+
+    it("rejects an oversized diagnostics value, naming which key", () => {
+      expect(() =>
+        parseBugReportRequest({
+          title: "x",
+          body: "y",
+          diagnostics: { recentLogs: "x".repeat(10_001) },
+        }),
+      ).toThrow("`diagnostics.recentLogs` must be 10000 characters or fewer");
+    });
+
+    it("rejects too many diagnostics keys", () => {
+      const diagnostics = Object.fromEntries(
+        Array.from({ length: 21 }, (_, index) => [`key${index}`, "value"]),
+      );
+
+      expect(() => parseBugReportRequest({ title: "x", body: "y", diagnostics })).toThrow(
+        "`diagnostics` must have 20 keys or fewer",
+      );
+    });
+  });
 });

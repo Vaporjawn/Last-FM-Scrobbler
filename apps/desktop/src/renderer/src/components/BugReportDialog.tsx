@@ -17,6 +17,16 @@ export interface BugReportDialogProps {
   readonly onClose: () => void;
 }
 
+// Mirrors services/bug-report-relay/src/parse-bug-report-request.ts's own
+// MAX_TITLE_LENGTH/MAX_BODY_LENGTH exactly (that file is the actual source of truth —
+// these two packages don't share a dependency to import the constants from directly).
+// A client-side maxLength doesn't replace the relay's own server-side check — it just
+// stops an over-the-limit submission from happening in the first place, rather than
+// letting someone type/paste a huge report and only find out it's rejected after
+// submitting.
+const MAX_TITLE_LENGTH = 256;
+const MAX_BODY_LENGTH = 60_000;
+
 /**
  * Files a report anonymously as a GitHub issue via `services/bug-report-relay` — no
  * GitHub account needed. See docs/adr/0004-anonymous-bug-report-relay.md.
@@ -73,6 +83,7 @@ export function BugReportDialog({ open, onClose }: BugReportDialogProps): JSX.El
               }}
               fullWidth
               autoFocus
+              slotProps={{ htmlInput: { maxLength: MAX_TITLE_LENGTH } }}
             />
             <TextField
               label="Description"
@@ -84,6 +95,7 @@ export function BugReportDialog({ open, onClose }: BugReportDialogProps): JSX.El
               multiline
               minRows={4}
               helperText="What happened? What did you expect instead? Steps to reproduce, if known."
+              slotProps={{ htmlInput: { maxLength: MAX_BODY_LENGTH } }}
             />
             <Typography variant="caption" color="text.secondary">
               This report is filed anonymously as a public GitHub issue — no account
