@@ -42,6 +42,11 @@ Thumbs.db
 # Playwright MCP scratch output
 .playwright-mcp/
 
+# Playwright test runner output (apps/desktop/e2e/)
+test-results/
+playwright-report/
+blob-report/
+
 # Env
 .env
 .env.local

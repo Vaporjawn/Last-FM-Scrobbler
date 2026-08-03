@@ -9,6 +9,7 @@
     "build": "tsup src/index.ts --format esm --dts --out-dir dist",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests"
   },
