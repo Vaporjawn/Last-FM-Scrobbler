@@ -1,4 +1,4 @@
-import { useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import BugReportIcon from "@mui/icons-material/BugReport";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -13,6 +13,8 @@ import ListItemText from "@mui/material/ListItemText";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import { isPortraitAspectRatio } from "../../../shared/settings-api.js";
+import { useSettings } from "../contexts/settings-context.js";
 import { NAV_ITEMS, SETTINGS_ITEM, type NavItem, type ViewId } from "./nav-items.js";
 
 const WIDTH_EXPANDED = 200;
@@ -186,13 +188,47 @@ function CollapseToggle({
 /** The app's persistent left-hand navigation chrome: an icon+label list of every
  * `ViewId` destination, a pinned Settings/Report-a-Bug section beneath a divider, and a
  * floating collapse toggle (see `CollapseToggle`) that shrinks the whole drawer to
- * icon-only. */
+ * icon-only. Starts (and re-collapses on switching into) *collapsed* whenever the
+ * window's own aspect ratio is a portrait one (`"9:16"`/`"9:14"`, this app's own
+ * default — see `isPortraitAspectRatio`) — the 200px expanded width that's a minor
+ * convenience in a wide landscape window is a genuinely large fraction of this app's
+ * narrow portrait width (680px at minimum), so defaulting to icon-only there gives
+ * real content the room a vertical window makes scarce. */
 export function NavigationSidebar({
   activeView,
   onSelectView,
   onReportBug,
 }: NavigationSidebarProps): JSX.Element {
-  const [collapsed, setCollapsed] = useState(false);
+  const { settings, loading } = useSettings();
+  const [collapsed, setCollapsed] = useState(() => isPortraitAspectRatio(settings.aspectRatio));
+  const wasPortraitRef = useRef(isPortraitAspectRatio(settings.aspectRatio));
+  // `useSettingsState` always starts a render with `DEFAULT_APP_SETTINGS` (portrait,
+  // this app's own default) synchronously, before the real persisted value resolves
+  // asynchronously — see that hook's own `loading` doc comment. Without accounting for
+  // that, a real *landscape* setting would still leave this sidebar collapsed from
+  // that synchronous default, since the effect below would only ever see
+  // `settings.aspectRatio` change *into* portrait, never notice it resolving *out* of
+  // the temporary default. `hasSyncedInitialLoadRef` marks the one moment that
+  // shouldn't count as a "live" change at all: the instant `loading` first turns
+  // `false`, `collapsed` is synced directly to whatever the real settings say, in
+  // *either* direction, since nothing about the initial load finishing is a user
+  // toggling anything.
+  const hasSyncedInitialLoadRef = useRef(false);
+  useEffect(() => {
+    const isPortrait = isPortraitAspectRatio(settings.aspectRatio);
+    if (!loading && !hasSyncedInitialLoadRef.current) {
+      hasSyncedInitialLoadRef.current = true;
+      setCollapsed(isPortrait);
+    } else if (hasSyncedInitialLoadRef.current && isPortrait && !wasPortraitRef.current) {
+      // A genuine *live* change to a portrait ratio thereafter (e.g. picked in
+      // Settings while this app is already running) re-collapses the sidebar too —
+      // but only in this direction. Switching back to landscape doesn't force it open
+      // again, which would override a sidebar state the user may have set
+      // deliberately in the meantime.
+      setCollapsed(true);
+    }
+    wasPortraitRef.current = isPortrait;
+  }, [settings.aspectRatio, loading]);
   const width = collapsed ? WIDTH_COLLAPSED : WIDTH_EXPANDED;
 
   return (
