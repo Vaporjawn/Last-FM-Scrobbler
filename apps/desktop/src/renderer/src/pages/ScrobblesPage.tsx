@@ -35,18 +35,16 @@ function matchesSearch(track: RecentTrack, query: string): boolean {
   );
 }
 
+/**
+ * The logged-in account's scrobble history — a paginated, searchable list
+ * (title/artist/album, see `matchesSearch`) backed by `useRecentTracks`, with a
+ * "Load more" control for older pages. Each row drills into `ScrobbleDetailPage` via
+ * `onSelectScrobble` when given.
+ */
 export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PageProps): JSX.Element {
   const { activeAccount } = useAuth();
-  const {
-    tracks,
-    loading,
-    loadingMore,
-    refreshing,
-    error,
-    hasMore,
-    loadMore,
-    refetch,
-  } = useRecentTracks(activeAccount);
+  const { tracks, loading, loadingMore, refreshing, error, hasMore, loadMore, refetch } =
+    useRecentTracks(activeAccount);
   const [searchQuery, setSearchQuery] = useState("");
 
   const visibleTracks = useMemo(() => {
@@ -78,7 +76,11 @@ export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PagePr
         // page 1's already-successfully-loaded list.
         <AsyncState kind="error" message={error} />
       ) : tracks.length === 0 ? (
-        <AsyncState kind="empty" icon={<LibraryMusicIcon sx={{ fontSize: 48 }} />} message="No scrobbles yet." />
+        <AsyncState
+          kind="empty"
+          icon={<LibraryMusicIcon sx={{ fontSize: 48 }} />}
+          message="No scrobbles yet."
+        />
       ) : (
         <>
           <TextField
@@ -139,7 +141,9 @@ export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PagePr
           )}
 
           {hasMore ? (
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2, gap: 1 }}>
+            <Box
+              sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2, gap: 1 }}
+            >
               {error ? (
                 <Typography variant="body2" color="error">
                   {error}

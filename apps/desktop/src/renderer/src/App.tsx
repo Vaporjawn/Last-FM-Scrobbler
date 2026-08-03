@@ -4,7 +4,9 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { BugReportDialog } from "./components/BugReportDialog.js";
-import { getViewLabel, NavigationSidebar, type ViewId } from "./components/NavigationSidebar.js";
+import { getViewLabel } from "./components/get-view-label.js";
+import type { ViewId } from "./components/nav-items.js";
+import { NavigationSidebar } from "./components/NavigationSidebar.js";
 import { SnackbarProvider } from "./contexts/SnackbarProvider.js";
 import { useSettings } from "./contexts/settings-context.js";
 import { useAuth } from "./hooks/use-auth.js";
@@ -29,6 +31,12 @@ const PAGES: Record<ViewId, (props: PageProps) => JSX.Element> = {
   settings: SettingsPage,
 };
 
+/**
+ * The renderer's composition root: theme/snackbar providers, the persistent sidebar,
+ * and the single-page-at-a-time view switcher (see `PAGES` above and the drill-down
+ * detail views handled inline below — `ScrobbleDetailPage` and the friend-scoped
+ * `ProfilePage` — neither of which is a `ViewId` destination of its own).
+ */
 export function App(): JSX.Element {
   const [activeView, setActiveView] = useState<ViewId>("now-playing");
   const [bugReportOpen, setBugReportOpen] = useState(false);

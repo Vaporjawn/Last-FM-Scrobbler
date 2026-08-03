@@ -16,9 +16,10 @@ import { FriendListItem, FRIEND_COLUMN_WIDTH } from "../components/FriendListIte
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { RefreshButton } from "../components/shared/RefreshButton.js";
+import { friendActivityOrEmpty } from "../hooks/friend-activity-or-empty.js";
 import { useAuth } from "../hooks/use-auth.js";
 import { useFriends } from "../hooks/use-friends.js";
-import { friendActivityOrEmpty, useFriendsActivity } from "../hooks/use-friends-activity.js";
+import { useFriendsActivity } from "../hooks/use-friends-activity.js";
 import type { PageProps } from "./page-props.js";
 
 function matchesSearch(friend: Friend, query: string): boolean {
@@ -28,6 +29,13 @@ function matchesSearch(friend: Friend, query: string): boolean {
   );
 }
 
+/**
+ * The logged-in account's Last.fm friends list — a search box over real-time "who's
+ * scrobbling now" activity (see `useFriendsActivity`), sorted with currently-playing
+ * friends first. Each row drills into that friend's own `ProfilePage`
+ * (`onSelectFriend`) or their current/last track's `ScrobbleDetailPage`
+ * (`onSelectScrobble`) — see `FriendListItem`.
+ */
 export function FriendsPage({
   onNavigateToSettings,
   onSelectScrobble,
@@ -68,8 +76,10 @@ export function FriendsPage({
     // a same-priority comparison of 0 is enough to preserve that rather than needing
     // to re-derive the original order some other way.
     return [...matching].sort((a, b) => {
-      const aPlaying = friendActivityOrEmpty(activityByUsername, a.username).track?.nowPlaying ?? false;
-      const bPlaying = friendActivityOrEmpty(activityByUsername, b.username).track?.nowPlaying ?? false;
+      const aPlaying =
+        friendActivityOrEmpty(activityByUsername, a.username).track?.nowPlaying ?? false;
+      const bPlaying =
+        friendActivityOrEmpty(activityByUsername, b.username).track?.nowPlaying ?? false;
       if (aPlaying === bPlaying) {
         return 0;
       }
@@ -89,7 +99,11 @@ export function FriendsPage({
         inlineSubtitle
         action={
           activeAccount ? (
-            <RefreshButton onRefresh={refetchAll} refreshing={friendsRefreshing} label="Refresh friends" />
+            <RefreshButton
+              onRefresh={refetchAll}
+              refreshing={friendsRefreshing}
+              label="Refresh friends"
+            />
           ) : undefined
         }
       />
@@ -104,7 +118,11 @@ export function FriendsPage({
       ) : error ? (
         <AsyncState kind="error" message={error} />
       ) : friends.length === 0 ? (
-        <AsyncState kind="empty" icon={<PeopleIcon sx={{ fontSize: 48 }} />} message="No friends to show." />
+        <AsyncState
+          kind="empty"
+          icon={<PeopleIcon sx={{ fontSize: 48 }} />}
+          message="No friends to show."
+        />
       ) : (
         <>
           <TextField

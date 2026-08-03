@@ -35,7 +35,16 @@ export function TopArtistListItem({ artist, rank, maxPlayCount }: TopArtistListI
           {rank}
         </Typography>
         <ArtistAvatar name={artist.name} size={AVATAR_SIZE} />
-        <ListItemText primary={artist.name} secondary={`${artist.playCount} plays`} sx={{ my: 0 }} />
+        {/* `minWidth: 0` — a flex item's default min-width is `auto` (its content's
+            own intrinsic minimum, the longest unbreakable word for text without
+            `noWrap`), not 0 — without this, a single long unbroken artist name can
+            still overflow the row instead of wrapping within it. Same fix, same root
+            cause, as `ScrobbleListItem`'s equivalent `ListItemText`. */}
+        <ListItemText
+          primary={artist.name}
+          secondary={`${artist.playCount} plays`}
+          sx={{ my: 0, minWidth: 0 }}
+        />
       </Stack>
       <Box
         sx={{

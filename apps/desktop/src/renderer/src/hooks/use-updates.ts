@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { UpdateStatus } from "../../../shared/update-status.js";
-import { fail, ok, type ActionResult } from "./action-result.js";
+import type { ActionResult } from "./action-result.js";
+import { fail } from "./fail.js";
+import { ok } from "./ok.js";
 
 export interface UseUpdatesResult {
   readonly status: UpdateStatus;
@@ -33,19 +35,39 @@ export function useUpdates(): UseUpdatesResult {
       return;
     }
     let cancelled = false;
+    // Set once the push subscription below fires before the pull resolves — once
+    // that's happened, the pull's eventually-resolved status is guaranteed stale and
+    // must never overwrite it. wireUpdates schedules an auto-check 10s after startup
+    // and every 4h (see wire-updates.ts), driven by electron-updater's own async
+    // network events entirely independent of any given getStatus() round trip — if a
+    // mount's pull is in flight when one of those fires and pushes a real status
+    // change (e.g. "available" -> "downloading" -> "downloaded"), and the pull's IPC
+    // response happens to land after the push, the UI could revert from a correct
+    // "downloaded, restart to apply" status back to a stale "idle"/"checking" one.
+    let hasReceivedPush = false;
 
     window.updates
       .getStatus()
       .then((current) => {
-        if (!cancelled) {
+        if (!cancelled && !hasReceivedPush) {
           setStatus(current);
         }
       })
-      .catch((error: unknown) => {
-        console.error("Failed to fetch the current update status:", error);
+      .catch((getStatusError: unknown) => {
+        // Previously only logged, never surfaced via `error` — unlike checkNow below,
+        // which does call setError on failure. A rejected initial getStatus() (e.g. a
+        // stale preload build missing the method) left `status` at IDLE and `error`
+        // at undefined, indistinguishable in the UI from "checked, no update
+        // available" — now mirrors checkNow's own pattern so a failed initial check
+        // is actually visible as a failure, not silent.
+        console.error("Failed to fetch the current update status:", getStatusError);
+        if (!cancelled) {
+          setError(fail(getStatusError).error);
+        }
       });
 
     const unsubscribe = window.updates.onStatusChanged((next) => {
+      hasReceivedPush = true;
       setStatus(next);
     });
 

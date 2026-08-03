@@ -79,7 +79,13 @@ export function TrackLoveTagControls({
 
   const handleAddTags = (tags: readonly string[]): void => {
     void addTags(tags).then((result) => {
-      closeTagPopover();
+      // Only close (and discard the typed input) on success — closing unconditionally
+      // meant a transient failure (network error, etc.) silently threw away whatever
+      // tags the user had typed, forcing a full retype to try again instead of
+      // leaving the popover open with their input intact.
+      if (result.success) {
+        closeTagPopover();
+      }
       notify(
         result.success
           ? { message: "Tags added.", severity: "success" }

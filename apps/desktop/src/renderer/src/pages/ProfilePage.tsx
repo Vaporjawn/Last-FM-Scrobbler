@@ -61,6 +61,12 @@ export interface ProfilePageProps extends PageProps {
   readonly backLabel?: string;
 }
 
+/**
+ * The account card (avatar, real name/location, scrobble/loved-track stats, member
+ * since) plus This Week/Overall Top Artists, Top Tracks, and Top Albums for one
+ * account — either the logged-in user (the sidebar's own "Profile" destination) or a
+ * friend drilled into from `FriendsPage` (see `username`/`onBack`/`backLabel` above).
+ */
 export function ProfilePage({
   onNavigateToSettings,
   username,
@@ -112,8 +118,11 @@ export function ProfilePage({
   // `undefined` while loading, on fetch failure, or if the account has no photo set;
   // MUI's `Avatar` falls back to the letter children automatically whenever `src` is
   // `undefined` (and self-heals to that fallback if a real `src` fails to load).
-  const { profile, refreshing: profileRefreshing, refetch: refetchProfile } =
-    useUserProfile(targetUsername);
+  const {
+    profile,
+    refreshing: profileRefreshing,
+    refetch: refetchProfile,
+  } = useUserProfile(targetUsername);
   // Separate call from `useUserProfile` above — see `getLovedTracksCount`'s own
   // docstring for why `user.getInfo` can't provide this count itself.
   const {
@@ -211,7 +220,9 @@ export function ProfilePage({
               {targetUsername}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {profile ? (formatRealNameAndLocation(profile) ?? "Last.fm account") : "Last.fm account"}
+              {profile
+                ? (formatRealNameAndLocation(profile) ?? "Last.fm account")
+                : "Last.fm account"}
             </Typography>
           </Box>
         </Stack>
@@ -235,7 +246,8 @@ export function ProfilePage({
                 color="text.secondary"
                 sx={{
                   display: "block",
-                  mt: profile.totalScrobbles !== undefined || lovedTracksCount !== undefined ? 1 : 0,
+                  mt:
+                    profile.totalScrobbles !== undefined || lovedTracksCount !== undefined ? 1 : 0,
                 }}
               >
                 Member since {formatMemberSince(profile.registeredAt)}

@@ -1,21 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { RecentTrack } from "@lastfm-scrobbler/core";
-
-export interface FriendActivityState {
-  /** The friend's single most recent (or currently playing) track — `undefined`
-   * while loading, on fetch failure, or if they have no scrobble history at all
-   * (`error` distinguishes the second case from the third and the first). */
-  readonly track: RecentTrack | undefined;
-  readonly loading: boolean;
-  /** Set only when the fetch itself failed — `undefined` for "still loading" and for
-   * "loaded successfully but this friend has no scrobble history", which look the
-   * same to a caller that only checks `track`. Not surfaced in `FriendListItem`'s UI
-   * (a wall of small red errors next to friends' names would be worse than showing
-   * no activity line for those rows) — logged via `console.warn` instead, and kept
-   * here so a caller that *does* want to react to it (e.g. to distinguish "empty"
-   * from "broke" for sorting/diagnostics) can. */
-  readonly error: string | undefined;
-}
+import type { FriendActivityState } from "./friend-activity-state.js";
 
 export type FriendsActivityMap = Readonly<Record<string, FriendActivityState>>;
 
@@ -31,7 +15,6 @@ export interface FriendsActivityResult {
 }
 
 const LOADING: FriendActivityState = { track: undefined, loading: true, error: undefined };
-const EMPTY: FriendActivityState = { track: undefined, loading: false, error: undefined };
 
 /**
  * Fetches every given friend's most recent activity (`user.getRecentTracks` capped
@@ -48,7 +31,9 @@ const EMPTY: FriendActivityState = { track: undefined, loading: false, error: un
  * rows.
  */
 export function useFriendsActivity(usernames: readonly string[]): FriendsActivityResult {
-  const [activityByUsername, setActivityByUsername] = useState<Record<string, FriendActivityState>>({});
+  const [activityByUsername, setActivityByUsername] = useState<Record<string, FriendActivityState>>(
+    {},
+  );
   // A stable primitive key, not the array reference itself — `usernames` is a new
   // array every render (e.g. FriendsPage re-renders on every keystroke in its search
   // box), which would otherwise re-run this effect — and re-fetch everyone's
@@ -102,15 +87,4 @@ export function useFriendsActivity(usernames: readonly string[]): FriendsActivit
   }, []);
 
   return { activityByUsername, refetch };
-}
-
-/** `useFriendsActivity`'s inert per-friend default — same shape `EMPTY` reset to
- * whenever a username has no entry yet (e.g. this render's friend list includes
- * someone the fetch effect hasn't started for). Exported so callers reading the map
- * (`FriendsPage`) don't need to know this hook's internal default shape. */
-export function friendActivityOrEmpty(
-  activityByUsername: FriendsActivityMap,
-  username: string,
-): FriendActivityState {
-  return activityByUsername[username] ?? EMPTY;
 }

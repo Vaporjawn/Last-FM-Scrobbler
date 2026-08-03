@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuthApi } from "../../../shared/auth-api.js";
-import { fail, ok, type ActionResult } from "./action-result.js";
+import type { ActionResult } from "./action-result.js";
+import { fail } from "./fail.js";
+import { ok } from "./ok.js";
 
 export interface AuthState {
   /** Whether this build has Last.fm API credentials configured at all. `undefined`
@@ -82,11 +84,22 @@ async function runAuthAction(
  */
 export function useAuth(): UseAuthResult {
   const [state, setState] = useState<AuthState>(INITIAL_STATE);
+  // Bumped on every refresh() call and checked before either branch below applies its
+  // result — the underlying main handlers do real I/O (OS keychain reads/writes via
+  // AccountStore), so out-of-order resolution across two overlapping refresh() calls
+  // is realistic, not theoretical. Without this, e.g. clicking "switch to alice" then
+  // quickly clicking "log out" on a different account row (neither button is
+  // `disabled` while the other's refresh() is in flight) could have the second,
+  // correct call's result clobbered by the first, stale one resolving later —
+  // silently reverting the displayed account list/active account. Same pattern
+  // use-lastfm-fetch.ts already uses for its own stale-response protection.
+  const refreshGenerationRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!window.auth) {
       return;
     }
+    const myGeneration = (refreshGenerationRef.current += 1);
     try {
       const [isConfigured, credentialsSource, accounts, activeAccount] = await Promise.all([
         window.auth.isConfigured(),
@@ -94,6 +107,9 @@ export function useAuth(): UseAuthResult {
         window.auth.listAccounts(),
         window.auth.getActiveAccount(),
       ]);
+      if (refreshGenerationRef.current !== myGeneration) {
+        return; // Superseded by a newer refresh() call — this result is stale.
+      }
       setState((previous) => ({
         ...previous,
         isConfigured,
@@ -103,6 +119,9 @@ export function useAuth(): UseAuthResult {
         error: undefined,
       }));
     } catch (refreshError) {
+      if (refreshGenerationRef.current !== myGeneration) {
+        return;
+      }
       // If any of the above IPC calls reject (e.g. a stale main process during
       // development — Electron's main process doesn't hot-reload the way the renderer
       // does, so a main-process-only change needs a full restart), fall back to a

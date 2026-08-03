@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "../../../shared/settings-api.js";
-import { fail, ok, type ActionResult } from "./action-result.js";
+import type { ActionResult } from "./action-result.js";
+import { fail } from "./fail.js";
+import { ok } from "./ok.js";
 
 export interface UseSettingsResult {
   readonly settings: AppSettings;
@@ -47,18 +49,57 @@ export function useSettingsState(): UseSettingsResult {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
+  // Bumped by both updateSettings/resetSettings on every call, and checked before
+  // either applies its resolved response — same generation-ref pattern
+  // use-lastfm-fetch.ts already uses for stale-response protection. Without this, two
+  // concurrent calls with *different* patches (e.g. toggling dark mode, then — before
+  // that IPC round trip resolves — toggling "show notifications") could apply their
+  // responses out of order: main's synchronous settingsSet handler processes them in
+  // call order, but nothing guaranteed *this* hook's setSettings(updated) calls landed
+  // in that same order, so the earlier call's (now-stale) response could momentarily
+  // overwrite the later call's correct one — self-correcting once the later response
+  // also lands, but a real, visible flicker in between.
+  const settingsGenerationRef = useRef(0);
 
   useEffect(() => {
     if (!window.settings) {
       setLoading(false);
       return;
     }
-    void window.settings
+    // `cancelled` mirrors every other data-fetching hook in this codebase (see e.g.
+    // use-app-version.ts) — this hook's own call sites (SettingsProvider, mounted for
+    // the app's lifetime; TrayPopover, a persistent separate window) are unlikely to
+    // unmount mid-fetch today, but it's a real deviation from the established
+    // convention that would surface a "setState on unmounted component" issue if
+    // either ever did.
+    let cancelled = false;
+    window.settings
       .get()
-      .then(setSettings)
+      .then((result) => {
+        if (!cancelled) {
+          setSettings(result);
+        }
+      })
+      .catch((getError: unknown) => {
+        // Previously uncaught: a rejected window.settings.get() (e.g. a stale
+        // preload build during development — see use-auth.ts's docstring for the
+        // same class of failure) surfaced only as an unhandled promise rejection.
+        // `settings` silently stayed at DEFAULT_APP_SETTINGS with no way for a
+        // consumer to tell "checked and failed" apart from "still loading" or
+        // "genuinely has no saved settings" — this hook's own `error` field exists
+        // specifically to distinguish that, same as every sibling hook already does.
+        if (!cancelled) {
+          setError(fail(getError).error);
+        }
+      })
       .finally(() => {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const updateSettings = useCallback(async (patch: Partial<AppSettings>): Promise<ActionResult> => {
@@ -70,15 +111,25 @@ export function useSettingsState(): UseSettingsResult {
     if (!window.settings) {
       return fail(NOT_AVAILABLE);
     }
+    const myGeneration = (settingsGenerationRef.current += 1);
     try {
       const updated = await window.settings.set(patch);
-      setSettings(updated);
-      setError(undefined);
+      // Only apply if no newer updateSettings/resetSettings call has started since —
+      // see settingsGenerationRef's own docstring for the concurrent-calls race this
+      // guards against. The returned ActionResult below still always reflects this
+      // call's own real outcome regardless of generation — only the shared `settings`
+      // state is guarded, not what's reported back to this specific caller.
+      if (settingsGenerationRef.current === myGeneration) {
+        setSettings(updated);
+        setError(undefined);
+      }
       return ok();
     } catch (updateError) {
       // The optimistic update above never actually persisted — revert to what was
       // there before this call, rather than leaving the UI showing an unsaved value.
-      if (previous) {
+      // Same generation guard as the success path: don't roll back over a newer
+      // call's own (possibly already-applied) result.
+      if (settingsGenerationRef.current === myGeneration && previous) {
         setSettings(previous);
       }
       const result = fail(updateError);
@@ -96,13 +147,20 @@ export function useSettingsState(): UseSettingsResult {
     if (!window.settings) {
       return fail(NOT_AVAILABLE);
     }
+    // Shares the same generation counter as updateSettings — resetSettings and
+    // updateSettings racing each other is the same class of concern as two
+    // updateSettings calls racing each other, so both need to be ordered against one
+    // another, not just against calls of their own kind.
+    const myGeneration = (settingsGenerationRef.current += 1);
     try {
       const reset = await window.settings.reset();
-      setSettings(reset);
-      setError(undefined);
+      if (settingsGenerationRef.current === myGeneration) {
+        setSettings(reset);
+        setError(undefined);
+      }
       return ok();
     } catch (resetError) {
-      if (previous) {
+      if (settingsGenerationRef.current === myGeneration && previous) {
         setSettings(previous);
       }
       const result = fail(resetError);

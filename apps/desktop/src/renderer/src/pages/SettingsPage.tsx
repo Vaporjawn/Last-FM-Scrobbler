@@ -1,5 +1,5 @@
 import type { JSX, SubmitEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AspectRatioIcon from "@mui/icons-material/AspectRatio";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
@@ -195,6 +195,16 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
   // local-state-plus-explicit-submit pattern just below.
   const [filterExpressionInput, setFilterExpressionInput] = useState(settings.filterExpression ?? "");
   const [filterValidationError, setFilterValidationError] = useState<string | undefined>(undefined);
+  // Bumped on every window.filter.validate() call (from either handler below) and
+  // captured by each call's own closure — a response only gets applied if no newer
+  // call has started since. Without this, handleFilterExpressionBlur (on blur) and
+  // handleSaveFilterExpression (on click) each independently call validate() with no
+  // ordering guard: blurring with an invalid draft, quickly fixing it, then blurring
+  // again fires two overlapping calls, and if the first (slower, for the stale
+  // invalid text) resolves after the second (faster, correct) one, its stale error
+  // clobbers the correct state — showing an error for text the user already fixed,
+  // and leaving "Save filter" wrongly disabled until the next validate() call.
+  const filterValidationGenerationRef = useRef(0);
 
   useEffect(() => {
     setFilterExpressionInput(settings.filterExpression ?? "");
@@ -379,7 +389,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
       setFilterValidationError(undefined);
       return;
     }
+    const generation = (filterValidationGenerationRef.current += 1);
     void window.filter.validate(trimmed).then((result) => {
+      if (generation !== filterValidationGenerationRef.current) {
+        return; // Superseded by a newer validate() call — this result is stale.
+      }
       setFilterValidationError(result.valid ? undefined : result.error);
     });
   };
@@ -398,7 +412,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     // Always re-validates before saving, independent of whether onBlur already ran —
     // covers pasting text and clicking "Save filter" directly without ever tabbing
     // away first.
+    const generation = (filterValidationGenerationRef.current += 1);
     void window.filter.validate(trimmed).then((result) => {
+      if (generation !== filterValidationGenerationRef.current) {
+        return; // Superseded by a newer validate() call — this result is stale.
+      }
       if (!result.valid) {
         setFilterValidationError(result.error);
         return;

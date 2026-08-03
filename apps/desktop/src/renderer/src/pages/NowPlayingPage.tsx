@@ -55,7 +55,13 @@ function StateIcon({ state }: { state: PlaybackState }): JSX.Element {
  * `track.getInfo`) when one is on file, falling back to a gradient/record-icon
  * placeholder otherwise — the same `src`-falls-back-to-children `Avatar` pattern
  * `ScrobbleListItem` already uses for scrobble history's art. */
-function NowPlayingArtwork({ imageUrl, title }: { imageUrl: string | undefined; title: string }): JSX.Element {
+function NowPlayingArtwork({
+  imageUrl,
+  title,
+}: {
+  imageUrl: string | undefined;
+  title: string;
+}): JSX.Element {
   return (
     <Avatar
       variant="rounded"
@@ -76,6 +82,13 @@ function NowPlayingArtwork({ imageUrl, title }: { imageUrl: string | undefined; 
   );
 }
 
+/**
+ * The sidebar's default landing view: whatever `useNowPlaying` currently reports (live,
+ * pushed over IPC from the OS-level playback source — see that hook) plus point-in-time
+ * Last.fm data fetched for it — track stats/link (`useTrackDetail`) and artist bio/
+ * similar artists (`useArtistInfo`, via `ArtistInfoPanel`) — and, when logged in, love/
+ * tag controls for the track. Shows an empty state when nothing is currently playing.
+ */
 export function NowPlayingPage(): JSX.Element {
   const { track, state, positionSec } = useNowPlaying();
   const { activeAccount } = useAuth();
@@ -149,7 +162,11 @@ export function NowPlayingPage(): JSX.Element {
           <VolumeUpIcon fontSize="small" />
         </Avatar>
         <Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", lineHeight: 1.2 }}
+          >
             Scrobbling from
           </Typography>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
@@ -162,7 +179,13 @@ export function NowPlayingPage(): JSX.Element {
       <Box sx={{ p: 4 }}>
         <PageHeader
           title="Now Playing"
-          action={<RefreshButton onRefresh={refetchAll} refreshing={refreshing} label="Refresh track info" />}
+          action={
+            <RefreshButton
+              onRefresh={refetchAll}
+              refreshing={refreshing}
+              label="Refresh track info"
+            />
+          }
         />
         {/* `md` rather than MUI's usual `sm` here on purpose — same fix as
             ScrobbleDetailPage's own hero `Stack` (see that file's comment for the
@@ -176,7 +199,11 @@ export function NowPlayingPage(): JSX.Element {
             (900px) keeps this stacked in one generous column until the window is
             genuinely wide enough for a row to look intentional rather than
             cramped. */}
-        <Stack direction={{ xs: "column", md: "row" }} spacing={4} sx={{ alignItems: { md: "flex-start" } }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={4}
+          sx={{ alignItems: { md: "flex-start" } }}
+        >
           <NowPlayingArtwork imageUrl={trackDetail?.imageUrl} title={track.title} />
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
@@ -187,7 +214,12 @@ export function NowPlayingPage(): JSX.Element {
                 color={state === "playing" ? "primary" : "default"}
               />
             </Stack>
-            {track.durationSec !== undefined ? (
+            {/* `> 0`, not just `!== undefined` — a reported durationSec of exactly 0
+                (a track with genuinely unknown duration reported as 0 rather than
+                omitted, which nothing in the PlaybackSource contract rules out) would
+                otherwise divide by zero below, producing NaN for the progress bar's
+                value instead of a defined 0-100 number. */}
+            {track.durationSec !== undefined && track.durationSec > 0 ? (
               <Box sx={{ mb: 1.5 }}>
                 <LinearProgress
                   variant="determinate"
@@ -243,7 +275,11 @@ export function NowPlayingPage(): JSX.Element {
                   View on Last.fm
                 </Link>
                 {trackDetail.userPlayCount !== undefined ? (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 0.5 }}
+                  >
                     You've listened to this track {trackDetail.userPlayCount.toLocaleString()} time
                     {trackDetail.userPlayCount === 1 ? "" : "s"}.
                   </Typography>
@@ -255,7 +291,11 @@ export function NowPlayingPage(): JSX.Element {
               <TrackLoveTagControls artist={track.artist} track={track.title} />
             </Stack>
             {!activeAccount ? (
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.75 }}
+              >
                 Log in with Last.fm in Settings to love or tag tracks.
               </Typography>
             ) : null}

@@ -44,10 +44,15 @@ export function TopTrackListItem({ track, rank, maxPlayCount }: TopTrackListItem
           {rank}
         </Typography>
         <ArtistAvatar name={track.artist} size={AVATAR_SIZE} />
+        {/* `minWidth: 0` — a flex item's default min-width is `auto` (its content's
+            own intrinsic minimum), not 0, so without this the text refuses to shrink
+            below that and overflows the row instead of the `noWrap`/ellipsis
+            treatment below actually taking effect — same fix, same root cause, as
+            `ScrobbleListItem`'s equivalent `ListItemText`. */}
         <ListItemText
           primary={track.name}
           secondary={`${track.artist} — ${track.playCount} play${track.playCount === 1 ? "" : "s"}`}
-          sx={{ my: 0 }}
+          sx={{ my: 0, minWidth: 0 }}
           slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
         />
       </Stack>

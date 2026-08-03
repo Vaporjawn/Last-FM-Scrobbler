@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import { DEFAULT_APP_SETTINGS } from "../../../shared/settings-api.js";
-import { fail } from "../hooks/action-result.js";
+import { fail } from "../hooks/fail.js";
 import type { UseSettingsResult } from "../hooks/use-settings-state.js";
 
 export const SettingsContext = createContext<UseSettingsResult | undefined>(undefined);

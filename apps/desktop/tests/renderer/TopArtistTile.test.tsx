@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TopArtist } from "@lastfm-scrobbler/core";
 import type { ArtistImageApi } from "../../src/shared/artist-image-api.js";
@@ -49,5 +49,20 @@ describe("TopArtistTile", () => {
 
     expect(await screen.findByRole("img", { name: "Radiohead" })).toHaveAttribute("src", imageUrl);
     expect(screen.queryByText("R")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the artist's initial when the real photo URL fails to load", async () => {
+    // Regression test, same root cause as TopAlbumTile's — see that test file's own
+    // comment for the full reasoning.
+    const imageUrl = "https://e-cdn-images.dzcdn.net/images/artist/radiohead.jpg";
+    installFakeArtistImageApi(vi.fn().mockResolvedValue(imageUrl));
+
+    render(<TopArtistTile artist={ARTIST} />);
+    const img = await screen.findByRole("img", { name: "Radiohead" });
+
+    fireEvent.error(img);
+
+    expect(screen.queryByRole("img", { name: "Radiohead" })).not.toBeInTheDocument();
+    expect(screen.getByText("R")).toBeInTheDocument();
   });
 });

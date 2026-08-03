@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { TopAlbum } from "@lastfm-scrobbler/core";
 import { TopAlbumTile } from "../../src/renderer/src/components/TopAlbumTile.js";
@@ -39,6 +39,22 @@ describe("TopAlbumTile", () => {
   it("falls back to a plain album icon when no art is on file", () => {
     render(<TopAlbumTile album={ALBUM_WITHOUT_ART} />);
 
+    expect(screen.getByTestId("AlbumIcon")).toBeInTheDocument();
+  });
+
+  it("falls back to the album icon when the real artwork URL fails to load", () => {
+    // Regression test: ArtworkTile (which this renders through) used to have no
+    // onError handler on its <img> at all, unlike every other real-photo component in
+    // this app (ArtistAvatar, TrackArtworkAvatar, SubscriberAvatar) — a 404'd/failed
+    // network-sourced art URL showed the browser's native broken-image icon instead
+    // of the intended fallback, contradicting this component's own "never fails, just
+    // shows less" contract.
+    render(<TopAlbumTile album={ALBUM} />);
+    const img = screen.getByRole("img", { name: "In Rainbows" });
+
+    fireEvent.error(img);
+
+    expect(screen.queryByRole("img", { name: "In Rainbows" })).not.toBeInTheDocument();
     expect(screen.getByTestId("AlbumIcon")).toBeInTheDocument();
   });
 });

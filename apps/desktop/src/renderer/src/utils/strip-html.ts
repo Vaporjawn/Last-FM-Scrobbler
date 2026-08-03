@@ -8,13 +8,22 @@
  * summary — a React `Typography` with this plain-text output is inherently escaped.
  */
 export function stripHtml(html: string): string {
+  // Entities decoded *before* tags are stripped, not after — decoding last would let
+  // an entity-encoded tag fragment (e.g. a bio literally containing the text
+  // "&lt;script&gt;") survive tag-stripping untouched (it isn't real `<...>` syntax
+  // yet at that point) and only turn into literal `<script>` in the final output
+  // afterward. Not exploitable today (the sole caller renders this as a plain JSX
+  // text child, which React auto-escapes) but a latent trap for any future caller
+  // that reused this output somewhere unescaped (dangerouslySetInnerHTML, a URL, an
+  // attribute) — decoding first means tag-stripping actually sees and removes it,
+  // matching this function's own "reduces to plain text" contract.
   return html
-    .replace(/<a\s[^>]*>.*?<\/a>/gis, "")
-    .replace(/<[^>]+>/g, "")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#0?39;/g, "'")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
+    .replace(/<a\s[^>]*>.*?<\/a>/gis, "")
+    .replace(/<[^>]+>/g, "")
     .trim();
 }

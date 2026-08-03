@@ -472,6 +472,31 @@ describe("NowPlayingPage", () => {
       await screen.findByText("Weights");
       expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     });
+
+    it("doesn't render a progress bar (or divide by zero) for a reported durationSec of exactly 0", async () => {
+      // Regression test: the progress bar was previously guarded only by
+      // `durationSec !== undefined`, not `> 0` — nothing in the PlaybackSource
+      // contract rules out a source reporting `durationSec: 0` for a track with
+      // genuinely unknown duration (rather than omitting the field entirely), which
+      // divided by zero into a NaN progress-bar value.
+      //
+      // Checked via the MUI LinearProgress-specific class, not a bare
+      // `role: "progressbar"` query — ArtistInfoPanel's own "Loading artist info…"
+      // CircularProgress spinner shares that same role and can still legitimately be
+      // in the document at this point, which would make a bare role query ambiguous/
+      // flaky rather than actually testing the playback progress bar this is about.
+      installFakeNowPlayingApi({
+        track: { ...TRACK, durationSec: 0 },
+        state: "playing",
+        positionSec: 0,
+      });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+
+      await screen.findByText("Weights");
+      expect(document.querySelector(".MuiLinearProgress-root")).not.toBeInTheDocument();
+    });
   });
 
   describe("login hint", () => {

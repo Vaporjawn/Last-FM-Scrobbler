@@ -1143,6 +1143,54 @@ describe("SettingsPage", () => {
       });
     });
 
+    it("does not let a stale (out-of-order) validation response override a newer one", async () => {
+      // Regression test: handleFilterExpressionBlur/handleSaveFilterExpression each
+      // independently call window.filter.validate with no ordering guard. If the
+      // user blurs with an invalid draft (kicking off a slow validate call), quickly
+      // corrects it, and blurs again (a second, faster call), the two responses can
+      // resolve out of order — the stale first response used to overwrite the
+      // correct second one, showing an error for text the user already fixed and
+      // leaving "Save filter" wrongly disabled.
+      installFakeAuthApi();
+      installFakeSettingsApi();
+      let resolveStale: ((result: FilterValidationResult) => void) | undefined;
+      const validate = vi
+        .fn()
+        .mockImplementationOnce(
+          () => new Promise<FilterValidationResult>((resolve) => { resolveStale = resolve; }),
+        )
+        .mockResolvedValueOnce({ valid: true });
+      installFakeFilterApi({ validate });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const field = await screen.findByLabelText("Filter expression");
+
+      // First blur: an invalid draft, whose validate() call stays pending.
+      fireEvent.change(field, { target: { value: "sourceApp ==" } });
+      fireEvent.blur(field);
+      await waitFor(() => {
+        expect(validate).toHaveBeenCalledTimes(1);
+      });
+
+      // Quickly corrected and blurred again — this second, faster call resolves
+      // (valid: true) before the first one does.
+      fireEvent.change(field, { target: { value: 'sourceApp == "firefox"' } });
+      fireEvent.blur(field);
+      const saveButton = await screen.findByRole("button", { name: "Save filter" });
+      await waitFor(() => {
+        expect(saveButton).not.toBeDisabled();
+      });
+
+      // The stale first call finally resolves, with an error for the text that was
+      // already corrected — it must be ignored.
+      resolveStale?.({ valid: false, error: "Unexpected end of input" });
+
+      await waitFor(() => {
+        expect(screen.queryByText("Unexpected end of input")).not.toBeInTheDocument();
+      });
+      expect(saveButton).not.toBeDisabled();
+    });
+
     it("saves a valid filter expression and shows a restart notice", async () => {
       installFakeAuthApi();
       const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));

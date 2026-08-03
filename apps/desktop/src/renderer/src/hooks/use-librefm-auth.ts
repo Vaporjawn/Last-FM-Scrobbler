@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { LibrefmApi } from "../../../shared/secondary-auth-api.js";
-import { fail, ok, type ActionResult } from "./action-result.js";
+import type { ActionResult } from "./action-result.js";
+import { fail } from "./fail.js";
+import { ok } from "./ok.js";
 
 export interface LibrefmAuthState {
   /** Whether a Libre.fm API key/secret pair is available at all right now (baked in
@@ -67,17 +69,25 @@ async function runLibrefmAction(
  */
 export function useLibrefmAuth(): UseLibrefmAuthResult {
   const [state, setState] = useState<LibrefmAuthState>(INITIAL_STATE);
+  // Same generation-ref stale-response guard as useAuth's own refresh() — see that
+  // hook's docstring for the full reasoning (concurrent login()/logout() calls racing
+  // against real keychain I/O).
+  const refreshGenerationRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!window.librefm) {
       return;
     }
+    const myGeneration = (refreshGenerationRef.current += 1);
     try {
       const [isConfigured, credentialsSource, activeAccount] = await Promise.all([
         window.librefm.isConfigured(),
         window.librefm.credentialsSource(),
         window.librefm.getActiveAccount(),
       ]);
+      if (refreshGenerationRef.current !== myGeneration) {
+        return; // Superseded by a newer refresh() call — this result is stale.
+      }
       setState((previous) => ({
         ...previous,
         isConfigured,
@@ -86,6 +96,9 @@ export function useLibrefmAuth(): UseLibrefmAuthResult {
         error: undefined,
       }));
     } catch (refreshError) {
+      if (refreshGenerationRef.current !== myGeneration) {
+        return;
+      }
       // Same "fall back to a known state instead of an infinite spinner" reasoning as
       // useAuth's own refresh() catch block.
       setState((previous) => ({

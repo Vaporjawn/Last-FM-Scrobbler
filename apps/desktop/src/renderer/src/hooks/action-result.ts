@@ -11,6 +11,8 @@
  * running; the hook's internal `setError(...)` schedules a *future* re-render with a
  * *new* closure, which the code that's mid-`await` right now can never see. Returning
  * the message directly sidesteps that entirely.
+ *
+ * Construct instances via `ok()`/`fail()` rather than these object literals directly.
  */
 export interface ActionSuccess {
   readonly success: true;
@@ -22,11 +24,3 @@ export interface ActionFailure {
 }
 
 export type ActionResult = ActionSuccess | ActionFailure;
-
-export function ok(): ActionSuccess {
-  return { success: true };
-}
-
-export function fail(error: unknown): ActionFailure {
-  return { success: false, error: error instanceof Error ? error.message : String(error) };
-}

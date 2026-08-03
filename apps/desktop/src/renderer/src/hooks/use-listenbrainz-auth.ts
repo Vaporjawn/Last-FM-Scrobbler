@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { fail, ok, type ActionResult } from "./action-result.js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ActionResult } from "./action-result.js";
+import { fail } from "./fail.js";
+import { ok } from "./ok.js";
 
 export interface ListenBrainzAuthState {
   /** The connected ListenBrainz account's username, or `undefined` if none is
@@ -34,15 +36,26 @@ const INITIAL_STATE: ListenBrainzAuthState = {
  */
 export function useListenBrainzAuth(): UseListenBrainzAuthResult {
   const [state, setState] = useState<ListenBrainzAuthState>(INITIAL_STATE);
+  // Same generation-ref stale-response guard as useAuth's own refresh() — see that
+  // hook's docstring for the full reasoning (concurrent connect()/disconnect() calls
+  // racing against real keychain I/O).
+  const refreshGenerationRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!window.listenbrainz) {
       return;
     }
+    const myGeneration = (refreshGenerationRef.current += 1);
     try {
       const activeAccount = await window.listenbrainz.getActiveAccount();
+      if (refreshGenerationRef.current !== myGeneration) {
+        return; // Superseded by a newer refresh() call — this result is stale.
+      }
       setState((previous) => ({ ...previous, activeAccount, error: undefined }));
     } catch (refreshError) {
+      if (refreshGenerationRef.current !== myGeneration) {
+        return;
+      }
       setState((previous) => ({
         ...previous,
         error: refreshError instanceof Error ? refreshError.message : String(refreshError),

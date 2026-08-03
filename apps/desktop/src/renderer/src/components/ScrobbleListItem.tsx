@@ -56,9 +56,17 @@ export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JS
   // one) share the second line, since "from this album" is a track-level fact, not an
   // artist-level one.
   const text = (
+    // `minWidth: 0` is the fix, not a style nicety — a flex item's default min-width
+    // is `auto`, meaning it refuses to shrink narrower than its content's own
+    // intrinsic minimum (the longest unbreakable word). Without this, in a narrow
+    // (portrait-ratio) window this box silently overflowed its actual allocated
+    // space in the row instead of wrapping within it, visually spilling underneath
+    // the love/tag/timestamp `Stack` beside it — same root cause as `App.tsx`'s own
+    // `minWidth: 0` fix on its main content area, just one level deeper here.
     <ListItemText
       primary={track.artist}
       secondary={`${track.track}${track.album ? ` — ${track.album}` : ""}`}
+      sx={{ minWidth: 0 }}
     />
   );
 
@@ -98,7 +106,7 @@ export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JS
           ml: 1,
           mr: onSelect ? 2 : 0,
           mt: 1,
-          flexShrink: 0,
+          minWidth: 0,
         }}
       >
         <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>

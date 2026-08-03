@@ -1,4 +1,5 @@
 import type { JSX, ReactNode } from "react";
+import { useState } from "react";
 import Box from "@mui/material/Box";
 import ImageListItem from "@mui/material/ImageListItem";
 import ImageListItemBar from "@mui/material/ImageListItemBar";
@@ -35,24 +36,39 @@ export interface ArtworkTileProps {
  * `<li>` with no `<ul>`/`<ol>` parent) even though it would render visually fine.
  */
 export function ArtworkTile({ imageUrl, title, subtitle, fallback }: ArtworkTileProps): JSX.Element {
+  // Tracks the specific URL that failed to load (not just a bare boolean) so that if
+  // `imageUrl` later changes to a genuinely different URL, the new one gets a fresh
+  // chance to load instead of being permanently stuck showing the fallback. Without
+  // this, a 404'd/otherwise-failed artwork URL (network-sourced — Deezer artist
+  // photos, Last.fm album art, either of which can fail after this component has
+  // already decided `imageUrl` is defined) rendered the browser's native broken-image
+  // icon instead of `fallback` — contradicting this component's own "never fails,
+  // just shows less" contract that every other real-photo component in this app
+  // follows (ArtistAvatar, TrackArtworkAvatar, SubscriberAvatar).
+  const [failedUrl, setFailedUrl] = useState<string | undefined>(undefined);
+  const showFallback = !imageUrl || imageUrl === failedUrl;
+
   return (
     <ImageListItem
       component="div"
       sx={{ aspectRatio: "1", borderRadius: 2, overflow: "hidden", bgcolor: "action.selected" }}
     >
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={title}
-          loading="lazy"
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      ) : (
+      {showFallback ? (
         <Box
           sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           {fallback}
         </Box>
+      ) : (
+        <img
+          src={imageUrl}
+          alt={title}
+          loading="lazy"
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          onError={() => {
+            setFailedUrl(imageUrl);
+          }}
+        />
       )}
       <ImageListItemBar title={title} subtitle={subtitle} />
     </ImageListItem>

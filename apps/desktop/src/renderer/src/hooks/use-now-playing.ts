@@ -32,11 +32,23 @@ export function useNowPlaying(): NowPlayingState {
       return;
     }
     let cancelled = false;
+    // Set by any push handler below firing before the pull resolves — once that's
+    // happened, the pull's eventually-resolved snapshot is guaranteed stale (it can
+    // only describe an *older* state than a push that already landed) and must never
+    // overwrite it. This matters because getCurrent()'s main-process handler is
+    // genuinely slow/variable-latency (a live IPC/D-Bus round trip on Windows/Linux,
+    // or a spawned-process read on macOS — see wire-now-playing.ts), so a fast track
+    // change can land *before* the original pull resolves: without this guard, the
+    // pull's response — built from data read *before* the await, so still describing
+    // the old track, but tagged with whatever position was current *after* it —
+    // would land last and overwrite the correct, newly-pushed state with a
+    // Frankenstein mix of new track + stale position.
+    let hasReceivedPush = false;
 
     window.nowPlaying
       .getCurrent()
       .then((snapshot) => {
-        if (!cancelled) {
+        if (!cancelled && !hasReceivedPush) {
           setNowPlaying(snapshot);
         }
       })
@@ -45,6 +57,7 @@ export function useNowPlaying(): NowPlayingState {
       });
 
     const unsubscribeTrack = window.nowPlaying.onTrackChanged((track) => {
+      hasReceivedPush = true;
       // positionSec resets to 0 here rather than waiting for the next
       // onPositionChanged push (up to ~1s away) — the previous track's elapsed time
       // is meaningless for a new one and would otherwise flash as a too-large,
@@ -52,9 +65,11 @@ export function useNowPlaying(): NowPlayingState {
       setNowPlaying((previous) => ({ ...previous, track, positionSec: 0 }));
     });
     const unsubscribeState = window.nowPlaying.onPlaybackStateChanged((state) => {
+      hasReceivedPush = true;
       setNowPlaying((previous) => ({ ...previous, state }));
     });
     const unsubscribePosition = window.nowPlaying.onPositionChanged((positionSec) => {
+      hasReceivedPush = true;
       setNowPlaying((previous) => ({ ...previous, positionSec }));
     });
 
