@@ -42,6 +42,26 @@ export const IPC_CHANNELS = {
   authClearAppCredentials: "auth:clear-app-credentials",
   /** Restarts the app so newly-saved credentials take effect. */
   appRelaunch: "app:relaunch",
+
+  /** Whether a user-supplied Libre.fm API key/secret pair has been saved. */
+  librefmIsConfigured: "librefm:is-configured",
+  /** Saves a Libre.fm API key/secret pair — always user-supplied, see `LibrefmApi`. */
+  librefmSetCredentials: "librefm:set-credentials",
+  /** Clears a previously-saved Libre.fm API key/secret pair. */
+  librefmClearCredentials: "librefm:clear-credentials",
+  /** Runs the Libre.fm browser-authorization flow and stores the resulting account. */
+  librefmLogin: "librefm:login",
+  /** Disconnects the currently-connected Libre.fm account, if any. */
+  librefmLogout: "librefm:logout",
+  /** The currently-connected Libre.fm account's username, or undefined. */
+  librefmGetActiveAccount: "librefm:get-active-account",
+
+  /** Validates a pasted ListenBrainz token and stores it as the connected account. */
+  listenbrainzConnect: "listenbrainz:connect",
+  /** Disconnects the currently-connected ListenBrainz account, if any. */
+  listenbrainzDisconnect: "listenbrainz:disconnect",
+  /** The currently-connected ListenBrainz account's username, or undefined. */
+  listenbrainzGetActiveAccount: "listenbrainz:get-active-account",
   /** The running app's own version (`app.getVersion()`, from `package.json`/
    * electron-builder's packaged metadata) — shown in Settings → General. */
   appGetVersion: "app:get-version",
