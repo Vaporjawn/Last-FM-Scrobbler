@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AspectRatioIcon from "@mui/icons-material/AspectRatio";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
+import HubIcon from "@mui/icons-material/Hub";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
@@ -30,6 +31,8 @@ import { SettingsSectionCard } from "../components/SettingsSectionCard.js";
 import { useAccountAvatars } from "../hooks/use-account-avatars.js";
 import { useAppVersion } from "../hooks/use-app-version.js";
 import { useAuth } from "../hooks/use-auth.js";
+import { useLibrefmAuth } from "../hooks/use-librefm-auth.js";
+import { useListenBrainzAuth } from "../hooks/use-listenbrainz-auth.js";
 import { useSettings } from "../contexts/settings-context.js";
 import { useUpdates } from "../hooks/use-updates.js";
 import type { PageProps } from "./page-props.js";
@@ -138,6 +141,22 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     clearAppCredentials,
     relaunch,
   } = useAuth();
+  const {
+    isConfigured: librefmIsConfigured,
+    activeAccount: librefmActiveAccount,
+    isLoggingIn: librefmIsLoggingIn,
+    isSavingCredentials: librefmIsSavingCredentials,
+    login: librefmLogin,
+    logout: librefmLogout,
+    saveCredentials: librefmSaveCredentials,
+    clearCredentials: librefmClearCredentials,
+  } = useLibrefmAuth();
+  const {
+    activeAccount: listenBrainzActiveAccount,
+    isConnecting: listenBrainzIsConnecting,
+    connect: listenBrainzConnect,
+    disconnect: listenBrainzDisconnect,
+  } = useListenBrainzAuth();
   const { settings, updateSettings, resetSettings } = useSettings();
   const avatarsByUsername = useAccountAvatars(accounts);
   const appVersion = useAppVersion();
@@ -158,6 +177,9 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
   const [resetting, setResetting] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
+  const [librefmApiKey, setLibrefmApiKey] = useState("");
+  const [librefmApiSecret, setLibrefmApiSecret] = useState("");
+  const [listenBrainzToken, setListenBrainzToken] = useState("");
   const [saveState, setSaveState] = useState<SettingsSaveState>("saved");
   // Local, editable copy of the persisted filter expression — not bound directly to
   // `settings.filterExpression`/`handleUpdateSetting` on every keystroke the way the
@@ -237,6 +259,70 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
       notify(
         result.success
           ? { message: "API key removed. Restart the app for it to take effect.", severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
+    });
+  };
+
+  const handleLibrefmConnect = (): void => {
+    // Unlike Last.fm's two-step "save a key, then separately log in" flow, Libre.fm's
+    // saved key takes effect immediately (see useLibrefmAuth's saveCredentials
+    // docstring) — so a single "Connect" button chains both steps, since there's no
+    // reason to make the user click twice for something that needs no restart between
+    // them.
+    void librefmSaveCredentials(librefmApiKey, librefmApiSecret).then((saveResult) => {
+      if (!saveResult.success) {
+        notify({ message: saveResult.error, severity: "error" });
+        return;
+      }
+      void librefmLogin().then((loginResult) => {
+        if (loginResult.success) {
+          setLibrefmApiKey("");
+          setLibrefmApiSecret("");
+          notify({ message: "Connected to Libre.fm.", severity: "success" });
+        } else {
+          notify({ message: loginResult.error, severity: "error" });
+        }
+      });
+    });
+  };
+
+  const handleLibrefmLogout = (): void => {
+    void librefmLogout().then((result) => {
+      notify(
+        result.success
+          ? { message: "Disconnected from Libre.fm.", severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
+    });
+  };
+
+  const handleLibrefmClearCredentials = (): void => {
+    void librefmClearCredentials().then((result) => {
+      notify(
+        result.success
+          ? { message: "Libre.fm API key removed.", severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
+    });
+  };
+
+  const handleListenBrainzConnect = (): void => {
+    void listenBrainzConnect(listenBrainzToken).then((result) => {
+      if (result.success) {
+        setListenBrainzToken("");
+        notify({ message: "Connected to ListenBrainz.", severity: "success" });
+      } else {
+        notify({ message: result.error, severity: "error" });
+      }
+    });
+  };
+
+  const handleListenBrainzDisconnect = (): void => {
+    void listenBrainzDisconnect().then((result) => {
+      notify(
+        result.success
+          ? { message: "Disconnected from ListenBrainz.", severity: "success" }
           : { message: result.error, severity: "error" },
       );
     });
@@ -388,6 +474,18 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
   );
   const apiKeyVisible =
     showKeyForm && sectionMatches(q, "last.fm api key", "api key", "shared secret");
+  const additionalServicesVisible = sectionMatches(
+    q,
+    "additional services",
+    "librefm",
+    "libre.fm",
+    "listenbrainz",
+    "listen brainz",
+    "connect",
+    "disconnect",
+    librefmActiveAccount,
+    listenBrainzActiveAccount,
+  );
   const noResults =
     q.length > 0 &&
     !generalVisible &&
@@ -395,7 +493,8 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     !notificationsVisible &&
     !filterVisible &&
     !accountsVisible &&
-    !apiKeyVisible;
+    !apiKeyVisible &&
+    !additionalServicesVisible;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -824,6 +923,135 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                     </Alert>
                   )}
                 </>
+              )}
+            </SettingsSectionCard>
+          ) : null}
+
+          {additionalServicesVisible ? (
+            <SettingsSectionCard
+              icon={<HubIcon fontSize="small" />}
+              title="Additional services"
+              description="Scrobbles and now-playing updates go to every connected service at once, alongside Last.fm."
+              fullWidth
+            >
+              {/* Libre.fm — same browser-authorization flow as Last.fm, just always
+                  "bring your own key" (no baked-in build variant — see
+                  useLibrefmAuth's docstring), so the key/secret form and the login
+                  step are combined into one "Connect" action here rather than two
+                  separate cards the way Last.fm's own Accounts/API-key split works. */}
+              {librefmActiveAccount ? (
+                <SettingsRow
+                  label="Libre.fm"
+                  description={`Connected as ${librefmActiveAccount}`}
+                  control={
+                    <Button size="small" color="inherit" onClick={handleLibrefmLogout}>
+                      Disconnect
+                    </Button>
+                  }
+                />
+              ) : (
+                <Box sx={{ py: 1.25, borderBottom: 1, borderColor: "divider" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                    Libre.fm
+                  </Typography>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560, mb: 1 }}>
+                    <TextField
+                      // Deliberately not "Libre.fm API key" — SettingsPage.test.tsx's
+                      // existing Last.fm API-key tests query via a bare
+                      // /api key/i-style regex, which would otherwise ambiguously
+                      // match both this field and Last.fm's own (see this section's
+                      // sibling card below). "Key"/"Secret" alone stay unambiguous
+                      // while the adjacent "Libre.fm" heading above still makes it
+                      // clear what they're for.
+                      label="Key"
+                      value={librefmApiKey}
+                      onChange={(event) => {
+                        setLibrefmApiKey(event.target.value);
+                      }}
+                      size="small"
+                      fullWidth
+                      autoComplete="off"
+                    />
+                    <TextField
+                      label="Secret"
+                      type="password"
+                      value={librefmApiSecret}
+                      onChange={(event) => {
+                        setLibrefmApiSecret(event.target.value);
+                      }}
+                      size="small"
+                      fullWidth
+                      autoComplete="off"
+                    />
+                  </Stack>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={handleLibrefmConnect}
+                      disabled={
+                        librefmIsLoggingIn ||
+                        librefmIsSavingCredentials ||
+                        !librefmApiKey.trim() ||
+                        !librefmApiSecret.trim()
+                      }
+                    >
+                      {librefmIsLoggingIn
+                        ? "Waiting for approval on Libre.fm…"
+                        : librefmIsSavingCredentials
+                          ? "Saving…"
+                          : "Connect to Libre.fm"}
+                    </Button>
+                    {librefmIsConfigured ? (
+                      <Button size="small" color="inherit" onClick={handleLibrefmClearCredentials}>
+                        Remove saved key
+                      </Button>
+                    ) : null}
+                  </Stack>
+                </Box>
+              )}
+
+              {/* ListenBrainz — no browser flow at all, just a per-account token
+                  pasted in from the user's own ListenBrainz profile settings page. */}
+              {listenBrainzActiveAccount ? (
+                <SettingsRow
+                  label="ListenBrainz"
+                  description={`Connected as ${listenBrainzActiveAccount}`}
+                  control={
+                    <Button size="small" color="inherit" onClick={handleListenBrainzDisconnect}>
+                      Disconnect
+                    </Button>
+                  }
+                />
+              ) : (
+                <Box sx={{ py: 1.25 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                    ListenBrainz
+                  </Typography>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560 }}>
+                    <TextField
+                      label="User token"
+                      type="password"
+                      value={listenBrainzToken}
+                      onChange={(event) => {
+                        setListenBrainzToken(event.target.value);
+                      }}
+                      size="small"
+                      fullWidth
+                      autoComplete="off"
+                      helperText="From your ListenBrainz profile's settings page"
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={handleListenBrainzConnect}
+                      disabled={listenBrainzIsConnecting || !listenBrainzToken.trim()}
+                      sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", md: "center" } }}
+                    >
+                      {listenBrainzIsConnecting ? "Connecting…" : "Connect"}
+                    </Button>
+                  </Stack>
+                </Box>
               )}
             </SettingsSectionCard>
           ) : null}

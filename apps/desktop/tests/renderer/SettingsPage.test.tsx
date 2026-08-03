@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "../../src/shared/auth-api.js";
 import type { FilterApi, FilterValidationResult } from "../../src/shared/filter-api.js";
 import type { LastfmDataApi } from "../../src/shared/lastfm-api.js";
+import type { LibrefmApi, ListenBrainzApi } from "../../src/shared/secondary-auth-api.js";
 import { DEFAULT_APP_SETTINGS, type AppSettings, type SettingsApi } from "../../src/shared/settings-api.js";
 import { SettingsProvider } from "../../src/renderer/src/contexts/SettingsProvider.js";
 import { SnackbarProvider } from "../../src/renderer/src/contexts/SnackbarProvider.js";
@@ -106,6 +107,37 @@ function installFakeAppInfoApi(version = "1.2.3"): void {
   });
 }
 
+/** `useLibrefmAuth()` reads/writes via `window.librefm` — kept separate from
+ * `installFakeAuthApi` since most existing tests here don't care about it. Defaults
+ * to "not configured, nothing connected", same reasoning as `installFakeAuthApi`'s
+ * defaults. */
+function installFakeLibrefmApi(overrides: Partial<LibrefmApi> = {}): LibrefmApi {
+  const api: LibrefmApi = {
+    isConfigured: vi.fn().mockResolvedValue(false),
+    setCredentials: vi.fn().mockResolvedValue(undefined),
+    clearCredentials: vi.fn().mockResolvedValue(undefined),
+    login: vi.fn().mockResolvedValue({ username: "alice" }),
+    logout: vi.fn().mockResolvedValue(undefined),
+    getActiveAccount: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+  Object.defineProperty(window, "librefm", { value: api, configurable: true });
+  return api;
+}
+
+/** `useListenBrainzAuth()` reads/writes via `window.listenbrainz` — same reasoning
+ * and defaults as `installFakeLibrefmApi`. */
+function installFakeListenBrainzApi(overrides: Partial<ListenBrainzApi> = {}): ListenBrainzApi {
+  const api: ListenBrainzApi = {
+    connect: vi.fn().mockResolvedValue({ username: "alice" }),
+    disconnect: vi.fn().mockResolvedValue(undefined),
+    getActiveAccount: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+  Object.defineProperty(window, "listenbrainz", { value: api, configurable: true });
+  return api;
+}
+
 describe("SettingsPage", () => {
   afterEach(() => {
     Reflect.deleteProperty(window, "auth");
@@ -114,6 +146,8 @@ describe("SettingsPage", () => {
     Reflect.deleteProperty(window, "filter");
     Reflect.deleteProperty(window, "appInfo");
     Reflect.deleteProperty(window, "platform");
+    Reflect.deleteProperty(window, "librefm");
+    Reflect.deleteProperty(window, "listenbrainz");
   });
 
   it("shows the app version in the General section", async () => {
@@ -449,6 +483,107 @@ describe("SettingsPage", () => {
       await waitFor(() => {
         expect(clearAppCredentials).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe("additional services", () => {
+    it("connecting to Libre.fm saves credentials, logs in, and clears the fields", async () => {
+      const setCredentials = vi.fn().mockResolvedValue(undefined);
+      const login = vi.fn().mockResolvedValue({ username: "alice" });
+      installFakeAuthApi();
+      installFakeLibrefmApi({ setCredentials, login });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const keyField = await screen.findByLabelText(/^key$/i);
+      const secretField = screen.getByLabelText(/^secret$/i);
+      act(() => {
+        fireEvent.change(keyField, { target: { value: "lf-key" } });
+        fireEvent.change(secretField, { target: { value: "lf-secret" } });
+        fireEvent.click(screen.getByRole("button", { name: /connect to libre\.fm/i }));
+      });
+
+      await waitFor(() => {
+        expect(setCredentials).toHaveBeenCalledWith("lf-key", "lf-secret");
+      });
+      await waitFor(() => {
+        expect(login).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^key$/i)).toHaveValue("");
+      });
+    });
+
+    it("shows the connected Libre.fm account and disconnects it", async () => {
+      const logout = vi.fn().mockResolvedValue(undefined);
+      installFakeAuthApi();
+      installFakeLibrefmApi({ getActiveAccount: vi.fn().mockResolvedValue("alice"), logout });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      expect(await screen.findByText(/connected as alice/i)).toBeInTheDocument();
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+      });
+
+      await waitFor(() => {
+        expect(logout).toHaveBeenCalled();
+      });
+    });
+
+    it("connecting to ListenBrainz validates the token and clears the field", async () => {
+      const connect = vi.fn().mockResolvedValue({ username: "alice" });
+      installFakeAuthApi();
+      installFakeListenBrainzApi({ connect });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const tokenField = await screen.findByLabelText(/user token/i);
+      act(() => {
+        fireEvent.change(tokenField, { target: { value: "lb-token" } });
+        fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+      });
+
+      await waitFor(() => {
+        expect(connect).toHaveBeenCalledWith("lb-token");
+      });
+      await waitFor(() => {
+        expect(screen.getByLabelText(/user token/i)).toHaveValue("");
+      });
+    });
+
+    it("shows the connected ListenBrainz account and disconnects it", async () => {
+      const disconnect = vi.fn().mockResolvedValue(undefined);
+      installFakeAuthApi();
+      installFakeListenBrainzApi({
+        getActiveAccount: vi.fn().mockResolvedValue("bob"),
+        disconnect,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      expect(await screen.findByText(/connected as bob/i)).toBeInTheDocument();
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /disconnect/i }));
+      });
+
+      await waitFor(() => {
+        expect(disconnect).toHaveBeenCalled();
+      });
+    });
+
+    it("shows an error notification when connecting to ListenBrainz fails", async () => {
+      installFakeAuthApi();
+      installFakeListenBrainzApi({
+        connect: vi.fn().mockRejectedValue(new Error("That token isn't valid.")),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const tokenField = await screen.findByLabelText(/user token/i);
+      act(() => {
+        fireEvent.change(tokenField, { target: { value: "bad-token" } });
+        fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+      });
+
+      expect(await screen.findByText("That token isn't valid.")).toBeInTheDocument();
     });
   });
 
