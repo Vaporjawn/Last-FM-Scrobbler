@@ -84,7 +84,19 @@ export function App(): JSX.Element {
               setBugReportOpen(true);
             }}
           />
-          <Box component="main" sx={{ flexGrow: 1, overflow: "auto" }}>
+          {/* `minWidth: 0` is the fix, not `overflow: "auto"` alone — a flex item's
+              default `min-width` is `auto`, meaning it refuses to shrink below its
+              *content's* intrinsic width. Without this, any unshrinkable element
+              anywhere in the entire active page's tree (a long unwrapped string, a
+              fixed-width row, a CSS Grid track that won't shrink below its content —
+              see the fixes elsewhere in this pass) sets this whole box's effective
+              minimum width, which then forces it — and the whole app, since this is
+              the only element standing between the fixed-width sidebar and the
+              window's own edge — wider than the window itself, rather than that one
+              element failing in isolation. `overflow: "auto"` only governs how *this*
+              box's own children overflow once its size is already decided; it does
+              nothing to let the box itself shrink. */}
+          <Box component="main" sx={{ flexGrow: 1, minWidth: 0, overflow: "auto" }}>
             {selectedTrack ? (
               <ScrobbleDetailPage
                 track={selectedTrack}

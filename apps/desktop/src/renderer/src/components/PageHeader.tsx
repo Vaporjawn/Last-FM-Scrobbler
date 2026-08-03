@@ -62,7 +62,14 @@ export function PageHeader({ title, subtitle, inlineSubtitle, action }: PageHead
 
   return (
     <Stack direction="row" spacing={1} sx={{ mb: 3, alignItems: "center", justifyContent: "space-between" }}>
-      <Box>{titleBlock}</Box>
+      {/* `minWidth: 0` — this sits next to `action` (a `RefreshButton` on most
+          callers, which has a fixed intrinsic size and won't shrink) in a flex row;
+          without it, a long single-word title (e.g. ProfilePage's own `title`, a
+          friend's raw username with no spaces to wrap at) sets this box's minimum
+          width to that unbreakable word's full rendered width, which can exceed the
+          available space at this app's narrower window sizes instead of the title
+          Typography's own wrapping taking over. */}
+      <Box sx={{ minWidth: 0 }}>{titleBlock}</Box>
       {action}
     </Stack>
   );

@@ -201,8 +201,15 @@ export function ProfilePage({
             fontSize={32}
             flexShrink
           />
-          <Box>
-            <Typography variant="h6">{targetUsername}</Typography>
+          {/* `minWidth: 0` + `wordBreak: "break-word"` on the username — usernames
+              have no spaces, so without these a long one sets this Box's minimum
+              width to its own full unbroken rendered width (rather than wrapping)
+              next to the fixed-size `SubscriberAvatar`, which can exceed this app's
+              narrower window widths. */}
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" sx={{ wordBreak: "break-word" }}>
+              {targetUsername}
+            </Typography>
             <Typography variant="body2" color="text.secondary">
               {profile ? (formatRealNameAndLocation(profile) ?? "Last.fm account") : "Last.fm account"}
             </Typography>

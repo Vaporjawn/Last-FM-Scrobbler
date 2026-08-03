@@ -27,9 +27,22 @@ export function SettingsRow({ label, description, leading, control }: SettingsRo
     <Box
       sx={{
         display: "flex",
+        // `flexWrap: "wrap"` rather than a breakpoint: `control` ranges from a small
+        // `Switch` up to a multi-button `Stack` (e.g. SettingsPage's Libre.fm "log in"
+        // row, which can show both a long "Waiting for approval on Libre.fm…" button
+        // and a "Remove saved key" button at once) — and this row's own available
+        // width already varies with SettingsPage's own 1-column/2-column grid
+        // breakpoint, so a *second*, independently-guessed breakpoint here would risk
+        // the same "doesn't actually match the real available width" bug that `md`
+        // (not `sm`) fixed elsewhere in this app (see ScrobbleDetailPage's comment).
+        // Wrapping only when content genuinely doesn't fit — rather than at a fixed
+        // width threshold — adapts correctly to whichever container this row ends up
+        // in without needing to know about it.
+        flexWrap: "wrap",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 2,
+        rowGap: 1,
         py: 1.25,
         borderBottom: 1,
         borderColor: "divider",

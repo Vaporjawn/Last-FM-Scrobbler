@@ -210,11 +210,22 @@ export function FriendListItem({
               >
                 {track.track}
               </Typography>
-              <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", minWidth: 0 }}>
+              <Stack
+                direction="row"
+                spacing={0.75}
+                sx={{ alignItems: "center", minWidth: 0, overflow: "hidden" }}
+              >
                 {/* The artist name truncates first (minWidth: 0) if space is tight —
                     the chip's own content (a live "Scrobbling now" or a specific
                     timestamp) is the more load-bearing of the two here, so it keeps
-                    its full width rather than being squeezed by a long artist name. */}
+                    its full width rather than being squeezed by a long artist name.
+                    `overflow: "hidden"` on this row is the last-resort safety net for
+                    the truly narrowest case (this app's own 680px minimum window,
+                    sidebar expanded, a long friend name, and a chip showing a full
+                    timestamp rather than the shorter "Scrobbling now") — once the
+                    artist name has shrunk to nothing and the flexShrink: 0 chip still
+                    doesn't fit, this clips it at the row's own edge instead of letting
+                    it visually bleed past the card into whatever's next to it. */}
                 <Typography
                   variant="caption"
                   color="text.secondary"

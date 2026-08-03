@@ -1003,7 +1003,12 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                 <SettingsRow
                   label="Libre.fm"
                   control={
-                    <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    // `flexWrap` for the same reason as SettingsRow's own outer
+                    // container (see its comment): "Waiting for approval on Libre.fm…"
+                    // plus a second "Remove saved key" button can combine to just about
+                    // the width of a settings card at this app's narrowest window size
+                    // — safe to wrap onto two lines rather than risk overflowing.
+                    <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
                       <Button
                         size="small"
                         variant="outlined"

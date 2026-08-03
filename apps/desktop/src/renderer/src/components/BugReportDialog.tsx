@@ -53,7 +53,10 @@ export function BugReportDialog({ open, onClose }: BugReportDialogProps): JSX.El
         ) : issueUrl ? (
           <Stack spacing={1.5}>
             <Alert severity="success">Thanks — your report was filed.</Alert>
-            <Typography>
+            {/* `wordBreak: "break-word"` — a GitHub issue URL has no spaces for normal
+                text wrapping to break at, so without this a long one would stay a
+                single unbreakable line past the dialog's own maxWidth="sm". */}
+            <Typography sx={{ wordBreak: "break-word" }}>
               <Link href={issueUrl} target="_blank" rel="noreferrer">
                 {issueUrl}
               </Link>

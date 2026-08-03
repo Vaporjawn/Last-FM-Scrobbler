@@ -162,7 +162,15 @@ export function FriendsPage({
                 disablePadding
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: `${FRIEND_COLUMN_WIDTH}px 1fr`,
+                  // `minmax(0, 1fr)`, not bare `1fr` — a bare `1fr` track is shorthand
+                  // for `minmax(auto, 1fr)`, which refuses to shrink below the widest
+                  // *unshrinkable* content any row places in it (here, that's each
+                  // row's PlaybackStatusChip, deliberately `flexShrink: 0` — see
+                  // FriendListItem's own comment on that). `minmax(0, ...)` is what
+                  // actually lets the track — and every row's own `noWrap`/ellipsis
+                  // handling within it — take over instead of forcing this whole grid
+                  // wider than its container at narrow window widths.
+                  gridTemplateColumns: `${FRIEND_COLUMN_WIDTH}px minmax(0, 1fr)`,
                   rowGap: 2,
                   py: 1,
                 }}
