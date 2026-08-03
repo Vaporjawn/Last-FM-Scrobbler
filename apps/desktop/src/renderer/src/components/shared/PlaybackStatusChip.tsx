@@ -2,10 +2,7 @@ import type { JSX } from "react";
 import Chip from "@mui/material/Chip";
 import type { SxProps, Theme } from "@mui/material/styles";
 import { ScrobblingIndicator } from "../ScrobblingIndicator.js";
-
-function formatTimestamp(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
-}
+import { TimestampLabel } from "./TimestampLabel.js";
 
 export interface PlaybackStatusChipProps {
   readonly nowPlaying: boolean;
@@ -35,6 +32,14 @@ export interface PlaybackStatusChipProps {
  * without the caller needing its own wrapping element for that — `FriendListItem`'s
  * activity card used to hand-roll exactly this (a `role="status"` `Box` around a bare
  * `ScrobblingIndicator`) before it adopted this shared chip instead.
+ *
+ * The timestamp chip's label is `TimestampLabel`, not a plain string: at the narrow
+ * row widths this app has to support, a fixed full-precision timestamp
+ * ("8/3/2026, 2:45:30 PM") would otherwise get silently cut mid-character by the
+ * `Chip`'s own default `text-overflow: ellipsis`. `TimestampLabel` instead steps down
+ * through progressively shorter but always fully-formed strings (dropping seconds,
+ * then the year, then the date entirely) as its actual available width shrinks — see
+ * its own docstring and `format-timestamp-candidates.ts`.
  */
 export function PlaybackStatusChip({
   nowPlaying,
@@ -56,7 +61,9 @@ export function PlaybackStatusChip({
     );
   }
   if (timestamp !== undefined) {
-    return <Chip label={formatTimestamp(timestamp)} size="small" variant="outlined" sx={sx} />;
+    return (
+      <Chip label={<TimestampLabel timestamp={timestamp} />} size="small" variant="outlined" sx={sx} />
+    );
   }
   return null;
 }

@@ -706,9 +706,11 @@ at narrow widths:
   later (an actual, previously-hit instance of that exact bug class in this codebase).
 - **Last-resort clipping**: `FriendListItem.tsx`'s artist + timestamp-chip row has
   `overflow: "hidden"` as a genuine last resort for the true worst case (a long artist
-  name plus a full-length timestamp chip at exactly the 680px floor) — everything above
+  name plus a timestamp chip at exactly the 680px floor) — everything above
   is a real shrink-to-fit fix; this one just guarantees a graceful clip rather than a
-  layout break on the one combination none of the above alone can fully save.
+  layout break on the one combination none of the above alone can fully save. The
+  timestamp chip itself no longer needs to rely on this as heavily as it once did — see
+  "The timestamp chip shrinks through shorter formats instead of truncating" below.
 
 **Sidebar auto-collapse in portrait mode** (`NavigationSidebar.tsx`): the sidebar
 starts collapsed whenever the current aspect ratio is portrait (`"9:16"`/`"9:14"`) —
@@ -725,6 +727,75 @@ still auto-collapses, but leaving portrait later never force-expands — a user 
 manually re-opened the sidebar while in portrait keeps it open when they switch back to
 landscape, respecting their explicit choice rather than overriding it every time the
 aspect ratio changes.
+
+## The timestamp chip shrinks through shorter formats instead of truncating
+
+`PlaybackStatusChip`'s non-"now playing" state (a track's scrobble time, shown in
+`FriendListItem`/`ScrobbleListItem`/`ScrobbleDetailPage`) used to render one fixed
+string (`Date.prototype.toLocaleString()`, e.g. `"8/3/2026, 2:45:30 PM"`) and let the
+`Chip`'s own default `text-overflow: ellipsis` silently cut it mid-character whenever
+the row didn't have room — the "Last-resort clipping" bullet above used to be the
+*primary* mechanism for this chip, not the true last resort it's meant to be. It's now
+`TimestampLabel`, which steps down through `format-timestamp-candidates.ts`'s four
+progressively shorter but always fully-formed strings (full → drop seconds → drop the
+year → time only) via `useShrinkToFitIndex`, picking the widest one that actually fits
+— genuine CSS ellipsis truncation only ever engages now if even the shortest candidate
+(a bare time) still doesn't fit.
+
+**Two real bugs, both found only by live-resizing an actual chip in a real browser —
+neither is catchable by this project's own jsdom-based component tests, which is worth
+understanding in some depth given how confidently the original implementation passed
+every test it had before either was found:**
+
+1. **Shrinking from an already-fitting state did nothing.** The original design called
+   `setIndex(0)` directly from the `ResizeObserver` callback on every detected resize.
+   When the chip is already showing the longest candidate (`index === 0`, the common
+   case — plenty of room) and the container then shrinks, calling `setIndex(0)` again
+   is a no-op as far as React is concerned (the value didn't change), so React skips
+   re-rendering entirely, and the step-down effect that actually measures and shrinks
+   never gets a chance to run. Fixed by routing every detected resize through a plain
+   incrementing counter (`resizeTick`) instead of calling `setIndex(0)` directly — a
+   counter is never idempotent, so it guarantees a real re-render (and therefore a real
+   re-run of the measuring effect) on every resize, even when the index it resets
+   *to* happens to already be the current value.
+2. **Growing back to a more detailed format often didn't happen at all.** The
+   `ResizeObserver` watches the label's own span, which only auto-sizes to its current
+   content — nothing stretches it to fill whatever room its ancestor row has. Shrinking
+   the ancestor below that auto-size genuinely squeezes the span smaller, which
+   `ResizeObserver` correctly reports (bug 1 aside). But *growing* the ancestor back
+   doesn't force the span to grow with it if the span was already comfortably sized for
+   its current (short) text with slack room to spare — the span's own box never
+   changes size, so `ResizeObserver`, which only fires on the *observed* element's own
+   size actually changing, never fires, and the label stays stuck on a shorter format
+   than the now-available space could fit. Fixed by adding a `window` `resize`
+   listener as a second, independent trigger for the same `resizeTick` counter — window
+   resizes are the dominant real-world cause of a row's available space changing.
+   **Known, accepted gap, not silently swept under the rug**: this still won't catch a
+   *sibling* element's content changing length (e.g. a friend's username loading in
+   shorter than a placeholder) independent of any window resize, while the chip itself
+   stays comfortably sized either way. Genuinely covering that would need a
+   `ResizeObserver` on each call site's own actual constraining ancestor, which differs
+   per row layout and isn't implemented — revisit if it turns out to matter in
+   practice.
+
+Both bugs were found the same way: temporarily standing up a throwaway Vite dev server
+serving nothing but this component at several fixed pixel widths plus one
+viewport-relative (`vw`) width, driving it with Playwright — a real Chromium instance
+in a real browser, with a real `ResizeObserver` and real layout — resizing both a test
+`<div>` directly and the actual browser viewport, and confirming the rendered text at
+each step. `useShrinkToFitIndex`'s own docstring documents exactly why jsdom (this
+project's component-test environment) can't be used for this: it implements neither
+`ResizeObserver` nor real layout, so `scrollWidth`/`clientWidth` both read `0` there
+unconditionally (confirmed directly against jsdom 30.0.1's own `window`) — every
+existing jsdom-based test of this component, before and after the fix, only ever
+proves "shows the full candidate and doesn't crash," which is exactly the class of gap
+that let the original, subtly-broken implementation ship with every test green. One
+piece *is* genuinely testable in jsdom despite this — `window.dispatchEvent(new
+Event("resize"))` exercises real, unstubbed `window` event APIs jsdom fully
+implements — and `tests/renderer/use-shrink-to-fit-index.test.tsx` has a dedicated test
+for exactly that path; the `ResizeObserver`-specific paths there use a hand-written
+fake instead, with manually-stubbed `scrollWidth`/`clientWidth` getters standing in for
+real layout.
 
 ## Now Playing: artist panel, love/tag
 
