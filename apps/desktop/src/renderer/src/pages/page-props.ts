@@ -22,4 +22,10 @@ export interface PageProps {
    * union, since a detail view isn't a sidebar destination — it's a drill-down that
    * always returns to whichever page opened it. */
   readonly onSelectScrobble?: (track: RecentTrack) => void;
+  /** Opens `ProfilePage` for a clicked friend — `FriendsPage`'s own list is the only
+   * source today (see `FriendListItem.onSelectFriend`). Mirrors `onSelectScrobble`
+   * above: `App.tsx` holds "which friend" as separate state from `activeView` for the
+   * same reason a scrobble's detail view isn't a sidebar destination — it's a
+   * drill-down that always returns to whichever page opened it. */
+  readonly onSelectFriend?: (username: string) => void;
 }

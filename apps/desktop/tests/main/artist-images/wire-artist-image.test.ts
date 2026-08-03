@@ -58,4 +58,61 @@ describe("wireArtistImage", () => {
 
     expect(ipcMainHandlers.has(IPC_CHANNELS.artistImageGetUrl)).toBe(false);
   });
+
+  describe("Last.fm-first, Deezer-fallback", () => {
+    it("tries Last.fm first and returns its photo without ever calling Deezer", async () => {
+      const getArtistImageUrl = vi.fn().mockResolvedValue("https://lastfm.example.com/real.jpg");
+      const fetchImpl = vi.fn<typeof fetch>();
+      wireArtistImage({ lastfmClient: { getArtistImageUrl }, fetchImpl });
+
+      const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Radiohead");
+
+      expect(result).toBe("https://lastfm.example.com/real.jpg");
+      expect(getArtistImageUrl).toHaveBeenCalledWith("Radiohead");
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it("falls through to Deezer when Last.fm has nothing for this artist", async () => {
+      const getArtistImageUrl = vi.fn().mockResolvedValue(undefined);
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          jsonResponse({ data: [{ name: "Kendrick Lamar", picture_xl: "https://deezer.example.com/real.jpg" }] }),
+        );
+      wireArtistImage({ lastfmClient: { getArtistImageUrl }, fetchImpl });
+
+      const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Kendrick Lamar");
+
+      expect(result).toBe("https://deezer.example.com/real.jpg");
+    });
+
+    it("falls through to Deezer when the Last.fm request itself throws", async () => {
+      // e.g. LastfmApiError for an artist Last.fm's catalog doesn't have at all —
+      // a common, expected case, not something that should ever surface as a failure.
+      const getArtistImageUrl = vi.fn().mockRejectedValue(new Error("artist not found"));
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          jsonResponse({ data: [{ name: "Some Obscure Artist", picture_xl: "https://deezer.example.com/real.jpg" }] }),
+        );
+      wireArtistImage({ lastfmClient: { getArtistImageUrl }, fetchImpl });
+
+      const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Some Obscure Artist");
+
+      expect(result).toBe("https://deezer.example.com/real.jpg");
+    });
+
+    it("goes straight to Deezer when no lastfmClient is given at all", async () => {
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          jsonResponse({ data: [{ name: "Radiohead", picture_xl: "https://deezer.example.com/real.jpg" }] }),
+        );
+      wireArtistImage({ fetchImpl });
+
+      const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Radiohead");
+
+      expect(result).toBe("https://deezer.example.com/real.jpg");
+    });
+  });
 });

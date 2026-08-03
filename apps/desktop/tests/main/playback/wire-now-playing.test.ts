@@ -5,6 +5,7 @@ import type {
   TrackInfo,
   Unsubscribe,
 } from "@lastfm-scrobbler/shared-types";
+import { compileFilter } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../../src/shared/ipc-channels.js";
 
 const ipcMainHandlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -145,6 +146,56 @@ describe("wireNowPlaying", () => {
     emitTrackChanged(TRACK);
 
     expect(onTrackChanged).toHaveBeenCalledOnce();
+    stop();
+  });
+
+  it("never calls onTrackChanged for a track matching the filter", () => {
+    // Coverage for onScrobbleEligible specifically being suppressed too lives in
+    // packages/core's own Tracker test suite (it needs to advance past the
+    // eligibility threshold via manual tick() calls, which isn't meaningful to
+    // duplicate here) — Tracker checks the filter in the same place
+    // (handleTrackChanged, before either callback fires) for both, so onTrackChanged
+    // being suppressed here is a direct signal the filter reached Tracker correctly.
+    const { source, emitTrackChanged } = createFakeSource();
+    const mainWindow = createFakeWindow();
+    const onTrackChanged = vi.fn();
+    const filter = compileFilter('sourceApp == "com.apple.Music"');
+
+    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged, filter);
+    emitTrackChanged(TRACK);
+
+    expect(onTrackChanged).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("still relays a filtered-out track to the renderer's Now Playing view unfiltered", () => {
+    // The filter only ever affects Tracker (scrobble eligibility) — "what's playing"
+    // and "what's eligible to scrobble" are different questions, see wireNowPlaying's
+    // own docstring.
+    const { source, emitTrackChanged } = createFakeSource();
+    const mainWindow = createFakeWindow();
+    const filter = compileFilter('sourceApp == "com.apple.Music"');
+
+    const stop = wireNowPlaying(source, mainWindow as never, undefined, undefined, filter);
+    emitTrackChanged(TRACK);
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith(
+      IPC_CHANNELS.nowPlayingTrackChanged,
+      TRACK,
+    );
+    stop();
+  });
+
+  it("still calls onTrackChanged for a track that doesn't match the filter", () => {
+    const { source, emitTrackChanged } = createFakeSource();
+    const mainWindow = createFakeWindow();
+    const onTrackChanged = vi.fn();
+    const filter = compileFilter('sourceApp == "spotify"');
+
+    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged, filter);
+    emitTrackChanged(TRACK);
+
+    expect(onTrackChanged).toHaveBeenCalledWith(expect.objectContaining({ track: TRACK }));
     stop();
   });
 

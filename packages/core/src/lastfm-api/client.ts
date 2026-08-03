@@ -20,6 +20,14 @@ import type {
 const DEFAULT_BASE_URL = "https://ws.audioscrobbler.com/2.0/";
 const MAX_SCROBBLE_BATCH_SIZE = 50;
 
+/** Last.fm's own shared "no photo" placeholder for `artist.getInfo`'s `image` array —
+ * verified live against the real API: every size's `#text` points to this exact same
+ * generic graphic, regardless of which artist was requested, a known, long-standing
+ * issue on Last.fm's side (see `ArtistInfo`'s docstring in `types.ts` for the full
+ * writeup and citation). Used by `getArtistImageUrl` to filter it out rather than
+ * returning it as if it were a real photo. */
+const LASTFM_ARTIST_IMAGE_PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
+
 export interface LastfmClientOptions {
   readonly apiKey: string;
   readonly apiSecret: string;
@@ -320,14 +328,32 @@ export class LastfmClient {
    * elsewhere in this client) is trustworthy. */
   async getUserInfo(options: { readonly user: string }): Promise<UserProfile> {
     const result = await this.request<{
-      user: { name: string; realname?: string; image?: readonly LastfmImageJson[] };
+      user: {
+        name: string;
+        realname?: string;
+        image?: readonly LastfmImageJson[];
+        playcount?: string;
+        registered?: { unixtime?: string };
+      };
     }>("user.getInfo", { user: options.user }, { httpMethod: "GET", signed: false });
 
     const avatarUrl = pickLargestImageUrl(result.user.image);
+    // Defensive Number() + isNaN checks, same as every other numeric field this
+    // client parses (see e.g. getArtistInfo's stats.listeners) — playcount/
+    // registered.unixtime are always present and numeric on a real account (verified
+    // live), but never assumed here.
+    const totalScrobbles = Number(result.user.playcount);
+    const registeredAt = Number(result.user.registered?.unixtime);
     return {
       username: result.user.name,
       ...(result.user.realname ? { realName: result.user.realname } : {}),
       ...(avatarUrl ? { avatarUrl } : {}),
+      ...(result.user.playcount !== undefined && !Number.isNaN(totalScrobbles)
+        ? { totalScrobbles }
+        : {}),
+      ...(result.user.registered?.unixtime !== undefined && !Number.isNaN(registeredAt)
+        ? { registeredAt }
+        : {}),
     };
   }
 
@@ -363,6 +389,35 @@ export class LastfmClient {
         ? { userPlayCount: Number(result.artist.stats.userplaycount) }
         : {}),
     };
+  }
+
+  /**
+   * A real per-artist photo sourced from Last.fm itself, when Last.fm actually has
+   * one for `artistName` — `undefined` otherwise, including the common case where
+   * `artist.getInfo`'s `image` array is present but every size points to Last.fm's
+   * own shared placeholder graphic (see `LASTFM_ARTIST_IMAGE_PLACEHOLDER_HASH`; full
+   * writeup in `ArtistInfo`'s docstring in `types.ts`) — that's filtered out here so
+   * callers never mistake it for a real photo. Throws on request failure (e.g. the
+   * artist genuinely doesn't exist in Last.fm's catalog — error code 6), same
+   * convention as every other method on this client; callers that want a graceful
+   * "try Last.fm, fall back to another source" flow should catch around this call
+   * themselves (see `apps/desktop/src/main/artist-images/wire-artist-image.ts`).
+   *
+   * Deliberately a separate method from `getArtistInfo` rather than adding `imageUrl`
+   * to its `ArtistInfo` return type: that type is used far more broadly than any
+   * caller that actually wants a photo, and — per its own docstring — was designed
+   * specifically to *not* carry this field, to avoid every consumer of artist bio/
+   * stats having to independently remember to filter the placeholder.
+   */
+  async getArtistImageUrl(artistName: string): Promise<string | undefined> {
+    const result = await this.request<{
+      artist: { image?: readonly LastfmImageJson[] };
+    }>("artist.getInfo", { artist: artistName }, { httpMethod: "GET", signed: false });
+
+    const imageUrl = pickLargestImageUrl(result.artist.image);
+    return imageUrl && !imageUrl.includes(LASTFM_ARTIST_IMAGE_PLACEHOLDER_HASH)
+      ? imageUrl
+      : undefined;
   }
 
   async getSimilarArtists(options: {

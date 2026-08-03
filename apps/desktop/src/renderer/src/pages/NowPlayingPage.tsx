@@ -82,7 +82,7 @@ export function NowPlayingPage(): JSX.Element {
     loading: artistInfoLoading,
     error: artistInfoError,
   } = useArtistInfo(track?.artist);
-  const trackDetail = useTrackDetail(track?.artist, track?.title);
+  const trackDetail = useTrackDetail(track?.artist, track?.title, activeAccount);
 
   if (!track) {
     return (
@@ -184,6 +184,12 @@ export function NowPlayingPage(): JSX.Element {
                 >
                   View on Last.fm
                 </Link>
+                {trackDetail.userPlayCount !== undefined ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                    You've listened to this track {trackDetail.userPlayCount.toLocaleString()} time
+                    {trackDetail.userPlayCount === 1 ? "" : "s"}.
+                  </Typography>
+                ) : null}
               </Box>
             ) : null}
 

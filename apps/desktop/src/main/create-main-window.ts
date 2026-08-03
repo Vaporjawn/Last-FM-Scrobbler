@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 import type { PlaybackSource } from "@lastfm-scrobbler/shared-types";
-import type { ScrobbleEligibleEvent, TrackChangedEvent } from "@lastfm-scrobbler/core";
+import type { CompiledFilter, ScrobbleEligibleEvent, TrackChangedEvent } from "@lastfm-scrobbler/core";
 import type { WindowBounds } from "../shared/settings-api.js";
 import { isSafeExternalUrl } from "./window/is-safe-external-url.js";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
@@ -44,6 +44,12 @@ export interface CreateMainWindowOptions {
    * resizing, Electron's own default. See `main/window/resolve-aspect-ratio.ts` for
    * how a Settings selection becomes this number. */
   readonly initialAspectRatio?: number;
+  /** A compiled `AppSettings.filterExpression` (see that field's docstring) — tracks
+   * matching it are excluded from `onScrobbleEligible`/`onTrackChanged` entirely, but
+   * still relayed to the renderer's "Now Playing" view unfiltered (see
+   * `wireNowPlaying`'s own docstring for why those are different questions). Omit for
+   * no filtering, this app's original behavior. */
+  readonly filter?: CompiledFilter;
   /** When `true`, the window is created without ever showing itself automatically —
    * used for `AppSettings.startMinimized`'s "a login-triggered launch shouldn't pop a
    * window in the user's face" behavior (see `main/index.ts`). The window still loads
@@ -70,6 +76,7 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
     iconPath,
     initialBounds,
     initialAspectRatio,
+    filter,
     startHidden,
   } = options;
 
@@ -162,9 +169,9 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
 
   if (playbackSource) {
     if (onScrobbleEligible) {
-      wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible, onTrackChanged);
+      wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible, onTrackChanged, filter);
     } else {
-      wireNowPlaying(playbackSource, mainWindow, undefined, onTrackChanged);
+      wireNowPlaying(playbackSource, mainWindow, undefined, onTrackChanged, filter);
     }
   }
 

@@ -1,7 +1,12 @@
 import type { BrowserWindow } from "electron";
 import electron from "electron";
 import type { PlaybackSource, PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
-import { Tracker, type ScrobbleEligibleEvent, type TrackChangedEvent } from "@lastfm-scrobbler/core";
+import {
+  Tracker,
+  type CompiledFilter,
+  type ScrobbleEligibleEvent,
+  type TrackChangedEvent,
+} from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import type { NowPlayingSnapshot } from "../../shared/now-playing-snapshot.js";
 
@@ -39,6 +44,12 @@ const TRACKER_TICK_INTERVAL_MS = 1000;
  * usually well after the track started). Omitted entirely (not defaulted to a no-op
  * logger like `onScrobbleEligible`) in builds/tests that don't need it.
  *
+ * `filter` (see `AppSettings.filterExpression`'s docstring) excludes a matching track
+ * from the `Tracker` entirely — no `onScrobbleEligible`, no `onTrackChanged` — but
+ * never affects the raw relay above, so an excluded track still shows in the
+ * renderer's "Now Playing" view exactly as it's actually playing; only scrobbling
+ * itself is suppressed for it.
+ *
  * Returns a cleanup function that stops the tracker, its tick timer, and the
  * `get-current` handler.
  */
@@ -49,6 +60,7 @@ export function wireNowPlaying(
     console.log(`Scrobble eligible (not submitted — no handler wired): ${event.track.artist} — ${event.track.title}`);
   },
   onTrackChanged?: (event: TrackChangedEvent) => void,
+  filter?: CompiledFilter,
 ): () => void {
   let currentTrack: TrackInfo | undefined;
   let currentState: PlaybackState = "stopped";
@@ -69,6 +81,7 @@ export function wireNowPlaying(
   const tracker = new Tracker({
     source,
     events: { onScrobbleEligible, ...(onTrackChanged ? { onTrackChanged } : {}) },
+    ...(filter ? { filter } : {}),
   });
   tracker.start();
   const tickHandle = setInterval(() => {

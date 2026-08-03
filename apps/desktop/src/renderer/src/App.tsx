@@ -39,6 +39,14 @@ export function App(): JSX.Element {
   // returns to whichever view was active when it opened, not always Scrobbles — see
   // `ScrobbleDetailPage`'s docstring and its `backLabel` prop below.
   const [selectedTrack, setSelectedTrack] = useState<RecentTrack | undefined>(undefined);
+  // Same drill-down pattern as `selectedTrack` above, for a friend's own row on
+  // FriendsPage (see `PageProps.onSelectFriend`) — reuses `ProfilePage` itself rather
+  // than a second page, passing the friend's username through as its `username` prop
+  // and a `backLabel`/`onBack` pair so it renders with a "Back to Friends" button
+  // instead of as the sidebar's own plain "Profile" destination.
+  const [selectedFriendUsername, setSelectedFriendUsername] = useState<string | undefined>(
+    undefined,
+  );
   const { activeAccount } = useAuth();
   const { settings } = useSettings();
   const ActivePage = PAGES[activeView];
@@ -69,6 +77,7 @@ export function App(): JSX.Element {
               // clicking, say, "Profile" while looking at a scrobble's detail would
               // silently do nothing, trapping the user there.
               setSelectedTrack(undefined);
+              setSelectedFriendUsername(undefined);
               setActiveView(view);
             }}
             onReportBug={() => {
@@ -85,6 +94,17 @@ export function App(): JSX.Element {
                   setSelectedTrack(undefined);
                 }}
               />
+            ) : selectedFriendUsername ? (
+              <ProfilePage
+                username={selectedFriendUsername}
+                backLabel={getViewLabel(activeView)}
+                onBack={() => {
+                  setSelectedFriendUsername(undefined);
+                }}
+                onNavigateToSettings={() => {
+                  setActiveView("settings");
+                }}
+              />
             ) : (
               <ActivePage
                 onNavigateToSettings={() => {
@@ -94,6 +114,7 @@ export function App(): JSX.Element {
                   setActiveView("profile");
                 }}
                 onSelectScrobble={setSelectedTrack}
+                onSelectFriend={setSelectedFriendUsername}
               />
             )}
           </Box>

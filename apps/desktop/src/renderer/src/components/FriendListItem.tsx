@@ -3,8 +3,8 @@ import StarIcon from "@mui/icons-material/Star";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
+import Divider from "@mui/material/Divider";
 import ListItem from "@mui/material/ListItem";
-import ListItemAvatar from "@mui/material/ListItemAvatar";
 import ListItemText from "@mui/material/ListItemText";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
@@ -16,9 +16,10 @@ import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
 
 /** Friend avatar size — bumped up from MUI's 40px default so real Last.fm photos
  * actually read at list scale; matches `ScrobbleListItem`'s row avatar for a
- * consistent list-avatar size across the app. The nested activity card's own avatar
- * stays a step smaller (see `ACTIVITY_AVATAR_SIZE` below) to keep the visual hierarchy
- * — this row is about the friend, the card beneath it is a secondary detail. */
+ * consistent list-avatar size across the app. The activity half's own artwork stays a
+ * step smaller (see `ACTIVITY_AVATAR_SIZE` below) to keep the visual hierarchy — the
+ * friend is the primary subject of the card, their current track a secondary detail
+ * sitting beside them, not competing for the same visual weight. */
 const AVATAR_SIZE = 56;
 const ACTIVITY_AVATAR_SIZE = 48;
 
@@ -40,24 +41,33 @@ export interface FriendListItemProps {
    * non-interactive) by any caller that doesn't have anywhere to navigate to, and
    * has no effect when there's no `activity.track` to select in the first place. */
   readonly onSelectTrack?: (track: RecentTrack) => void;
+  /** Opens `ProfilePage` for this friend when given — wired only on the avatar/name
+   * row above (not the whole `ListItem`, and not the activity card, which keeps its
+   * own independent `onSelectTrack` click-through). Omitted entirely (the row stays
+   * non-interactive) by any caller with nowhere to navigate to, same convention as
+   * `onSelectTrack`. */
+  readonly onSelectFriend?: (username: string) => void;
 }
 
 /**
- * One row of `FriendsPage`'s list: the friend's real Last.fm avatar (`friend.avatarUrl`
- * — comes directly from `user.getFriends`, no separate lookup needed; `Avatar` falls
+ * One row of `FriendsPage`'s list, rendered as a single outlined `Paper` card split
+ * into two halves side by side: the friend's real Last.fm avatar (`friend.avatarUrl` —
+ * comes directly from `user.getFriends`, no separate lookup needed; `Avatar` falls
  * back to a letter automatically when it's absent, same as `ProfilePage`'s account
  * card), a small gold star under the avatar for a Last.fm Pro subscriber
  * (`friend.isSubscriber` — also parsed directly out of the same `user.getFriends`
- * response, no separate lookup), their real name and/or self-reported location (see
- * `formatSecondaryLine` — either, both, or neither, same "no lookup needed" source),
- * plus their most recent activity, passed in via `activity` — see that prop's
- * docstring for why this component doesn't fetch it itself. The activity itself is
- * rendered as its own small nested `Paper` card (real album art — `track.imageUrl`,
- * the same real-image field `ScrobbleListItem` already renders for scrobble history,
- * falling back to a note/play icon the same way — plus the status chip/timestamp and
- * track/artist text), visually set apart from the friend's own row above it, and —
- * when `onSelectTrack` is given — clickable through to that track's
- * `ScrobbleDetailPage`, the same drill-down `ScrobbleListItem`'s own row offers.
+ * response, no separate lookup), and their real name and/or self-reported location
+ * (see `formatSecondaryLine` — either, both, or neither, same "no lookup needed"
+ * source) on the left; their most recent activity — passed in via `activity`, see that
+ * prop's docstring for why this component doesn't fetch it itself — on the right, past
+ * a vertical `Divider`, when there is any (real album art via `track.imageUrl`, the
+ * same real-image field `ScrobbleListItem` already renders for scrobble history,
+ * falling back to a note/play icon the same way, plus the status chip/timestamp and
+ * track/artist text). The two halves are independently clickable: the avatar/name half
+ * through to the friend's own `ProfilePage` when `onSelectFriend` is given, the
+ * activity half through to that track's `ScrobbleDetailPage` when `onSelectTrack` is
+ * given — since the two lead to different destinations; either or both can be omitted
+ * to leave that half non-interactive.
  */
 /** Combines `realName` and `location` onto ListItemText's one `secondary` line
  * ("Real Name · Location"), rather than adding a third text row for a single extra
@@ -69,19 +79,50 @@ function formatSecondaryLine(friend: Friend): string | undefined {
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
-export function FriendListItem({ friend, activity, onSelectTrack }: FriendListItemProps): JSX.Element {
+export function FriendListItem({
+  friend,
+  activity,
+  onSelectTrack,
+  onSelectFriend,
+}: FriendListItemProps): JSX.Element {
   const { track } = activity;
 
   return (
-    <ListItem divider sx={{ display: "block", py: 1.5 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        {/* MUI's `ListItemAvatar` reserves a fixed 56px box sized for its own 40px
-            default avatar (40px avatar + 16px gap before the text) — since
-            AVATAR_SIZE is bigger than that default, the box needs to grow with it or
-            the avatar fills it completely and the text butts right up against the
-            image with no gap at all. */}
-        <ListItemAvatar sx={{ minWidth: AVATAR_SIZE + 16 }}>
-          <Stack spacing={0.25} sx={{ alignItems: "center" }}>
+    <ListItem divider sx={{ py: 1 }}>
+      {/* One shared card for both halves — replaces the previous friend-row-with-a-
+          separate-activity-card-stacked-underneath layout. `flexShrink: 0` on the
+          friend half keeps the avatar/name from being squeezed as the window narrows;
+          `minWidth: 0` + `flex: 1` on the activity half is what lets its `noWrap`
+          track title actually truncate with an ellipsis instead of overflowing. */}
+      <Paper
+        variant="outlined"
+        sx={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          p: 1.25,
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={1.5}
+          {...(onSelectFriend
+            ? {
+                component: ButtonBase,
+                onClick: () => {
+                  onSelectFriend(friend.username);
+                },
+                "aria-label": `View ${friend.username}'s profile`,
+              }
+            : {})}
+          sx={{
+            alignItems: "center",
+            flexShrink: 0,
+            ...(onSelectFriend ? { textAlign: "left", cursor: "pointer" } : {}),
+          }}
+        >
+          <Stack spacing={0.25} sx={{ alignItems: "center", flexShrink: 0 }}>
             <Avatar
               src={friend.avatarUrl}
               alt={friend.username}
@@ -101,64 +142,63 @@ export function FriendListItem({ friend, activity, onSelectTrack }: FriendListIt
               />
             ) : null}
           </Stack>
-        </ListItemAvatar>
-        <ListItemText primary={friend.username} secondary={formatSecondaryLine(friend)} sx={{ my: 0 }} />
-      </Stack>
+          <ListItemText
+            primary={friend.username}
+            secondary={formatSecondaryLine(friend)}
+            sx={{ my: 0, maxWidth: 160 }}
+            slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
+          />
+        </Stack>
 
-      {track ? (
-        // Flush with the friend `Avatar` above (no `ml` indent) — `Paper`'s own `p: 1`
-        // (8px) padding plus the avatar's 8px inset within its 72px-wide
-        // `ListItemAvatar` box happen to match exactly, so `TrackArtworkAvatar` below
-        // lines up left-edge-to-left-edge with the friend's own avatar rather than
-        // sitting indented under their username.
-        <Box sx={{ mt: 1.25 }}>
-          <Paper
-            {...(onSelectTrack
-              ? {
-                  component: ButtonBase,
-                  onClick: () => {
-                    onSelectTrack(track);
-                  },
-                }
-              : {})}
-            variant="outlined"
-            {...(onSelectTrack ? { "aria-label": `View details for ${track.track}` } : {})}
-            sx={{
-              p: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: 1.25,
-              bgcolor: "action.hover",
-              width: "100%",
-              textAlign: "left",
-              ...(onSelectTrack ? { cursor: "pointer" } : {}),
-            }}
-          >
-            <TrackArtworkAvatar
-              imageUrl={track.imageUrl}
-              title={track.track}
-              nowPlaying={track.nowPlaying}
-              size={ACTIVITY_AVATAR_SIZE}
-              flexShrink
-            />
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <PlaybackStatusChip
+        {track ? (
+          <>
+            <Divider orientation="vertical" flexItem />
+            <Box
+              {...(onSelectTrack
+                ? {
+                    component: ButtonBase,
+                    onClick: () => {
+                      onSelectTrack(track);
+                    },
+                    "aria-label": `View details for ${track.track}`,
+                  }
+                : {})}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.25,
+                flex: 1,
+                minWidth: 0,
+                textAlign: "left",
+                ...(onSelectTrack ? { cursor: "pointer" } : {}),
+              }}
+            >
+              <TrackArtworkAvatar
+                imageUrl={track.imageUrl}
+                title={track.track}
                 nowPlaying={track.nowPlaying}
-                timestamp={track.timestamp}
-                nowPlayingLabel="Scrobbling now"
-                sx={{ mb: 0.5 }}
+                size={ACTIVITY_AVATAR_SIZE}
+                flexShrink
               />
-              <Typography variant="body2" noWrap>
-                {track.track}
-                <Typography component="span" variant="body2" color="text.secondary">
-                  {" — "}
-                  {track.artist}
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <PlaybackStatusChip
+                  nowPlaying={track.nowPlaying}
+                  timestamp={track.timestamp}
+                  nowPlayingLabel="Scrobbling now"
+                  sx={{ mb: 0.5 }}
+                />
+                <Typography variant="body2" noWrap>
+                  {track.track}
+                  <Typography component="span" variant="body2" color="text.secondary">
+                    {" — "}
+                    {track.artist}
+                  </Typography>
                 </Typography>
-              </Typography>
+              </Box>
             </Box>
-          </Paper>
-        </Box>
-      ) : null}
+          </>
+        ) : null}
+      </Paper>
     </ListItem>
   );
 }

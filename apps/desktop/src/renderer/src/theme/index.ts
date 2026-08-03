@@ -64,9 +64,19 @@ export function createAppTheme(mode: ThemeMode): Theme {
     // area this theme-only pass shouldn't reach for. Mirrors the exact stack already
     // used by `apps/site`'s styles.css, so the product's typography feels consistent
     // across the app and the marketing site.
+    //
+    // Oxygen/Ubuntu/Cantarell/"Noto Sans" fill a real gap the original stack had:
+    // this app ships a Linux build (`packages/adapter-linux`) same as macOS/Windows,
+    // but had nothing naming an actual Linux desktop-environment font — it fell
+    // straight from Roboto (present only if a Chromium-family browser happens to be
+    // installed) to the generic `Arial`/`sans-serif` fallback, silently skipping the
+    // KDE (Oxygen, older Plasma), Ubuntu (Ubuntu), GNOME (Cantarell), and broader
+    // freedesktop (Noto Sans, most distros' actual default UI sans) system faces —
+    // the exact same "read as native" goal this stack exists for, just previously
+    // only realized on two of the three platforms this app ships on.
     typography: {
       fontFamily:
-        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Noto Sans", "Helvetica Neue", Arial, sans-serif',
       // NowPlayingPage's and ScrobbleDetailPage's track title — the single largest,
       // most important piece of text in the app. Bolder and a touch smaller than MUI's
       // 34px/regular-400 default, which is sized for a full-width web hero rather than

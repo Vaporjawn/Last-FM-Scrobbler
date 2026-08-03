@@ -160,4 +160,148 @@ describe("ProfilePage", () => {
     expect(screen.queryByRole("img", { name: "alice" })).not.toBeInTheDocument();
     expect(screen.getByText("A")).toBeInTheDocument();
   });
+
+  describe("account stats", () => {
+    it("shows total scrobbles and a member-since date when Last.fm has both on file", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({
+          username: "alice",
+          totalScrobbles: 151_481,
+          // 1037793040 unix seconds = November 20, 2002
+          registeredAt: 1_037_793_040,
+        }),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByText("151,481")).toBeInTheDocument();
+      expect(screen.getByText("Scrobbles")).toBeInTheDocument();
+      expect(screen.getByText("Member since November 2002")).toBeInTheDocument();
+    });
+
+    it("shows only whichever of the two stats Last.fm actually has on file", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice", totalScrobbles: 42 }),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByText("42")).toBeInTheDocument();
+      expect(screen.queryByText(/member since/i)).not.toBeInTheDocument();
+    });
+
+    it("shows neither stat, without a broken layout, when Last.fm has neither on file", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice" }),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      await screen.findByText("alice");
+      expect(screen.queryByText("Scrobbles")).not.toBeInTheDocument();
+      expect(screen.queryByText(/member since/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("default behavior when username is omitted (regression)", () => {
+    it("shows the logged-in account's own profile, titled 'Profile', with no back button", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice" }),
+        // Period-aware, same as the "This Week"/"Overall" test above — a single
+        // fixed list for every call would render "Aphex Twin" twice (once per
+        // section) and break the exact-text assertion below.
+        topArtists: vi.fn().mockImplementation((_user: string, _limit?: number, period?: string) =>
+          Promise.resolve(period === "7day" ? [{ name: "Aphex Twin", playCount: 120 }] : []),
+        ),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByText("alice")).toBeInTheDocument();
+      expect(screen.getByText("Profile")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /back to/i })).not.toBeInTheDocument();
+      await screen.findByText("Aphex Twin");
+    });
+  });
+
+  describe("viewing a friend's profile", () => {
+    it("shows the given username's data instead of the logged-in account's own", async () => {
+      const getUserInfo = vi
+        .fn()
+        .mockImplementation((user: string) => Promise.resolve({ username: user }));
+      const getTopArtists = vi
+        .fn()
+        .mockImplementation((user: string, _limit?: number, period?: string) =>
+          Promise.resolve(
+            user === "bob" && period === undefined
+              ? [{ name: "Boards of Canada", playCount: 42 }]
+              : [],
+          ),
+        );
+      installFakeApis({ activeAccount: "alice", userInfo: getUserInfo, topArtists: getTopArtists });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} username="bob" />);
+
+      // Page title reflects whose profile this is once it's not the logged-in
+      // account's own — "bob", not the generic "Profile" heading — so "bob" appears
+      // twice: once as the title, once in the account card.
+      const bobMatches = await screen.findAllByText("bob");
+      expect(bobMatches).toHaveLength(2);
+      expect(screen.queryByText("alice")).not.toBeInTheDocument();
+      expect(await screen.findByText("Boards of Canada")).toBeInTheDocument();
+      expect(getUserInfo).toHaveBeenCalledWith("bob");
+      expect(getTopArtists).toHaveBeenCalledWith("bob", expect.anything(), "7day");
+    });
+
+    it("does not require a logged-in account to view a friend's profile", async () => {
+      installFakeApis({
+        userInfo: vi.fn().mockResolvedValue({ username: "bob" }),
+        topArtists: vi.fn().mockResolvedValue([]),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} username="bob" />);
+
+      expect(await screen.findAllByText("bob")).toHaveLength(2);
+      expect(screen.queryByText(/log in.*settings/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("back navigation", () => {
+    it("shows a 'Back to {backLabel}' button when onBack is given, and calls onBack when clicked", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "bob" }),
+        topArtists: vi.fn().mockResolvedValue([]),
+      });
+      const onBack = vi.fn();
+
+      render(
+        <ProfilePage
+          onNavigateToSettings={vi.fn()}
+          username="bob"
+          backLabel="Friends"
+          onBack={onBack}
+        />,
+      );
+
+      const backButton = await screen.findByRole("button", { name: /back to friends/i });
+      fireEvent.click(backButton);
+
+      expect(onBack).toHaveBeenCalledOnce();
+    });
+
+    it("still shows the back button on the login-gate screen when onBack is given but there's nobody to show", async () => {
+      installFakeApis({});
+      const onBack = vi.fn();
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} backLabel="Friends" onBack={onBack} />);
+
+      expect(await screen.findByRole("button", { name: /back to friends/i })).toBeInTheDocument();
+      expect(screen.getByText(/log in.*settings/i)).toBeInTheDocument();
+    });
+  });
 });

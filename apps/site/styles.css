@@ -29,7 +29,12 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Kept in sync with apps/desktop's theme (src/renderer/src/theme/index.ts) — see
+     that file's comment for why Oxygen/Ubuntu/Cantarell/Noto Sans are here: this app
+     ships a Linux build same as macOS/Windows, and those are the actual Linux
+     desktop-environment system fonts, not just a filler fallback. */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+    Cantarell, "Noto Sans", Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--fg);
   line-height: 1.6;

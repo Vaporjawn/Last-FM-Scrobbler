@@ -14,6 +14,7 @@ import type { AppInfoApi } from "../shared/app-info-api.js";
 import type { ArtistImageApi } from "../shared/artist-image-api.js";
 import type { AuthApi } from "../shared/auth-api.js";
 import type { BugReportApi } from "../shared/bug-report-api.js";
+import type { FilterApi, FilterValidationResult } from "../shared/filter-api.js";
 import type { LastfmDataApi } from "../shared/lastfm-api.js";
 import type { NowPlayingApi } from "../shared/now-playing-api.js";
 import type { NowPlayingSnapshot } from "../shared/now-playing-snapshot.js";
@@ -143,6 +144,14 @@ const artistImageApi: ArtistImageApi = {
   },
 };
 
+const filterApi: FilterApi = {
+  validate(expression) {
+    return ipcRenderer.invoke(IPC_CHANNELS.filterValidate, expression) as Promise<
+      FilterValidationResult
+    >;
+  },
+};
+
 const bugReportApi: BugReportApi = {
   isConfigured() {
     return ipcRenderer.invoke(IPC_CHANNELS.bugReportIsConfigured) as Promise<boolean>;
@@ -197,6 +206,7 @@ contextBridge.exposeInMainWorld("nowPlaying", nowPlayingApi);
 contextBridge.exposeInMainWorld("auth", authApi);
 contextBridge.exposeInMainWorld("lastfm", lastfmApi);
 contextBridge.exposeInMainWorld("artistImage", artistImageApi);
+contextBridge.exposeInMainWorld("filter", filterApi);
 contextBridge.exposeInMainWorld("bugReport", bugReportApi);
 contextBridge.exposeInMainWorld("settings", settingsApi);
 contextBridge.exposeInMainWorld("updates", updatesApi);

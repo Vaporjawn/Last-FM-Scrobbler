@@ -284,4 +284,106 @@ describe("ScrobblesPage", () => {
       expect(await screen.findByText("Tags added.")).toBeInTheDocument();
     });
   });
+
+  describe("search", () => {
+    it("filters the list by track title, artist, or album, case-insensitively", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        recentTracks: [
+          { artist: "Aphex Twin", track: "Windowlicker", nowPlaying: false, loved: false },
+          {
+            artist: "Crumb",
+            track: "Ghostride",
+            album: "Jinx",
+            nowPlaying: false,
+            timestamp: 1_700_000_000,
+            loved: false,
+          },
+          { artist: "Boards of Canada", track: "Roygbiv", nowPlaying: true, loved: false },
+        ],
+      });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("Windowlicker");
+
+      // Matches by artist name.
+      fireEvent.change(screen.getByPlaceholderText("Search scrobbles"), {
+        target: { value: "APHEX" },
+      });
+      expect(screen.getByText("Windowlicker")).toBeInTheDocument();
+      expect(screen.queryByText("Ghostride")).not.toBeInTheDocument();
+      expect(screen.queryByText("Roygbiv")).not.toBeInTheDocument();
+
+      // Matches by album name.
+      fireEvent.change(screen.getByPlaceholderText("Search scrobbles"), {
+        target: { value: "jinx" },
+      });
+      expect(screen.getByText("Ghostride")).toBeInTheDocument();
+      expect(screen.queryByText("Windowlicker")).not.toBeInTheDocument();
+
+      // Matches by track title.
+      fireEvent.change(screen.getByPlaceholderText("Search scrobbles"), {
+        target: { value: "roygbiv" },
+      });
+      expect(screen.getByText("Roygbiv")).toBeInTheDocument();
+      expect(screen.queryByText("Ghostride")).not.toBeInTheDocument();
+    });
+
+    it("shows a 'no scrobbles match' message when the search text matches nobody", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        recentTracks: [{ artist: "Crumb", track: "Ghostride", nowPlaying: false, loved: false }],
+      });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("Ghostride");
+
+      fireEvent.change(screen.getByPlaceholderText("Search scrobbles"), {
+        target: { value: "nobody-has-scrobbled-this" },
+      });
+
+      expect(screen.queryByText("Ghostride")).not.toBeInTheDocument();
+      expect(screen.getByText(/no scrobbles match/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("search icon and clear button", () => {
+    it("does not show a clear button when the search field is empty", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        recentTracks: [
+          { artist: "Crumb", track: "Ghostride", nowPlaying: false, loved: false },
+          { artist: "Joji", track: "SLOW DANCING IN THE DARK", nowPlaying: false, loved: false },
+        ],
+      });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("Ghostride");
+
+      expect(screen.queryByRole("button", { name: /clear search/i })).not.toBeInTheDocument();
+    });
+
+    it("shows a clear button once search text is entered, and clicking it resets the search", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        recentTracks: [
+          { artist: "Crumb", track: "Ghostride", nowPlaying: false, loved: false },
+          { artist: "Joji", track: "SLOW DANCING IN THE DARK", nowPlaying: false, loved: false },
+        ],
+      });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("Ghostride");
+
+      fireEvent.change(screen.getByPlaceholderText("Search scrobbles"), {
+        target: { value: "Ghostride" },
+      });
+      expect(screen.queryByText("SLOW DANCING IN THE DARK")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /clear search/i }));
+
+      expect(screen.getByPlaceholderText("Search scrobbles")).toHaveValue("");
+      expect(await screen.findByText("SLOW DANCING IN THE DARK")).toBeInTheDocument();
+    });
+  });
 });

@@ -312,6 +312,35 @@ describe("FriendsPage", () => {
     });
   });
 
+  describe("onSelectFriend", () => {
+    it("is not interactive on a friend's row when onSelectFriend is omitted", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        friends: vi.fn().mockResolvedValue([{ username: "bob" }]),
+      });
+
+      render(<FriendsPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("bob");
+
+      expect(screen.queryByRole("button", { name: /view bob's profile/i })).not.toBeInTheDocument();
+    });
+
+    it("calls onSelectFriend with the clicked friend's username", async () => {
+      const onSelectFriend = vi.fn();
+      installFakeApis({
+        activeAccount: "alice",
+        friends: vi.fn().mockResolvedValue([{ username: "bob" }, { username: "carol" }]),
+      });
+
+      render(<FriendsPage onNavigateToSettings={vi.fn()} onSelectFriend={onSelectFriend} />);
+      await screen.findByText("bob");
+
+      fireEvent.click(screen.getByRole("button", { name: /view bob's profile/i }));
+
+      expect(onSelectFriend).toHaveBeenCalledWith("bob");
+    });
+  });
+
   describe("sorting", () => {
     it("sorts a friend who is currently 'Scrobbling now' before one who isn't", async () => {
       installFakeApis({

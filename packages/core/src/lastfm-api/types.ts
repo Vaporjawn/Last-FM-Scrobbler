@@ -70,6 +70,40 @@ export interface TopArtist {
  * which is why every existing caller of that method simply never passed one. */
 export type TopArtistsPeriod = "overall" | "7day" | "1month" | "3month" | "6month" | "12month";
 
+export interface TopTrack {
+  readonly name: string;
+  readonly artist: string;
+  readonly playCount: number;
+  // Deliberately no `imageUrl` here, same reasoning as `TopArtist` above: verified
+  // live against the real API (`user.getTopTracks`, `format=json`) that every track's
+  // `image` array points at the exact same shared placeholder graphic (hash
+  // `2a96cbd8b46e442fc41c2b86b821562f`) `ArtistInfo`'s docstring already documents for
+  // artists — not real per-track art. Contrast `TopAlbum.imageUrl` below, which *is*
+  // real.
+}
+
+/** Same period enum `user.getTopArtists` uses — verified live that `user.getTopTracks`
+ * and `user.getTopAlbums` both accept the identical set of values, so this is reused
+ * rather than redeclared per entity type. */
+export type TopTracksPeriod = TopArtistsPeriod;
+
+export interface TopAlbum {
+  readonly name: string;
+  readonly artist: string;
+  readonly playCount: number;
+  /** Unlike `TopTrack.playCount`'s sibling `imageUrl` (deliberately omitted — see
+   * there) and `TopArtist`'s (also omitted — see `ArtistInfo`'s docstring), this one
+   * *is* real: verified live against `user.getTopAlbums` that each album's `image`
+   * array points at a genuinely distinct hash per album (e.g.
+   * `7a483359b47821463c1eced172d6bed4` for one album, `d8a6417d7c1d30ed4a211bdceb0e8cf9`
+   * for another in the same response) — the same kind of real cover art
+   * `RecentTrack.imageUrl`/`TrackDetail.imageUrl` already provide, not the shared
+   * artist/track placeholder. `undefined` on the rare album Last.fm has no art for. */
+  readonly imageUrl?: string;
+}
+
+export type TopAlbumsPeriod = TopArtistsPeriod;
+
 export interface UserProfile {
   readonly username: string;
   readonly realName?: string;
@@ -81,6 +115,21 @@ export interface UserProfile {
    * own API, not something fixable client-side), user avatars are real, user-uploaded
    * photos and do come through correctly. */
   readonly avatarUrl?: string;
+  /** Total scrobbles this account has ever submitted, Last.fm-wide (not just via this
+   * app) — verified live against the real API (`user.getInfo`, `format=json`): the
+   * response includes a top-level `"playcount"` string field, populated for every
+   * real account (e.g. `"151481"` for Last.fm's own public `RJ` test account).
+   * `undefined` only if the field is ever absent or non-numeric — not expected in
+   * practice, but parsed defensively rather than assumed, same as every other
+   * numeric field this client parses. */
+  readonly totalScrobbles?: number;
+  /** Unix seconds this account was created — verified live against the real API:
+   * `user.getInfo`'s response includes a `registered.unixtime` field (e.g.
+   * `"1037793040"` for the `RJ` test account, corresponding to November 2002). Kept
+   * as a raw timestamp, not a formatted string, so the renderer controls date
+   * formatting/locale — same convention as every other timestamp this client returns
+   * (e.g. `RecentTrack.timestamp`). `undefined` if the field is ever absent. */
+  readonly registeredAt?: number;
 }
 
 export interface Friend {

@@ -121,6 +121,25 @@ export interface AppSettings {
    * CLAUDE.md on that sandbox limitation.
    */
   readonly startMinimized: boolean;
+  /**
+   * A `packages/core` filter-DSL expression (see `compileFilter`'s docstring for the
+   * grammar — fields `artist`/`title`/`album`/`albumArtist`/`durationSec`/`sourceApp`,
+   * operators `==`/`!=`/`contains`/`matches`/`<`/`>`/etc., combined with `and`/`or`/
+   * `not`) — a track matching it is excluded entirely: no "now playing" update, no
+   * scrobble. `undefined`/empty means no filtering, this app's original and only
+   * behavior before this setting existed. Applied once at startup (see
+   * `main/index.ts`'s `createAndWireMainWindow`) — unlike the live-updating settings
+   * above, a change here needs an app restart to take effect (`Tracker`, in
+   * `packages/core`, has no way to swap its filter after construction); Settings →
+   * Filter says so explicitly when this is saved. An expression that fails to compile
+   * (`FilterSyntaxError`) is treated as no filter at all, logged as a warning, rather
+   * than crashing the tracker — see `main/index.ts`. Typed as `string | undefined`
+   * (not just `string?`) despite `exactOptionalPropertyTypes`: Settings → Filter needs
+   * to explicitly send `{ filterExpression: undefined }` to *clear* a previously-saved
+   * expression back to "no filter" — `set()`'s merge semantics mean omitting the key
+   * entirely would leave the old value untouched instead.
+   */
+  readonly filterExpression?: string | undefined;
 }
 
 /** `closeToTray`/`autoUpdateEnabled` on by default: this app is meant to run in the

@@ -2,7 +2,14 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
-import { LastfmClient, Logger, ScrobbleQueue } from "@lastfm-scrobbler/core";
+import {
+  compileFilter,
+  FilterSyntaxError,
+  LastfmClient,
+  Logger,
+  ScrobbleQueue,
+  type CompiledFilter,
+} from "@lastfm-scrobbler/core";
 import { wireAppInfo } from "./app-info/wire-app-info.js";
 import {
   createMainWindow,
@@ -16,6 +23,7 @@ import { wireLastfmData } from "./lastfm/wire-lastfm-data.js";
 import { wireTrackActions } from "./lastfm/wire-track-actions.js";
 import { wireArtistImage } from "./artist-images/wire-artist-image.js";
 import { createAccountStore } from "./auth/create-account-store.js";
+import { wireFilterValidation } from "./filters/wire-filter-validation.js";
 import { wireAuth } from "./auth/wire-auth.js";
 import { applyLoginItemSettings } from "./login-items/apply-login-item-settings.js";
 import { wireScrobbling } from "./scrobbling/wire-scrobbling.js";
@@ -68,6 +76,27 @@ const logger = new Logger({
     console.log(entry.message);
   },
 });
+
+/**
+ * Compiles `AppSettings.filterExpression` for `Tracker` — `undefined` for no
+ * filtering, whether because the setting itself is unset or because it failed to
+ * compile. An invalid expression is logged as a warning rather than crashing the
+ * tracker or blocking startup — Settings → Filter validates before saving (see
+ * `main/filters/wire-filter-validation.ts`), but this is the last line of defense
+ * against a value edited by hand in settings.json outside the app.
+ */
+function compileFilterExpression(expression: string | undefined): CompiledFilter | undefined {
+  if (!expression) {
+    return undefined;
+  }
+  try {
+    return compileFilter(expression);
+  } catch (error) {
+    const message = error instanceof FilterSyntaxError ? error.message : String(error);
+    logger.warn(`Settings → Filter: invalid expression, ignoring it — ${message}`);
+    return undefined;
+  }
+}
 
 // Constructed once at app startup, not per-window: it may spawn a real OS-level
 // process (see packages/adapter-macos), and there should only ever be one of those
@@ -241,10 +270,14 @@ void app.whenReady().then(async () => {
     },
   });
   wireLastfmData({ client: lastfmClient });
-  // Unconditional, unlike wireLastfmData above — Deezer's public artist search (real
-  // artist photos; see wire-artist-image.ts) needs no Last.fm credentials at all, so
-  // it works even in a build with none configured.
-  wireArtistImage();
+  // Tries Last.fm's own artist photo first when `lastfmClient` is configured (usually
+  // a miss — see wire-artist-image.ts's docstring), Deezer's public artist search
+  // always as the guaranteed fallback — unlike wireLastfmData above, this still works
+  // even in a build with no Last.fm credentials at all, since Deezer needs none.
+  wireArtistImage({ ...(lastfmClient ? { lastfmClient } : {}) });
+  // Also unconditional — validating a filter expression is pure, local, and needs no
+  // Last.fm credentials at all, see wire-filter-validation.ts.
+  wireFilterValidation();
 
   // Shared by scrobble submission and the signed track actions (love/unlove/addTags)
   // below — both need a client signed with a *specific account's* session key, which
@@ -272,6 +305,14 @@ void app.whenReady().then(async () => {
       accountStore,
       createSessionClient,
       onScrobbled: (items) => {
+        // Read fresh on every call, not captured once at wiring time — lets toggling
+        // Settings → Notifications take effect immediately, no restart needed, same
+        // as `handleTrayHide`/`wireUpdates` below already do by reading
+        // `settingsStore.get()` at the point each notification actually fires rather
+        // than at startup.
+        if (!settingsStore.get().notifyOnScrobble) {
+          return;
+        }
         const [first] = items;
         if (!first) {
           return;
@@ -286,6 +327,9 @@ void app.whenReady().then(async () => {
         });
       },
       onScrobbleFailed: (reason) => {
+        if (!settingsStore.get().notifyOnScrobbleFailure) {
+          return;
+        }
         showNotification({
           title: "Scrobbling is having trouble reaching Last.fm",
           body: `${reason} — will keep retrying in the background.`,
@@ -343,7 +387,13 @@ void app.whenReady().then(async () => {
   // `false` — a dock-icon click while the app has no windows is always a manual,
   // explicit request to see it, never something that should stay hidden.
   function createAndWireMainWindow(windowOptions?: { startHidden?: boolean }): Electron.BrowserWindow {
-    const { windowBounds, aspectRatio } = settingsStore.get();
+    const { windowBounds, aspectRatio, filterExpression } = settingsStore.get();
+    // Compiled once, here, not live-updated: unlike aspectRatio/themeMode above,
+    // `Tracker` (packages/core) has no way to swap its filter after construction, so
+    // a filter-expression change only takes effect on the next window this function
+    // creates — in practice, an app restart. Settings → Filter tells the user this
+    // explicitly when they save a change.
+    const filter = compileFilterExpression(filterExpression);
     const window = createMainWindow({
       playbackSource,
       ...(onScrobbleEligible ? { onScrobbleEligible } : {}),
@@ -351,6 +401,7 @@ void app.whenReady().then(async () => {
       ...(appIconPath ? { iconPath: appIconPath } : {}),
       ...(windowBounds ? { initialBounds: windowBounds } : {}),
       initialAspectRatio: resolveAspectRatioValue(aspectRatio),
+      ...(filter ? { filter } : {}),
       ...(windowOptions?.startHidden ? { startHidden: true } : {}),
     });
     wireCloseToTray({

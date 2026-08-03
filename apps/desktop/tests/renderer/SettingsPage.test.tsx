@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "../../src/shared/auth-api.js";
+import type { FilterApi, FilterValidationResult } from "../../src/shared/filter-api.js";
 import type { LastfmDataApi } from "../../src/shared/lastfm-api.js";
 import { DEFAULT_APP_SETTINGS, type AppSettings, type SettingsApi } from "../../src/shared/settings-api.js";
 import { SettingsProvider } from "../../src/renderer/src/contexts/SettingsProvider.js";
@@ -81,6 +82,19 @@ function installFakeSettingsApi(overrides: Partial<SettingsApi> = {}): SettingsA
   return api;
 }
 
+/** Settings → Filter validates via `window.filter.validate` — kept separate from
+ * `installFakeAuthApi` since most existing tests here don't care about it. Defaults to
+ * accepting anything (`{ valid: true }`); pass `overrides.validate` for tests that
+ * need a syntax error. */
+function installFakeFilterApi(overrides: Partial<FilterApi> = {}): FilterApi {
+  const api: FilterApi = {
+    validate: vi.fn(() => Promise.resolve<FilterValidationResult>({ valid: true })),
+    ...overrides,
+  };
+  Object.defineProperty(window, "filter", { value: api, configurable: true });
+  return api;
+}
+
 /** `useAppVersion()` reads `window.appInfo.getVersion()` — kept separate from
  * `installFakeAuthApi` since most existing tests here don't care about it. */
 function installFakeAppInfoApi(version = "1.2.3"): void {
@@ -95,7 +109,9 @@ describe("SettingsPage", () => {
     Reflect.deleteProperty(window, "auth");
     Reflect.deleteProperty(window, "settings");
     Reflect.deleteProperty(window, "lastfm");
+    Reflect.deleteProperty(window, "filter");
     Reflect.deleteProperty(window, "appInfo");
+    Reflect.deleteProperty(window, "platform");
   });
 
   it("shows the app version in the General section", async () => {
@@ -457,6 +473,30 @@ describe("SettingsPage", () => {
       expect(darkModeSwitch).not.toBeChecked();
     });
 
+    it("describes switching to light while dark mode is active", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(
+        await screen.findByText("Switch to a light color scheme — takes effect immediately"),
+      ).toBeInTheDocument();
+    });
+
+    it("describes switching to dark while light mode is active", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, themeMode: "light" }),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(
+        await screen.findByText("Switch to a dark color scheme — takes effect immediately"),
+      ).toBeInTheDocument();
+    });
+
     it("switching dark mode off calls window.settings.set with themeMode 'light'", async () => {
       installFakeAuthApi();
       // Captured as a standalone variable, not accessed as `settingsApi.set` later —
@@ -477,6 +517,349 @@ describe("SettingsPage", () => {
       await waitFor(() => {
         expect(set).toHaveBeenCalledWith({ themeMode: "light" });
       });
+    });
+  });
+
+  describe("launch at login", () => {
+    it("shows launch-at-login off by default, with start-minimized hidden until it's on", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      const launchAtLoginSwitch = await screen.findByRole("switch", { name: /launch at login/i });
+      expect(launchAtLoginSwitch).not.toBeChecked();
+      expect(screen.queryByRole("switch", { name: /start minimized/i })).not.toBeInTheDocument();
+    });
+
+    it("reflects a previously-saved launch-at-login setting, revealing start minimized", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, launchAtLogin: true, startMinimized: true }),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByRole("switch", { name: /launch at login/i })).toBeChecked();
+      expect(await screen.findByRole("switch", { name: /start minimized/i })).toBeChecked();
+    });
+
+    it("switching launch-at-login on calls window.settings.set with launchAtLogin true", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const launchAtLoginSwitch = await screen.findByRole("switch", { name: /launch at login/i });
+
+      act(() => {
+        fireEvent.click(launchAtLoginSwitch);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ launchAtLogin: true });
+      });
+    });
+
+    it("switching start minimized on calls window.settings.set with startMinimized true", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, launchAtLogin: true }),
+        set,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const startMinimizedSwitch = await screen.findByRole("switch", { name: /start minimized/i });
+
+      act(() => {
+        fireEvent.click(startMinimizedSwitch);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ startMinimized: true });
+      });
+    });
+
+    it("hides launch-at-login entirely on Linux, where Electron has no login-item support", async () => {
+      Object.defineProperty(window, "platform", { value: "linux", configurable: true });
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      // Wait for a row that's definitely rendered first, so the query below isn't
+      // racing the initial settings load.
+      await screen.findByRole("switch", { name: /dark mode/i });
+      expect(screen.queryByRole("switch", { name: /launch at login/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("reset to defaults", () => {
+    it("does not call window.settings.reset until the confirmation dialog is confirmed", async () => {
+      installFakeAuthApi();
+      const reset = vi.fn(() => Promise.resolve(DEFAULT_APP_SETTINGS));
+      installFakeSettingsApi({ reset });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.click(await screen.findByRole("button", { name: "Reset to defaults" }));
+
+      expect(await screen.findByText(/reset to defaults\?/i)).toBeInTheDocument();
+      expect(reset).not.toHaveBeenCalled();
+    });
+
+    it("does not reset when the confirmation dialog is cancelled", async () => {
+      installFakeAuthApi();
+      const reset = vi.fn(() => Promise.resolve(DEFAULT_APP_SETTINGS));
+      installFakeSettingsApi({ reset });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.click(await screen.findByRole("button", { name: "Reset to defaults" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText(/reset to defaults\?/i)).not.toBeInTheDocument();
+      });
+      expect(reset).not.toHaveBeenCalled();
+    });
+
+    it("calls window.settings.reset when the confirmation dialog is confirmed", async () => {
+      installFakeAuthApi();
+      const reset = vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, closeToTray: false, themeMode: "light" });
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, closeToTray: false, themeMode: "light" }),
+        reset,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.click(await screen.findByRole("button", { name: "Reset to defaults" }));
+      // Two "Reset to defaults" buttons exist once the dialog is open: the settings
+      // row's own button (still in the DOM behind the dialog) and the dialog's
+      // confirm button — scoping the query to the dialog picks the right one.
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Reset to defaults" }));
+
+      await waitFor(() => {
+        expect(reset).toHaveBeenCalledOnce();
+      });
+    });
+
+    it("reflects the reset settings and closes the dialog after a successful reset", async () => {
+      installFakeAuthApi();
+      const reset = vi.fn(() => Promise.resolve(DEFAULT_APP_SETTINGS));
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, themeMode: "light" }),
+        reset,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      expect(await screen.findByRole("switch", { name: /dark mode/i })).not.toBeChecked();
+
+      fireEvent.click(await screen.findByRole("button", { name: "Reset to defaults" }));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Reset to defaults" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText(/reset to defaults\?/i)).not.toBeInTheDocument();
+      });
+      expect(screen.getByRole("switch", { name: /dark mode/i })).toBeChecked();
+    });
+
+    it("shows an error snackbar and keeps the dialog's confirm button enabled when reset fails", async () => {
+      installFakeAuthApi();
+      const reset = vi.fn(() => Promise.reject(new Error("disk full")));
+      installFakeSettingsApi({ reset });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.click(await screen.findByRole("button", { name: "Reset to defaults" }));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Reset to defaults" }));
+
+      expect(await screen.findByText("disk full")).toBeInTheDocument();
+    });
+  });
+
+  describe("notifications", () => {
+    it("shows both notification switches on by default", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByRole("switch", { name: /notify when a track is scrobbled/i })).toBeChecked();
+      expect(await screen.findByRole("switch", { name: /notify when scrobbling fails/i })).toBeChecked();
+    });
+
+    it("reflects previously-saved notification preferences on load", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({
+          ...DEFAULT_APP_SETTINGS,
+          notifyOnScrobble: false,
+          notifyOnScrobbleFailure: false,
+        }),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(
+        await screen.findByRole("switch", { name: /notify when a track is scrobbled/i }),
+      ).not.toBeChecked();
+      expect(
+        await screen.findByRole("switch", { name: /notify when scrobbling fails/i }),
+      ).not.toBeChecked();
+    });
+
+    it("switching off 'notify when a track is scrobbled' calls window.settings.set with notifyOnScrobble false", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const scrobbleSwitch = await screen.findByRole("switch", { name: /notify when a track is scrobbled/i });
+
+      act(() => {
+        fireEvent.click(scrobbleSwitch);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ notifyOnScrobble: false });
+      });
+    });
+
+    it("switching off 'notify when scrobbling fails' calls window.settings.set with notifyOnScrobbleFailure false", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const failureSwitch = await screen.findByRole("switch", { name: /notify when scrobbling fails/i });
+
+      act(() => {
+        fireEvent.click(failureSwitch);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ notifyOnScrobbleFailure: false });
+      });
+    });
+
+    it("is findable via the search box", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const searchBox = await screen.findByPlaceholderText("Search settings…");
+
+      fireEvent.change(searchBox, { target: { value: "notifications" } });
+
+      expect(await screen.findByText("Notifications")).toBeInTheDocument();
+      expect(screen.queryByText("General")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("filter", () => {
+    it("shows a previously-saved filter expression on load", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, filterExpression: 'sourceApp == "firefox"' }),
+      });
+      installFakeFilterApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const field = await screen.findByLabelText("Filter expression");
+
+      await waitFor(() => {
+        expect(field).toHaveValue('sourceApp == "firefox"');
+      });
+    });
+
+    it("shows nothing pre-filled when no filter has ever been saved", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+      installFakeFilterApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByLabelText("Filter expression")).toHaveValue("");
+    });
+
+    it("shows a validation error and disables Save when the expression doesn't compile", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+      installFakeFilterApi({
+        validate: vi.fn().mockResolvedValue({ valid: false, error: "Unexpected end of input" }),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const field = await screen.findByLabelText("Filter expression");
+
+      fireEvent.change(field, { target: { value: "sourceApp ==" } });
+      fireEvent.blur(field);
+
+      expect(await screen.findByText("Unexpected end of input")).toBeInTheDocument();
+      const saveButton = await screen.findByRole("button", { name: "Save filter" });
+      await waitFor(() => {
+        expect(saveButton).toBeDisabled();
+      });
+    });
+
+    it("saves a valid filter expression and shows a restart notice", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+      installFakeFilterApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const field = await screen.findByLabelText("Filter expression");
+
+      fireEvent.change(field, { target: { value: 'sourceApp == "firefox"' } });
+      fireEvent.click(await screen.findByRole("button", { name: "Save filter" }));
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ filterExpression: 'sourceApp == "firefox"' });
+      });
+      expect(
+        await screen.findByText("Saved. Restart the app for the filter to take effect."),
+      ).toBeInTheDocument();
+    });
+
+    it("clears a previously-saved filter when saved empty", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, filterExpression: 'sourceApp == "firefox"' }),
+        set,
+      });
+      installFakeFilterApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const field = await screen.findByLabelText("Filter expression");
+      await waitFor(() => {
+        expect(field).toHaveValue('sourceApp == "firefox"');
+      });
+
+      fireEvent.change(field, { target: { value: "" } });
+      fireEvent.click(await screen.findByRole("button", { name: "Save filter" }));
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ filterExpression: undefined });
+      });
+      expect(await screen.findByText("Filter cleared. Restart the app for it to take effect.")).toBeInTheDocument();
+    });
+
+    it("is findable via the search box", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+      installFakeFilterApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const searchBox = await screen.findByPlaceholderText("Search settings…");
+
+      fireEvent.change(searchBox, { target: { value: "excluded sources" } });
+
+      expect(await screen.findByText("Filter")).toBeInTheDocument();
+      expect(screen.queryByText("General")).not.toBeInTheDocument();
     });
   });
 

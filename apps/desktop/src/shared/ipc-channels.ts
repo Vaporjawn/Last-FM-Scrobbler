@@ -78,8 +78,8 @@ export const IPC_CHANNELS = {
   settingsSet: "settings:set",
   /** Replaces all persisted settings with `DEFAULT_APP_SETTINGS` and returns them —
    * Settings → "Reset to defaults" uses this rather than `settingsSet` so optional
-   * fields (like `windowBounds`) actually clear instead of surviving a merge patch.
-   * See `SettingsStore.reset()`'s docstring. */
+   * fields (`windowBounds`, `filterExpression`) actually clear instead of surviving a
+   * merge patch. See `SettingsStore.reset()`'s docstring. */
   settingsReset: "settings:reset",
 
   /** Pushed whenever the auto-updater's state changes (checking/available/
@@ -94,4 +94,12 @@ export const IPC_CHANNELS = {
   /** Real per-artist photo lookup via Deezer — see `shared/artist-image-api.ts` and
    * `packages/core`'s `fetchArtistImageUrl` for why this isn't a `lastfm:*` channel. */
   artistImageGetUrl: "artist-image:get-url",
+
+  /** Validates a `packages/core` filter-DSL expression (see
+   * `AppSettings.filterExpression`) without applying it — Settings → Filter uses this
+   * for inline feedback before saving. Resolves `{ valid: true }` or `{ valid: false,
+   * error }` (a `FilterSyntaxError`'s message), never rejects — compiling the filter
+   * happens in the main process (see `shared/filter-api.ts`'s docstring for why:
+   * `@lastfm-scrobbler/core`'s bundled output isn't safe to import into the renderer). */
+  filterValidate: "filter:validate",
 } as const;

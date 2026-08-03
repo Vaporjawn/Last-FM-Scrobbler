@@ -1,7 +1,9 @@
 import type { JSX, SubmitEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AspectRatioIcon from "@mui/icons-material/AspectRatio";
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
+import NotificationsIcon from "@mui/icons-material/Notifications";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
@@ -20,6 +22,7 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useSnackbar } from "../contexts/snackbar-context.js";
+import { ConfirmDialog } from "../components/shared/ConfirmDialog.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { SettingsRow } from "../components/SettingsRow.js";
 import { SettingsSaveStatus, type SettingsSaveState } from "../components/SettingsSaveStatus.js";
@@ -135,7 +138,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     clearAppCredentials,
     relaunch,
   } = useAuth();
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, resetSettings } = useSettings();
   const avatarsByUsername = useAccountAvatars(accounts);
   const appVersion = useAppVersion();
   const { status: updateStatus, isChecking: isCheckingForUpdate, checkNow: checkForUpdatesNow } =
@@ -151,9 +154,25 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     : "Keep running in the tray when the window is closed";
 
   const [query, setQuery] = useState("");
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [saveState, setSaveState] = useState<SettingsSaveState>("saved");
+  // Local, editable copy of the persisted filter expression — not bound directly to
+  // `settings.filterExpression`/`handleUpdateSetting` on every keystroke the way the
+  // Switches/Radio rows above are, since most intermediate states while typing an
+  // expression are syntactically invalid and shouldn't get persisted (or repeatedly
+  // trigger the save-status indicator) on every character. Synced from the persisted
+  // value once it loads (and again after this page's own save updates it) via the
+  // effect below; explicit "Save filter" commits it, matching the API-key form's same
+  // local-state-plus-explicit-submit pattern just below.
+  const [filterExpressionInput, setFilterExpressionInput] = useState(settings.filterExpression ?? "");
+  const [filterValidationError, setFilterValidationError] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    setFilterExpressionInput(settings.filterExpression ?? "");
+  }, [settings.filterExpression]);
 
   const q = query.trim().toLowerCase();
 
@@ -235,6 +254,65 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  const handleResetToDefaults = (): void => {
+    setResetting(true);
+    void resetSettings().then((result) => {
+      setResetting(false);
+      setResetDialogOpen(false);
+      if (result.success) {
+        setSaveState("saved");
+        notify({ message: "Settings reset to their defaults.", severity: "success" });
+      } else {
+        setSaveState("error");
+        notify({ message: result.error, severity: "error" });
+      }
+    });
+  };
+
+  const handleFilterExpressionBlur = (): void => {
+    const trimmed = filterExpressionInput.trim();
+    if (!trimmed || !window.filter) {
+      setFilterValidationError(undefined);
+      return;
+    }
+    void window.filter.validate(trimmed).then((result) => {
+      setFilterValidationError(result.valid ? undefined : result.error);
+    });
+  };
+
+  const handleSaveFilterExpression = (): void => {
+    const trimmed = filterExpressionInput.trim();
+    if (!trimmed) {
+      setFilterValidationError(undefined);
+      handleUpdateSetting({ filterExpression: undefined });
+      notify({ message: "Filter cleared. Restart the app for it to take effect.", severity: "success" });
+      return;
+    }
+    if (!window.filter) {
+      return;
+    }
+    // Always re-validates before saving, independent of whether onBlur already ran —
+    // covers pasting text and clicking "Save filter" directly without ever tabbing
+    // away first.
+    void window.filter.validate(trimmed).then((result) => {
+      if (!result.valid) {
+        setFilterValidationError(result.error);
+        return;
+      }
+      setFilterValidationError(undefined);
+      handleUpdateSetting({ filterExpression: trimmed });
+      // Same "needs a restart" messaging as the API-key form above — Tracker
+      // (packages/core) has no way to apply a new filter to an already-running
+      // instance, see AppSettings.filterExpression's docstring.
+      notify({
+        message: "Saved. Restart the app for the filter to take effect.",
+        severity: "success",
+        autoHideDurationMs: 15_000,
+        action: { label: "Restart now", onClick: () => void relaunch() },
+      });
+    });
+  };
+
   const handleCheckForUpdatesNow = (): void => {
     void checkForUpdatesNow().then((result) => {
       notify(
@@ -265,12 +343,35 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     updateStatusText,
     "version",
     appVersion,
+    "launch at login",
+    "start minimized",
+    "login item",
+    "open at login",
+    "reset to defaults",
+    "reset settings",
   );
   const windowVisible = sectionMatches(
     q,
     "window",
     "aspect ratio",
     ...ASPECT_RATIO_OPTIONS.map((option) => option.label),
+  );
+  const notificationsVisible = sectionMatches(
+    q,
+    "notifications",
+    "notify",
+    "notify when a track is scrobbled",
+    "notify when scrobbling fails",
+    "scrobbled",
+    "scrobble failed",
+  );
+  const filterVisible = sectionMatches(
+    q,
+    "filter",
+    "excluded sources",
+    "exclude",
+    "filter expression",
+    "sourceapp",
   );
   const accountsVisible = sectionMatches(
     q,
@@ -282,7 +383,14 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
   );
   const apiKeyVisible =
     showKeyForm && sectionMatches(q, "last.fm api key", "api key", "shared secret");
-  const noResults = q.length > 0 && !generalVisible && !windowVisible && !accountsVisible && !apiKeyVisible;
+  const noResults =
+    q.length > 0 &&
+    !generalVisible &&
+    !windowVisible &&
+    !notificationsVisible &&
+    !filterVisible &&
+    !accountsVisible &&
+    !apiKeyVisible;
 
   return (
     <Box sx={{ p: 3 }}>
@@ -344,7 +452,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
             <SettingsSectionCard icon={<TuneIcon fontSize="small" />} title="General">
               <SettingsRow
                 label="Dark mode"
-                description="Switch to a light color scheme — takes effect immediately"
+                description={
+                  settings.themeMode === "dark"
+                    ? "Switch to a light color scheme — takes effect immediately"
+                    : "Switch to a dark color scheme — takes effect immediately"
+                }
                 control={
                   <Switch
                     checked={settings.themeMode === "dark"}
@@ -372,6 +484,43 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   />
                 }
               />
+              {/* Electron's `setLoginItemSettings` has no Linux support at all
+                  (verified against Electron's own current docs — see
+                  `AppSettings.launchAtLogin`'s docstring) — hiding this row there
+                  rather than presenting a control that can't do anything. */}
+              {window.platform !== "linux" ? (
+                <SettingsRow
+                  label="Launch at login"
+                  description="Start Last.fm Scrobbler automatically when you log in"
+                  control={
+                    <Switch
+                      checked={settings.launchAtLogin}
+                      onChange={(event) => {
+                        handleUpdateSetting({ launchAtLogin: event.target.checked });
+                      }}
+                      slotProps={{ input: { "aria-label": "Launch at login" } }}
+                    />
+                  }
+                />
+              ) : null}
+              {window.platform !== "linux" && settings.launchAtLogin ? (
+                <SettingsRow
+                  label="Start minimized"
+                  description={
+                    "Don't open the window when launched at login — bring it up later " +
+                    `from the ${isMac ? "menu bar" : "tray"} icon`
+                  }
+                  control={
+                    <Switch
+                      checked={settings.startMinimized}
+                      onChange={(event) => {
+                        handleUpdateSetting({ startMinimized: event.target.checked });
+                      }}
+                      slotProps={{ input: { "aria-label": "Start minimized" } }}
+                    />
+                  }
+                />
+              ) : null}
               <SettingsRow
                 label="Automatically check for updates"
                 control={
@@ -406,6 +555,22 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   </Typography>
                 }
               />
+              <SettingsRow
+                label="Reset to defaults"
+                description="Restores every setting above to its original value. Doesn't affect your logged-in accounts."
+                control={
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    onClick={() => {
+                      setResetDialogOpen(true);
+                    }}
+                  >
+                    Reset to defaults
+                  </Button>
+                }
+              />
             </SettingsSectionCard>
           ) : null}
 
@@ -435,6 +600,86 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   />
                 ))}
               </RadioGroup>
+            </SettingsSectionCard>
+          ) : null}
+
+          {notificationsVisible ? (
+            <SettingsSectionCard icon={<NotificationsIcon fontSize="small" />} title="Notifications">
+              <SettingsRow
+                label="Notify when a track is scrobbled"
+                description="Shows a native notification each time a batch of scrobbles is accepted by Last.fm"
+                control={
+                  <Switch
+                    checked={settings.notifyOnScrobble}
+                    onChange={(event) => {
+                      handleUpdateSetting({ notifyOnScrobble: event.target.checked });
+                    }}
+                    slotProps={{ input: { "aria-label": "Notify when a track is scrobbled" } }}
+                  />
+                }
+              />
+              <SettingsRow
+                label="Notify when scrobbling fails"
+                description="Shows a native notification if Last.fm can't be reached after several attempts"
+                control={
+                  <Switch
+                    checked={settings.notifyOnScrobbleFailure}
+                    onChange={(event) => {
+                      handleUpdateSetting({ notifyOnScrobbleFailure: event.target.checked });
+                    }}
+                    slotProps={{ input: { "aria-label": "Notify when scrobbling fails" } }}
+                  />
+                }
+              />
+            </SettingsSectionCard>
+          ) : null}
+
+          {filterVisible ? (
+            <SettingsSectionCard
+              icon={<FilterAltIcon fontSize="small" />}
+              title="Filter"
+              description="Matching tracks are excluded from now-playing and scrobbling entirely — takes effect on next restart"
+              fullWidth
+            >
+              <TextField
+                label="Filter expression"
+                placeholder='e.g. sourceApp == "firefox" or sourceApp == "chrome"'
+                value={filterExpressionInput}
+                onChange={(event) => {
+                  setFilterExpressionInput(event.target.value);
+                  setFilterValidationError(undefined);
+                }}
+                onBlur={handleFilterExpressionBlur}
+                size="small"
+                fullWidth
+                multiline
+                minRows={2}
+                autoComplete="off"
+                error={Boolean(filterValidationError)}
+                helperText={
+                  filterValidationError ??
+                  'Fields: artist, title, album, albumArtist, durationSec, sourceApp. Operators: ==, !=, ' +
+                    'contains "text", matches /regex/, <, >, <=, >=. Combine with and / or / not. Leave ' +
+                    "empty for no filtering."
+                }
+                sx={{
+                  maxWidth: 640,
+                  "& textarea": {
+                    fontFamily: 'ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace',
+                    fontSize: "0.875rem",
+                  },
+                }}
+              />
+              <Box sx={{ mt: 1.5 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleSaveFilterExpression}
+                  disabled={Boolean(filterValidationError)}
+                >
+                  Save filter
+                </Button>
+              </Box>
             </SettingsSectionCard>
           ) : null}
 
@@ -596,6 +841,17 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
           ) : null}
         </Box>
       )}
+      <ConfirmDialog
+        open={resetDialogOpen}
+        title="Reset to defaults?"
+        description="This restores every setting above to its original value. It doesn't affect your logged-in accounts."
+        confirmLabel="Reset to defaults"
+        confirming={resetting}
+        onConfirm={handleResetToDefaults}
+        onCancel={() => {
+          setResetDialogOpen(false);
+        }}
+      />
     </Box>
   );
 }

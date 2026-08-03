@@ -402,6 +402,47 @@ describe("LastfmClient", () => {
       expect(result).toEqual({ username: "someuser" });
     });
 
+    it("user.getInfo parses totalScrobbles and registeredAt from a realistic response", async () => {
+      // Shape verified live against the real API (curl user.getinfo, Last.fm's own
+      // documented public sample key against their RJ test account) — playcount and
+      // registered.unixtime are both real, populated fields on a real account.
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          user: {
+            name: "RJ",
+            realname: "Richard Jones ",
+            playcount: "151481",
+            registered: { unixtime: "1037793040", "#text": 1037793040 },
+          },
+        }),
+      );
+      const result = await client.getUserInfo({ user: "RJ" });
+      expect(result).toEqual({
+        username: "RJ",
+        realName: "Richard Jones ",
+        totalScrobbles: 151481,
+        registeredAt: 1037793040,
+      });
+    });
+
+    it("user.getInfo omits totalScrobbles/registeredAt when both fields are absent", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ user: { name: "someuser" } }));
+      const result = await client.getUserInfo({ user: "someuser" });
+      expect(result).toEqual({ username: "someuser" });
+      expect(result.totalScrobbles).toBeUndefined();
+      expect(result.registeredAt).toBeUndefined();
+    });
+
+    it("user.getInfo omits totalScrobbles/registeredAt when they're present but non-numeric", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          user: { name: "someuser", playcount: "not-a-number", registered: { unixtime: "also-not-a-number" } },
+        }),
+      );
+      const result = await client.getUserInfo({ user: "someuser" });
+      expect(result).toEqual({ username: "someuser" });
+    });
+
     it("parses artist.getInfo", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({
@@ -419,6 +460,56 @@ describe("LastfmClient", () => {
         listeners: 100,
         playCount: 200,
       });
+    });
+
+    it("getArtistImageUrl returns the largest real photo when Last.fm actually has one", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          artist: {
+            name: "Some Rare Artist",
+            image: [
+              { size: "small", "#text": "https://lastfm.freetls.fastly.net/i/u/small/real.jpg" },
+              { size: "extralarge", "#text": "https://lastfm.freetls.fastly.net/i/u/xl/real.jpg" },
+            ],
+          },
+        }),
+      );
+      const result = await client.getArtistImageUrl("Some Rare Artist");
+      expect(result).toBe("https://lastfm.freetls.fastly.net/i/u/xl/real.jpg");
+    });
+
+    it("getArtistImageUrl returns undefined when every size is Last.fm's own shared placeholder", async () => {
+      // Verified live against the real API: this is the actual, current behavior for
+      // the overwhelming majority of artists — see LASTFM_ARTIST_IMAGE_PLACEHOLDER_HASH's
+      // docstring and ArtistInfo's in types.ts.
+      const placeholderUrl =
+        "https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.jpg";
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          artist: {
+            name: "Radiohead",
+            image: [
+              { size: "small", "#text": placeholderUrl },
+              { size: "extralarge", "#text": placeholderUrl },
+            ],
+          },
+        }),
+      );
+      const result = await client.getArtistImageUrl("Radiohead");
+      expect(result).toBeUndefined();
+    });
+
+    it("getArtistImageUrl returns undefined when the image array is missing entirely", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ artist: { name: "Radiohead" } }));
+      const result = await client.getArtistImageUrl("Radiohead");
+      expect(result).toBeUndefined();
+    });
+
+    it("getArtistImageUrl propagates a LastfmApiError on request failure, same as getArtistInfo", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ error: 6, message: "The artist you supplied could not be found" }),
+      );
+      await expect(client.getArtistImageUrl("zzznonexistent")).rejects.toThrow(LastfmApiError);
     });
 
     it("parses artist.getSimilar", async () => {

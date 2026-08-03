@@ -255,6 +255,67 @@ describe("NowPlayingPage", () => {
       await screen.findByText("Weights");
       expect(screen.queryByRole("link", { name: /view on last\.fm/i })).not.toBeInTheDocument();
     });
+
+    it("shows the logged-in account's own play count for the track when Last.fm has one", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      const getTrackInfo = vi.fn().mockResolvedValue({ ...DEFAULT_TRACK_DETAIL, userPlayCount: 7 });
+      installFakeLastfmApi({ getTrackInfo });
+
+      render(<NowPlayingPage />);
+
+      expect(await screen.findByText("You've listened to this track 7 times.")).toBeInTheDocument();
+      expect(getTrackInfo).toHaveBeenCalledWith("Everything Everything", "Weights", "alice");
+    });
+
+    it("uses singular wording for exactly one play", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      installFakeLastfmApi({
+        getTrackInfo: vi.fn().mockResolvedValue({ ...DEFAULT_TRACK_DETAIL, userPlayCount: 1 }),
+      });
+
+      render(<NowPlayingPage />);
+
+      expect(await screen.findByText("You've listened to this track 1 time.")).toBeInTheDocument();
+    });
+
+    it("doesn't show a personal play count when nobody is logged in", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi(undefined);
+      // Mirrors the real API/client contract (see TrackDetail.userPlayCount's
+      // docstring): `userPlayCount` is only ever present when `getTrackInfo` was
+      // called with a username, so a faithful fake — unlike one that always returns
+      // it — only includes it in that case, same as `LastfmClient.getTrackInfo`'s own
+      // conditional-spread parsing.
+      const getTrackInfo = vi
+        .fn()
+        .mockImplementation((_artist: string, _track: string, username?: string) =>
+          Promise.resolve({ ...DEFAULT_TRACK_DETAIL, ...(username ? { userPlayCount: 7 } : {}) }),
+        );
+      installFakeLastfmApi({ getTrackInfo });
+
+      render(<NowPlayingPage />);
+
+      // getTrackInfo is still called (without a username) once the stats fetch
+      // resolves — assert on that instead of a fixed timeout, then confirm no
+      // personal-play-count line rendered.
+      await waitFor(() => {
+        expect(getTrackInfo).toHaveBeenCalledWith("Everything Everything", "Weights", undefined);
+      });
+      expect(screen.queryByText(/you've listened to this track/i)).not.toBeInTheDocument();
+    });
+
+    it("doesn't show a personal play count when Last.fm has none on file for this account", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+
+      await screen.findByText("Weights");
+      expect(screen.queryByText(/you've listened to this track/i)).not.toBeInTheDocument();
+    });
   });
 
   describe("state indicator", () => {

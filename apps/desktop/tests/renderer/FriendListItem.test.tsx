@@ -90,4 +90,55 @@ describe("FriendListItem", () => {
 
     expect(onSelectTrack).toHaveBeenCalledWith(TRACK);
   });
+
+  describe("onSelectFriend", () => {
+    it("is not interactive on the avatar/name row when onSelectFriend is omitted", () => {
+      render(
+        <List>
+          <FriendListItem friend={friend({ username: "bob" })} activity={EMPTY_ACTIVITY} />
+        </List>,
+      );
+
+      expect(screen.queryByRole("button", { name: /view bob's profile/i })).not.toBeInTheDocument();
+    });
+
+    it("calls onSelectFriend with the friend's username when the avatar/name row is clicked", () => {
+      const onSelectFriend = vi.fn();
+      render(
+        <List>
+          <FriendListItem
+            friend={friend({ username: "bob" })}
+            activity={EMPTY_ACTIVITY}
+            onSelectFriend={onSelectFriend}
+          />
+        </List>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /view bob's profile/i }));
+
+      expect(onSelectFriend).toHaveBeenCalledWith("bob");
+    });
+
+    it("keeps the avatar/name row and the activity card independently clickable", () => {
+      const onSelectTrack = vi.fn();
+      const onSelectFriend = vi.fn();
+      render(
+        <List>
+          <FriendListItem
+            friend={friend({ username: "bob" })}
+            activity={PLAYING_ACTIVITY}
+            onSelectTrack={onSelectTrack}
+            onSelectFriend={onSelectFriend}
+          />
+        </List>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /view details for under the light/i }));
+      expect(onSelectTrack).toHaveBeenCalledWith(TRACK);
+      expect(onSelectFriend).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: /view bob's profile/i }));
+      expect(onSelectFriend).toHaveBeenCalledWith("bob");
+    });
+  });
 });
