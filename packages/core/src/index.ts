@@ -4,6 +4,15 @@ export {
   MAX_ELIGIBILITY_THRESHOLD_SEC,
 } from "./rules/is-eligible-for-scrobble.js";
 export type {
+  LikelyNonMusicVideoInput,
+  LikelyNonMusicVideoOptions,
+} from "./rules/is-likely-non-music-video.js";
+export {
+  DEFAULT_NON_MUSIC_VIDEO_THRESHOLD_SEC,
+  isLikelyNonMusicVideo,
+} from "./rules/is-likely-non-music-video.js";
+export { combineFilters } from "./filters/combine-filters.js";
+export type {
   PendingScrobble,
   QueuedScrobble,
   ScrobbleQueueOptions,

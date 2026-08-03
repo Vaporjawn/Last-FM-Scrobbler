@@ -152,6 +152,26 @@ export interface AppSettings {
    */
   readonly filterExpression?: string | undefined;
   /**
+   * When `true` (default `false`), tracks are also excluded whenever
+   * `packages/core`'s `isLikelyNonMusicVideo` heuristic flags them — a browser-sourced
+   * (Chrome/Safari/Firefox/etc.) play longer than
+   * `DEFAULT_NON_MUSIC_VIDEO_THRESHOLD_SEC` (15 minutes), which in practice mostly
+   * means long-form YouTube videos (podcasts, talks, gameplay) getting scrobbled as if
+   * they were songs — see that function's docstring for why duration is the only
+   * reliable signal available at all: a regular YouTube video and a YouTube Music
+   * track were verified live to expose *identical* Media Session metadata, so no
+   * actual "is this music" classification is possible from what this app can read.
+   * Combined with `filterExpression` above (excluded by *either*, not both — see
+   * `packages/core`'s `combineFilters`), and applied the same way: compiled into
+   * `Tracker`'s filter once at startup, not live-updated, so this also needs a
+   * restart to take effect. Starts `false` (opt-in, not opt-out) since it's a
+   * heuristic with real false-positive potential (a deliberately long browser-played
+   * track — a DJ mix, a lecture someone actually wants scrobbled as one long "track" —
+   * would also get excluded); anyone who never visits the new toggle sees no behavior
+   * change.
+   */
+  readonly skipNonMusicVideos: boolean;
+  /**
    * When `true` (the default), the app's Dock icon is visible on macOS — turning this
    * off calls `app.dock.hide()` (see `main/dock/apply-dock-icon-visibility.ts`), the
    * same "run from the tray/menu bar only" pattern the reference Last.fm desktop
@@ -200,7 +220,8 @@ export interface AppSettings {
  * itself as a login item before these settings existed, so anyone who never visits the
  * new toggles sees no behavior change. `showDockIcon`/`showTrayIcon` start `true` —
  * this app always showed both before these settings existed, so anyone who never
- * visits the new toggles sees no visual change. */
+ * visits the new toggles sees no visual change. `skipNonMusicVideos` starts `false` —
+ * see that field's own docstring for why this one is opt-in rather than opt-out. */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   closeToTray: true,
   autoUpdateEnabled: true,
@@ -211,6 +232,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notifyOnScrobbleFailure: true,
   launchAtLogin: false,
   startMinimized: false,
+  skipNonMusicVideos: false,
   showDockIcon: true,
   showTrayIcon: true,
 };

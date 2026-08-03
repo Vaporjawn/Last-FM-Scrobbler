@@ -1068,6 +1068,35 @@ describe("SettingsPage", () => {
   });
 
   describe("filter", () => {
+    it("shows 'Skip long non-music videos' off by default", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+      installFakeFilterApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const toggle = await screen.findByRole("switch", { name: /skip long non-music videos/i });
+
+      expect(toggle).not.toBeChecked();
+    });
+
+    it("switching on 'Skip long non-music videos' calls window.settings.set with skipNonMusicVideos true", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+      installFakeFilterApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const toggle = await screen.findByRole("switch", { name: /skip long non-music videos/i });
+
+      act(() => {
+        fireEvent.click(toggle);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ skipNonMusicVideos: true });
+      });
+    });
+
     it("shows a previously-saved filter expression on load", async () => {
       installFakeAuthApi();
       installFakeSettingsApi({

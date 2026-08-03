@@ -28,6 +28,7 @@ function fakeSettingsStore(closeToTray: boolean) {
       notifyOnScrobbleFailure: true,
       launchAtLogin: false,
       startMinimized: false,
+      skipNonMusicVideos: false,
       showDockIcon: true,
       showTrayIcon: true,
     }),

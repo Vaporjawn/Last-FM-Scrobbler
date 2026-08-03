@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
 import {
+  combineFilters,
   compileFilter,
   FilterSyntaxError,
+  isLikelyNonMusicVideo,
   LastfmClient,
   ListenBrainzClient,
   Logger,
@@ -87,24 +89,38 @@ const logger = new Logger({
 });
 
 /**
- * Compiles `AppSettings.filterExpression` for `Tracker` — `undefined` for no
- * filtering, whether because the setting itself is unset or because it failed to
- * compile. An invalid expression is logged as a warning rather than crashing the
- * tracker or blocking startup — Settings → Filter validates before saving (see
+ * Compiles `Tracker`'s exclusion filter from `AppSettings.filterExpression` and
+ * `AppSettings.skipNonMusicVideos` combined (excluded by *either*, not both — see
+ * `combineFilters`) — `undefined` when neither is active, whether because both
+ * settings are unset/off or because the expression failed to compile. An invalid
+ * expression is logged as a warning rather than crashing the tracker or blocking
+ * startup — Settings → Filter validates before saving (see
  * `main/filters/wire-filter-validation.ts`), but this is the last line of defense
  * against a value edited by hand in settings.json outside the app.
  */
-function compileFilterExpression(expression: string | undefined): CompiledFilter | undefined {
-  if (!expression) {
-    return undefined;
+function compileFilterExpression(options: {
+  readonly filterExpression: string | undefined;
+  readonly skipNonMusicVideos: boolean;
+}): CompiledFilter | undefined {
+  const filters: CompiledFilter[] = [];
+
+  if (options.filterExpression) {
+    try {
+      filters.push(compileFilter(options.filterExpression));
+    } catch (error) {
+      const message = error instanceof FilterSyntaxError ? error.message : String(error);
+      logger.warn(`Settings → Filter: invalid expression, ignoring it — ${message}`);
+    }
   }
-  try {
-    return compileFilter(expression);
-  } catch (error) {
-    const message = error instanceof FilterSyntaxError ? error.message : String(error);
-    logger.warn(`Settings → Filter: invalid expression, ignoring it — ${message}`);
-    return undefined;
+
+  if (options.skipNonMusicVideos) {
+    // See isLikelyNonMusicVideo's docstring for the full reasoning — a browser-sourced
+    // play longer than DEFAULT_NON_MUSIC_VIDEO_THRESHOLD_SEC, most often a long-form
+    // YouTube video rather than an actual song.
+    filters.push({ test: (track) => isLikelyNonMusicVideo(track) });
   }
+
+  return filters.length > 0 ? combineFilters(filters) : undefined;
 }
 
 // Constructed once at app startup, not per-window: it may spawn a real OS-level
@@ -498,13 +514,13 @@ void app.whenReady().then(async () => {
   // `false` — a dock-icon click while the app has no windows is always a manual,
   // explicit request to see it, never something that should stay hidden.
   function createAndWireMainWindow(windowOptions?: { startHidden?: boolean }): Electron.BrowserWindow {
-    const { windowBounds, aspectRatio, filterExpression } = settingsStore.get();
+    const { windowBounds, aspectRatio, filterExpression, skipNonMusicVideos } = settingsStore.get();
     // Compiled once, here, not live-updated: unlike aspectRatio/themeMode above,
     // `Tracker` (packages/core) has no way to swap its filter after construction, so
-    // a filter-expression change only takes effect on the next window this function
-    // creates — in practice, an app restart. Settings → Filter tells the user this
-    // explicitly when they save a change.
-    const filter = compileFilterExpression(filterExpression);
+    // a filter-expression/skipNonMusicVideos change only takes effect on the next
+    // window this function creates — in practice, an app restart. Settings → Filter
+    // tells the user this explicitly when they save a change.
+    const filter = compileFilterExpression({ filterExpression, skipNonMusicVideos });
     const window = createMainWindow({
       playbackSource,
       ...(onScrobbleEligible ? { onScrobbleEligible } : {}),

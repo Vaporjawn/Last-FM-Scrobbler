@@ -480,6 +480,9 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     "exclude",
     "filter expression",
     "sourceapp",
+    "youtube",
+    "non-music",
+    "skip long",
   );
   const accountsVisible = sectionMatches(
     q,
@@ -793,6 +796,25 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
               description="Matching tracks are excluded from now-playing and scrobbling entirely — takes effect on next restart"
               fullWidth
             >
+              <SettingsRow
+                label="Skip long non-music videos"
+                description={
+                  "For browser tabs (YouTube, etc.) longer than 15 minutes — long-form video " +
+                  "content, not a single song. Best-effort: this app can't actually tell a " +
+                  "YouTube video from a YouTube Music track apart (they expose identical " +
+                  "metadata), so this works by duration and source instead, which means it " +
+                  "can occasionally skip a deliberately long track too."
+                }
+                control={
+                  <Switch
+                    checked={settings.skipNonMusicVideos}
+                    onChange={(event) => {
+                      handleUpdateSetting({ skipNonMusicVideos: event.target.checked });
+                    }}
+                    slotProps={{ input: { "aria-label": "Skip long non-music videos" } }}
+                  />
+                }
+              />
               <TextField
                 label="Filter expression"
                 placeholder='e.g. sourceApp == "firefox" or sourceApp == "chrome"'
