@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -86,6 +86,23 @@ describe("ElectronSecretStorage", () => {
     const raw = readFileSync(filePath, "utf8");
 
     expect(raw).not.toContain("super-secret-session-key");
+  });
+
+  it("treats a corrupt secrets file as empty rather than throwing", async () => {
+    writeFileSync(filePath, "{ not valid json", "utf8");
+    const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+
+    await expect(storage.get("account:alice")).resolves.toBeUndefined();
+    await expect(storage.list()).resolves.toEqual([]);
+  });
+
+  it("recovers from a corrupt file once a new value is written", async () => {
+    writeFileSync(filePath, "{ not valid json", "utf8");
+    const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+
+    await storage.set("account:alice", "session-key-123");
+
+    await expect(storage.get("account:alice")).resolves.toBe("session-key-123");
   });
 
   it("throws a clear error at construction when OS-level encryption is unavailable", () => {

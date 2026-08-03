@@ -80,7 +80,18 @@ export class ElectronSecretStorage implements SecretStorage {
     if (!existsSync(this.filePath)) {
       return {};
     }
-    return JSON.parse(readFileSync(this.filePath, "utf8")) as SecretsFile;
+    try {
+      return JSON.parse(readFileSync(this.filePath, "utf8")) as SecretsFile;
+    } catch {
+      // A corrupt or unreadable secrets file (an interrupted write during a crash,
+      // disk corruption, manual tampering) must never crash every get()/set()/
+      // delete()/list() call from here on — fall back to "nothing stored" instead,
+      // same reasoning (and same fallback shape) as settings-store.ts's own
+      // readSettings(): the next successful write overwrites the file with valid
+      // JSON again, and until then this just behaves like a fresh install with no
+      // accounts saved rather than hard-failing every account-related IPC call.
+      return {};
+    }
   }
 
   private writeFile(file: SecretsFile): void {
