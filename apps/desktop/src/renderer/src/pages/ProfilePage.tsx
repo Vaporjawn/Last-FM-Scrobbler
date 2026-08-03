@@ -1,8 +1,6 @@
 import type { JSX } from "react";
 import { useState } from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import StarIcon from "@mui/icons-material/Star";
-import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -14,6 +12,7 @@ import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { StatBox } from "../components/shared/StatBox.js";
+import { SubscriberAvatar } from "../components/shared/SubscriberAvatar.js";
 import { TopAlbumsSection, type TopAlbumsViewMode } from "../components/TopAlbumsSection.js";
 import { TopArtistsSection, type TopArtistsViewMode } from "../components/TopArtistsSection.js";
 import { TopTracksSection } from "../components/TopTracksSection.js";
@@ -192,34 +191,16 @@ export function ProfilePage({
 
       <Card variant="outlined" sx={{ p: 2.5, mb: 3, maxWidth: 480 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-          {/* `position: relative` + an absolutely-positioned badge, same treatment as
-              `FriendListItem`'s avatar — keeps subscriber styling consistent between
-              the one place a whole list of accounts shows it and the one place a
-              single account's own profile does. */}
-          <Box sx={{ position: "relative", flexShrink: 0 }}>
-            <Avatar
-              src={profile?.avatarUrl}
-              alt={targetUsername}
-              sx={{ width: 80, height: 80, fontSize: 32, bgcolor: "primary.main" }}
-            >
-              {targetUsername.slice(0, 1).toUpperCase()}
-            </Avatar>
-            {profile?.isSubscriber ? (
-              <StarIcon
-                titleAccess="Last.fm Pro subscriber"
-                sx={{
-                  position: "absolute",
-                  bottom: -2,
-                  right: -2,
-                  fontSize: 22,
-                  color: "warning.main",
-                  bgcolor: "background.paper",
-                  borderRadius: "50%",
-                  p: "2px",
-                }}
-              />
-            ) : null}
-          </Box>
+          <SubscriberAvatar
+            src={profile?.avatarUrl}
+            alt={targetUsername}
+            size={80}
+            fallbackInitial={targetUsername.slice(0, 1).toUpperCase()}
+            isSubscriber={profile?.isSubscriber ?? false}
+            bgcolor="primary.main"
+            fontSize={32}
+            flexShrink
+          />
           <Box>
             <Typography variant="h6">{targetUsername}</Typography>
             <Typography variant="body2" color="text.secondary">

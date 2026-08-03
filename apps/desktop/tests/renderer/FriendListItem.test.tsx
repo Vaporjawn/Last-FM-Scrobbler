@@ -127,6 +127,28 @@ describe("FriendListItem", () => {
     });
   });
 
+  describe("subscriber badge", () => {
+    it("shows the Last.fm Pro badge on the avatar for a subscriber", () => {
+      render(
+        <List>
+          <FriendListItem friend={friend({ isSubscriber: true })} activity={EMPTY_ACTIVITY} />
+        </List>,
+      );
+
+      expect(screen.getByTitle("Last.fm Pro subscriber")).toBeInTheDocument();
+    });
+
+    it("doesn't show the badge for a non-subscriber", () => {
+      render(
+        <List>
+          <FriendListItem friend={friend({ isSubscriber: false })} activity={EMPTY_ACTIVITY} />
+        </List>,
+      );
+
+      expect(screen.queryByTitle("Last.fm Pro subscriber")).not.toBeInTheDocument();
+    });
+  });
+
   describe("onSelectFriend", () => {
     it("is not interactive on the avatar/name row when onSelectFriend is omitted", () => {
       render(

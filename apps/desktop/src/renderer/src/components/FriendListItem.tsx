@@ -1,6 +1,4 @@
 import type { JSX } from "react";
-import StarIcon from "@mui/icons-material/Star";
-import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import ListItem from "@mui/material/ListItem";
@@ -11,6 +9,7 @@ import type { Friend, RecentTrack } from "@lastfm-scrobbler/core";
 import type { FriendActivityState } from "../hooks/friend-activity-state.js";
 import { formatRealNameAndLocation } from "../utils/format-real-name-and-location.js";
 import { PlaybackStatusChip } from "./shared/PlaybackStatusChip.js";
+import { SubscriberAvatar } from "./shared/SubscriberAvatar.js";
 import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
 
 /** Both halves of the card share one avatar size — deliberately equal, not the
@@ -154,35 +153,16 @@ export function FriendListItem({
             ...(onSelectFriend ? { textAlign: "left", cursor: "pointer" } : {}),
           }}
         >
-          <Box sx={{ position: "relative", flexShrink: 0 }}>
-            <Avatar
-              src={friend.avatarUrl}
-              alt={friend.username}
-              sx={{
-                width: AVATAR_SIZE,
-                height: AVATAR_SIZE,
-                bgcolor: "action.selected",
-                color: "text.secondary",
-              }}
-            >
-              {friend.username.slice(0, 1).toUpperCase()}
-            </Avatar>
-            {friend.isSubscriber ? (
-              <StarIcon
-                titleAccess="Last.fm Pro subscriber"
-                sx={{
-                  position: "absolute",
-                  bottom: -2,
-                  right: -2,
-                  fontSize: 14,
-                  color: "warning.main",
-                  bgcolor: "background.paper",
-                  borderRadius: "50%",
-                  p: "1px",
-                }}
-              />
-            ) : null}
-          </Box>
+          <SubscriberAvatar
+            src={friend.avatarUrl}
+            alt={friend.username}
+            size={AVATAR_SIZE}
+            fallbackInitial={friend.username.slice(0, 1).toUpperCase()}
+            isSubscriber={friend.isSubscriber}
+            bgcolor="action.selected"
+            color="text.secondary"
+            flexShrink
+          />
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
               {friend.username}
