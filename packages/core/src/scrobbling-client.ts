@@ -1,4 +1,8 @@
-import type { NowPlayingSubmission, ScrobbleBatchResult, ScrobbleSubmission } from "./lastfm-api/types.js";
+import type {
+  NowPlayingSubmission,
+  ScrobbleBatchResult,
+  ScrobbleSubmission,
+} from "./lastfm-api/types.js";
 
 /**
  * The minimal, service-agnostic surface `apps/desktop/src/main/scrobbling/wire-scrobbling.ts`

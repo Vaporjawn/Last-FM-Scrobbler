@@ -1,6 +1,10 @@
 import { ListenBrainzApiError } from "./listenbrainz-error.js";
 import type { ScrobblingClient } from "../scrobbling-client.js";
-import type { NowPlayingSubmission, ScrobbleBatchResult, ScrobbleSubmission } from "../lastfm-api/types.js";
+import type {
+  NowPlayingSubmission,
+  ScrobbleBatchResult,
+  ScrobbleSubmission,
+} from "../lastfm-api/types.js";
 
 const DEFAULT_BASE_URL = "https://api.listenbrainz.org";
 /** ListenBrainz's own documented per-request limit (`MAX_LISTENS_PER_REQUEST` in their
@@ -76,7 +80,11 @@ export class ListenBrainzClient implements ScrobblingClient {
 
   private async request<T>(
     path: string,
-    init: { readonly method: string; readonly headers?: Record<string, string>; readonly body?: string },
+    init: {
+      readonly method: string;
+      readonly headers?: Record<string, string>;
+      readonly body?: string;
+    },
   ): Promise<T> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: init.method,
@@ -92,7 +100,9 @@ export class ListenBrainzClient implements ScrobblingClient {
       const body = payload as { error?: string; message?: string } | undefined;
       throw new ListenBrainzApiError(
         response.status,
-        body?.error ?? body?.message ?? `ListenBrainz request failed with status ${response.status}`,
+        body?.error ??
+          body?.message ??
+          `ListenBrainz request failed with status ${response.status}`,
       );
     }
     return payload as T;

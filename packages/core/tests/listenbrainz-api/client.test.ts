@@ -64,7 +64,10 @@ describe("ListenBrainzClient", () => {
       expect(body.listen_type).toBe("single");
       expect(body.payload).toEqual([
         { listened_at: 1000, track_metadata: { artist_name: "A", track_name: "B" } },
-        { listened_at: 2000, track_metadata: { artist_name: "C", track_name: "D", release_name: "E" } },
+        {
+          listened_at: 2000,
+          track_metadata: { artist_name: "C", track_name: "D", release_name: "E" },
+        },
       ]);
 
       expect(result).toEqual({
@@ -85,11 +88,13 @@ describe("ListenBrainzClient", () => {
     });
 
     it("throws ListenBrainzApiError with the HTTP status and a parsed message on failure", async () => {
-      fetchMock.mockImplementation(() => Promise.resolve(jsonResponse({ error: "Invalid token" }, 401)));
-
-      await expect(client.scrobble([{ artist: "A", track: "B", timestamp: 1 }])).rejects.toMatchObject(
-        { code: 401, message: "Invalid token" },
+      fetchMock.mockImplementation(() =>
+        Promise.resolve(jsonResponse({ error: "Invalid token" }, 401)),
       );
+
+      await expect(
+        client.scrobble([{ artist: "A", track: "B", timestamp: 1 }]),
+      ).rejects.toMatchObject({ code: 401, message: "Invalid token" });
       await expect(
         client.scrobble([{ artist: "A", track: "B", timestamp: 1 }]),
       ).rejects.toBeInstanceOf(ListenBrainzApiError);

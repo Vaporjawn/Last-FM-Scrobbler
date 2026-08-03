@@ -277,7 +277,9 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
         if (!itemResult || itemResult.ignoredCode === 0) {
           acceptedByAny = true;
         } else if (itemResult.retryable) {
-          pendingReasons.push(`${outcome.id}: ignored this scrobble (code ${itemResult.ignoredCode})`);
+          pendingReasons.push(
+            `${outcome.id}: ignored this scrobble (code ${itemResult.ignoredCode})`,
+          );
         }
         // A non-retryable ignore from this particular service contributes nothing
         // further — that service is permanently done with this item either way.
@@ -302,7 +304,9 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
       consecutiveFailures += 1;
       if (consecutiveFailures === FAILURE_NOTIFICATION_THRESHOLD) {
         const reason = outcomes
-          .filter((outcome): outcome is Extract<(typeof outcomes)[number], { ok: false }> => !outcome.ok)
+          .filter(
+            (outcome): outcome is Extract<(typeof outcomes)[number], { ok: false }> => !outcome.ok,
+          )
           .map((outcome) => `${outcome.id}: ${outcome.reason}`)
           .join("; ");
         onScrobbleFailed?.(reason);
