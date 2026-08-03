@@ -7,6 +7,8 @@ import { ProfilePage } from "../../src/renderer/src/pages/ProfilePage.js";
 function installFakeApis(options: {
   activeAccount?: string;
   topArtists?: LastfmDataApi["getTopArtists"];
+  topTracks?: LastfmDataApi["getTopTracks"];
+  topAlbums?: LastfmDataApi["getTopAlbums"];
   userInfo?: LastfmDataApi["getUserInfo"];
 }): void {
   const auth: AuthApi = {
@@ -24,8 +26,8 @@ function installFakeApis(options: {
   const lastfm: LastfmDataApi = {
     getRecentTracks: vi.fn().mockResolvedValue([]),
     getTopArtists: options.topArtists ?? vi.fn().mockResolvedValue([]),
-    getTopTracks: vi.fn().mockResolvedValue([]),
-    getTopAlbums: vi.fn().mockResolvedValue([]),
+    getTopTracks: options.topTracks ?? vi.fn().mockResolvedValue([]),
+    getTopAlbums: options.topAlbums ?? vi.fn().mockResolvedValue([]),
     getFriends: vi.fn().mockResolvedValue([]),
     getUserInfo:
       options.userInfo ??
@@ -205,6 +207,80 @@ describe("ProfilePage", () => {
       await screen.findByText("alice");
       expect(screen.queryByText("Scrobbles")).not.toBeInTheDocument();
       expect(screen.queryByText(/member since/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Top Tracks and Top Albums", () => {
+    it("shows top tracks and top albums, each requested for the same target username", async () => {
+      const getTopTracks = vi
+        .fn()
+        .mockResolvedValue([{ name: "Windowlicker", artist: "Aphex Twin", playCount: 42 }]);
+      const getTopAlbums = vi.fn().mockResolvedValue([
+        {
+          name: "In Rainbows",
+          artist: "Radiohead",
+          playCount: 30,
+          imageUrl: "https://lastfm.freetls.fastly.net/i/u/300x300/inrainbows.jpg",
+        },
+      ]);
+      installFakeApis({ activeAccount: "alice", topTracks: getTopTracks, topAlbums: getTopAlbums });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      // `activeAccount` (from useAuth()) resolves asynchronously — the first
+      // synchronous render still shows the login gate, so wait for real content
+      // before making any synchronous assertions.
+      expect(await screen.findByText("Windowlicker")).toBeInTheDocument();
+      expect(screen.getByText("Top Tracks")).toBeInTheDocument();
+      expect(screen.getByText("Aphex Twin — 42 plays")).toBeInTheDocument();
+
+      expect(await screen.findByText("In Rainbows")).toBeInTheDocument();
+      expect(screen.getByText("Top Albums")).toBeInTheDocument();
+      expect(screen.getByText("Radiohead — 30 plays")).toBeInTheDocument();
+
+      expect(getTopTracks).toHaveBeenCalledWith("alice", expect.anything(), undefined);
+      expect(getTopAlbums).toHaveBeenCalledWith("alice", expect.anything(), undefined);
+    });
+
+    it("shows empty-state messages for Top Tracks and Top Albums when Last.fm has neither", async () => {
+      installFakeApis({ activeAccount: "alice" });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      await screen.findByText("alice");
+      const emptyMessages = await screen.findAllByText("No scrobbles yet.");
+      // Top Artists Overall, Top Tracks, and Top Albums all share this exact wording —
+      // three, not one, confirms Top Tracks/Albums actually rendered their own empty
+      // states rather than silently not rendering at all.
+      expect(emptyMessages.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("switches the Top Albums grid to tiles independently of the Top Artists view toggle", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        topArtists: vi.fn().mockResolvedValue([{ name: "Aphex Twin", playCount: 120 }]),
+        topAlbums: vi
+          .fn()
+          .mockResolvedValue([{ name: "In Rainbows", artist: "Radiohead", playCount: 30 }]),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+      await screen.findAllByText("Aphex Twin");
+      await screen.findByText("In Rainbows");
+
+      // Both Top Artists sections (This Week + Overall) and Top Albums start in list
+      // mode — rank "1" appears three times (one per section).
+      const ranksBeforeSwitch = screen.getAllByText("1");
+      expect(ranksBeforeSwitch).toHaveLength(3);
+
+      fireEvent.mouseDown(screen.getByLabelText("Top Albums view"));
+      fireEvent.click(await screen.findByRole("option", { name: "Tiles" }));
+
+      // Top Albums switched to tiles (its own rank number disappears), but Top
+      // Artists' own, separate Select is untouched — its two sections still show
+      // theirs, so exactly one "1" (Top Albums') should be gone, not all three.
+      expect(screen.getAllByText("1")).toHaveLength(2);
+      expect(screen.getAllByText("Aphex Twin")).toHaveLength(2);
     });
   });
 

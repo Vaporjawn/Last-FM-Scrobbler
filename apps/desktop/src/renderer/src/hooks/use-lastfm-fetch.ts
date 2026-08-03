@@ -44,7 +44,17 @@ export function useLastfmFetch<TData>(
     let cancelled = false;
     setState((previous) => ({ ...previous, loading: true, error: undefined }));
 
-    call()
+    // `Promise.resolve().then(call)` rather than calling `call()` directly: if `call`
+    // throws synchronously — e.g. a stale preload build where `window.lastfm` exists
+    // but a given method hasn't been exposed yet, so invoking it throws a plain
+    // TypeError immediately rather than returning a rejected promise — a bare
+    // `call().then(...).catch(...)` would never reach `.catch` at all (there's no
+    // promise to attach it to), leaving `loading: true` set forever with no way to
+    // recover short of a full reload. Routing the call through an already-resolved
+    // promise means ANY failure, sync or async, ends up as a normal rejection this
+    // hook's own `.catch` below already handles.
+    Promise.resolve()
+      .then(call)
       .then((data) => {
         if (!cancelled) {
           setState({ data, loading: false, error: undefined });

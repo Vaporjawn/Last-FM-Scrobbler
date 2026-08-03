@@ -12,9 +12,13 @@ import Typography from "@mui/material/Typography";
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { StatBox } from "../components/shared/StatBox.js";
+import { TopAlbumsSection, type TopAlbumsViewMode } from "../components/TopAlbumsSection.js";
 import { TopArtistsSection, type TopArtistsViewMode } from "../components/TopArtistsSection.js";
+import { TopTracksSection } from "../components/TopTracksSection.js";
 import { useAuth } from "../hooks/use-auth.js";
+import { useTopAlbums } from "../hooks/use-top-albums.js";
 import { useTopArtists } from "../hooks/use-top-artists.js";
+import { useTopTracks } from "../hooks/use-top-tracks.js";
 import { useUserProfile } from "../hooks/use-user-profile.js";
 import type { PageProps } from "./page-props.js";
 
@@ -23,6 +27,11 @@ import type { PageProps } from "./page-props.js";
  * for a 7-day window that, for most accounts, has far fewer distinct artists anyway. */
 const THIS_WEEK_LIMIT = 5;
 const OVERALL_LIMIT = 10;
+/** Top Tracks/Top Albums are Overall-only (see `TopTracksSection`'s docstring for why
+ * there's no This Week companion) and sit lower on an already-tall page, so a shorter
+ * list than Top Artists' own `OVERALL_LIMIT` keeps the page from growing unreasonably
+ * long while still showing a meaningful ranking. */
+const TOP_TRACKS_ALBUMS_LIMIT = 5;
 
 /** "Member since March 2003" — built with the platform's own `Intl.DateTimeFormat`
  * rather than a date-formatting dependency; this app has none, and one label doesn't
@@ -76,6 +85,16 @@ export function ProfilePage({
     loading: overallLoading,
     error: overallError,
   } = useTopArtists(targetUsername, OVERALL_LIMIT);
+  const {
+    tracks: topTracks,
+    loading: topTracksLoading,
+    error: topTracksError,
+  } = useTopTracks(targetUsername, TOP_TRACKS_ALBUMS_LIMIT);
+  const {
+    albums: topAlbums,
+    loading: topAlbumsLoading,
+    error: topAlbumsError,
+  } = useTopAlbums(targetUsername, TOP_TRACKS_ALBUMS_LIMIT);
   // Real avatar photo for the account card below — see use-user-profile.ts and
   // UserProfile.avatarUrl's docstring for why this (unlike the per-artist images
   // Last.fm's API returns elsewhere) is a genuine, working image. `profile` stays
@@ -89,6 +108,12 @@ export function ProfilePage({
   // exposes the one choice that actually changes what's on screen. Revisit if that
   // fuller settings surface turns out to matter later.
   const [viewMode, setViewMode] = useState<TopArtistsViewMode>("list");
+  // Independent from Top Artists' own `viewMode` above rather than one shared toggle —
+  // each section's `Select` sits directly above its own list/grid, and a single shared
+  // control far above both (next to "Top Artists") would either apply invisibly to
+  // sections below the fold or need relocating, neither of which is simpler than just
+  // giving Top Albums its own.
+  const [albumViewMode, setAlbumViewMode] = useState<TopAlbumsViewMode>("list");
 
   const backButton = onBack ? (
     <Button
@@ -189,6 +214,24 @@ export function ProfilePage({
         loading={overallLoading}
         error={overallError}
         viewMode={viewMode}
+        emptyMessage="No scrobbles yet."
+      />
+
+      <TopTracksSection
+        title="Top Tracks"
+        tracks={topTracks}
+        loading={topTracksLoading}
+        error={topTracksError}
+        emptyMessage="No scrobbles yet."
+      />
+
+      <TopAlbumsSection
+        title="Top Albums"
+        albums={topAlbums}
+        loading={topAlbumsLoading}
+        error={topAlbumsError}
+        viewMode={albumViewMode}
+        onViewModeChange={setAlbumViewMode}
         emptyMessage="No scrobbles yet."
       />
     </Box>
