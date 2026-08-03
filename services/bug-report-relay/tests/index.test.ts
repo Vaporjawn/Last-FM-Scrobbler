@@ -125,6 +125,21 @@ describe("bug-report-relay fetch handler", () => {
     expect(payload.error).not.toContain("secret internal detail");
   });
 
+  it("returns 502 (not a false 201 success) when GitHub's 2xx response has an unexpected shape", async () => {
+    // Regression test: response.json<T>() is only a compile-time type assertion —
+    // nothing validated at runtime that a 2xx response actually had html_url/number.
+    // A shape-drifted response used to be reported back to the caller as a false
+    // `201 { issueUrl: undefined, issueNumber: undefined }` "success" that silently
+    // lost the real result instead of surfacing as a failure.
+    mockGitHubApi(() => new Response(JSON.stringify({ unexpected: "shape" }), { status: 201 }));
+
+    const response = await postReport("203.0.113.15", { title: "Crash", body: "Details here." });
+
+    expect(response.status).toBe(502);
+    const payload = await response.json<{ error: string }>();
+    expect(payload.error).toBeTruthy();
+  });
+
   it("rate limits repeated requests from the same IP", async () => {
     mockGitHubApi(
       () => new Response(JSON.stringify({ html_url: "https://x", number: 1 }), { status: 201 }),

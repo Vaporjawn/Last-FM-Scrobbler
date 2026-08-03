@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBugReportRequest } from "../src/index.js";
+import { parseBugReportRequest } from "../src/parse-bug-report-request.js";
 
 describe("parseBugReportRequest", () => {
   it("accepts a well-formed report", () => {
@@ -47,6 +47,16 @@ describe("parseBugReportRequest", () => {
     expect(() =>
       parseBugReportRequest({ title: "x", body: "y", diagnostics: { count: 5 } }),
     ).toThrow("`diagnostics` values must all be strings");
+  });
+
+  it("rejects diagnostics supplied as an array", () => {
+    // Regression test: `typeof [] === "object"` is `true` in JS, so an array payload
+    // used to pass the object check as-is and be silently reinterpreted by
+    // Object.entries as `{"0":"a","1":"b"}` — diverging from the declared
+    // `Record<string, string>` type without ever being rejected.
+    expect(() =>
+      parseBugReportRequest({ title: "x", body: "y", diagnostics: ["a", "b"] }),
+    ).toThrow("`diagnostics` must be an object of string values when present");
   });
 
   describe("length limits", () => {
