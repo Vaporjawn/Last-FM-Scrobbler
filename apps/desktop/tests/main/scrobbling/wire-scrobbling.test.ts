@@ -366,6 +366,228 @@ describe("wireScrobbling", () => {
     queue.close();
   });
 
+  describe("multi-service (additionalServices)", () => {
+    function connection(id: string, client: { scrobble: ReturnType<typeof vi.fn>; updateNowPlaying?: ReturnType<typeof vi.fn> }) {
+      return { id, getClient: vi.fn().mockResolvedValue(client) };
+    }
+
+    it("submits a drained batch to Last.fm and every additional connected service", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const lastfmScrobble = vi.fn().mockResolvedValue({
+        accepted: 1,
+        ignored: 0,
+        results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+      });
+      const createSessionClient = vi.fn().mockReturnValue({ scrobble: lastfmScrobble });
+      const librefmScrobble = vi.fn().mockResolvedValue({
+        accepted: 1,
+        ignored: 0,
+        results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+      });
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient,
+        additionalServices: [connection("librefm", { scrobble: librefmScrobble })],
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      await drainOnce();
+
+      expect(lastfmScrobble).toHaveBeenCalledTimes(1);
+      expect(librefmScrobble).toHaveBeenCalledTimes(1);
+      expect(queue.count()).toBe(0);
+
+      stop();
+      queue.close();
+    });
+
+    it("keeps a scrobble queued when it's retryable on only one of several connected services", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const lastfmScrobble = vi.fn().mockResolvedValue({
+        accepted: 1,
+        ignored: 0,
+        results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+      });
+      const createSessionClient = vi.fn().mockReturnValue({ scrobble: lastfmScrobble });
+      const librefmScrobble = vi.fn().mockRejectedValue(new Error("librefm network error"));
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient,
+        additionalServices: [connection("librefm", { scrobble: librefmScrobble })],
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      await drainOnce();
+
+      // Still queued — Libre.fm hasn't confirmed it yet, even though Last.fm has.
+      expect(queue.count()).toBe(1);
+      const [pending] = queue.dequeueBatch(1);
+      expect(pending?.lastError).toContain("librefm network error");
+
+      // Next cycle resubmits to *both* services again, including the one that
+      // already succeeded — the documented duplicate-tolerance tradeoff.
+      await drainOnce();
+      expect(lastfmScrobble).toHaveBeenCalledTimes(2);
+      expect(librefmScrobble).toHaveBeenCalledTimes(2);
+
+      stop();
+      queue.close();
+    });
+
+    it("removes a scrobble once every connected service has accepted or permanently rejected it", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const lastfmScrobble = vi.fn().mockResolvedValue({
+        accepted: 0,
+        ignored: 1,
+        results: [{ track: "Weights", ignoredCode: 1, retryable: false }], // permanently ignored
+      });
+      const createSessionClient = vi.fn().mockReturnValue({ scrobble: lastfmScrobble });
+      const librefmScrobble = vi.fn().mockResolvedValue({
+        accepted: 1,
+        ignored: 0,
+        results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+      });
+      const onScrobbled = vi.fn();
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient,
+        additionalServices: [connection("librefm", { scrobble: librefmScrobble })],
+        onScrobbled,
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      await drainOnce();
+
+      expect(queue.count()).toBe(0);
+      // Accepted by Libre.fm even though Last.fm permanently ignored it — still
+      // reported once as an accepted scrobble.
+      expect(onScrobbled).toHaveBeenCalledWith([{ artist: "Everything Everything", track: "Weights" }]);
+
+      stop();
+      queue.close();
+    });
+
+    it("works with only an additional service connected and no Last.fm account active", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage()); // no active account
+      const createSessionClient = vi.fn();
+      const listenbrainzScrobble = vi.fn().mockResolvedValue({
+        accepted: 1,
+        ignored: 0,
+        results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+      });
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient,
+        additionalServices: [connection("listenbrainz", { scrobble: listenbrainzScrobble })],
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      await drainOnce();
+
+      expect(createSessionClient).not.toHaveBeenCalled();
+      expect(listenbrainzScrobble).toHaveBeenCalledTimes(1);
+      expect(queue.count()).toBe(0);
+
+      stop();
+      queue.close();
+    });
+
+    it("works with no primary accountStore/createSessionClient supplied at all", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const listenbrainzScrobble = vi.fn().mockResolvedValue({
+        accepted: 1,
+        ignored: 0,
+        results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+      });
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        additionalServices: [connection("listenbrainz", { scrobble: listenbrainzScrobble })],
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      await drainOnce();
+
+      expect(listenbrainzScrobble).toHaveBeenCalledTimes(1);
+      expect(queue.count()).toBe(0);
+
+      stop();
+      queue.close();
+    });
+
+    it("onScrobbleFailed only fires once every connected service fails, not just one of them", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const lastfmScrobble = vi.fn().mockResolvedValue({
+        accepted: 1,
+        ignored: 0,
+        results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+      });
+      const createSessionClient = vi.fn().mockReturnValue({ scrobble: lastfmScrobble });
+      const librefmScrobble = vi.fn().mockRejectedValue(new Error("librefm down"));
+      const onScrobbleFailed = vi.fn();
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient,
+        additionalServices: [connection("librefm", { scrobble: librefmScrobble })],
+        onScrobbleFailed,
+      });
+
+      // 3 consecutive cycles where Libre.fm fails but Last.fm succeeds — Last.fm being
+      // reachable means this isn't a "can't scrobble at all" outage.
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+      await drainOnce();
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_001 });
+      await drainOnce();
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_002 });
+      await drainOnce();
+
+      expect(onScrobbleFailed).not.toHaveBeenCalled();
+
+      stop();
+      queue.close();
+    });
+
+    it("onTrackChanged pushes now-playing to every connected service", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const lastfmUpdateNowPlaying = vi.fn().mockResolvedValue(undefined);
+      const createSessionClient = vi
+        .fn()
+        .mockReturnValue({ scrobble: vi.fn(), updateNowPlaying: lastfmUpdateNowPlaying });
+      const librefmUpdateNowPlaying = vi.fn().mockRejectedValue(new Error("librefm error"));
+      const { onTrackChanged, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient,
+        additionalServices: [
+          connection("librefm", { scrobble: vi.fn(), updateNowPlaying: librefmUpdateNowPlaying }),
+        ],
+      });
+
+      await expect(onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 })).resolves.toBeUndefined();
+
+      expect(lastfmUpdateNowPlaying).toHaveBeenCalledTimes(1);
+      expect(librefmUpdateNowPlaying).toHaveBeenCalledTimes(1);
+
+      stop();
+      queue.close();
+    });
+  });
+
   it("stop() clears the drain interval", () => {
     vi.useFakeTimers();
     try {
