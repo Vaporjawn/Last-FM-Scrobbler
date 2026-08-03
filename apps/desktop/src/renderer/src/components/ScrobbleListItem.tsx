@@ -50,10 +50,15 @@ export function ScrobbleListItem({ track, onSelect }: ScrobbleListItemProps): JS
       />
     </ListItemAvatar>
   );
+  // Artist leads (not the track title) — the artist is what stays constant across a
+  // whole run of someone's listening history, so leading with it reads better scanning
+  // down a list of many rows than a track title would. Track + album (when there is
+  // one) share the second line, since "from this album" is a track-level fact, not an
+  // artist-level one.
   const text = (
     <ListItemText
-      primary={track.track}
-      secondary={`${track.artist}${track.album ? ` — ${track.album}` : ""}`}
+      primary={track.artist}
+      secondary={`${track.track}${track.album ? ` — ${track.album}` : ""}`}
     />
   );
 

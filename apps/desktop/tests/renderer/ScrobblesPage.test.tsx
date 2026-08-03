@@ -316,11 +316,14 @@ describe("ScrobblesPage", () => {
       expect(screen.queryByText("Ghostride")).not.toBeInTheDocument();
       expect(screen.queryByText("Roygbiv")).not.toBeInTheDocument();
 
-      // Matches by album name.
+      // Matches by album name. "Ghostride" now renders combined with its album on one
+      // line ("Ghostride — Jinx" — see ScrobbleListItem's artist-then-track-and-album
+      // layout), so this needs a substring match rather than getByText's default exact
+      // match.
       fireEvent.change(screen.getByPlaceholderText("Search scrobbles"), {
         target: { value: "jinx" },
       });
-      expect(screen.getByText("Ghostride")).toBeInTheDocument();
+      expect(screen.getByText(/Ghostride/)).toBeInTheDocument();
       expect(screen.queryByText("Windowlicker")).not.toBeInTheDocument();
 
       // Matches by track title.
