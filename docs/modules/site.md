@@ -42,11 +42,15 @@ generate it with (see "Not a workspace package" below):
   (`styles.css`'s `--bg-hero`/`--accent` custom properties) rather than looking like a
   generic auto-generated card. Regenerate by re-running the same composition (see git
   history for the exact `magick` invocation) if the tagline or palette ever changes.
-- **JSON-LD structured data** (`application/ld+json`, `schema.org/SoftwareApplication`)
-  — lets a search engine show this as an app result (platforms, price, license) rather
-  than a generic webpage snippet. `softwareVersion` is deliberately omitted: there's no
-  tagged release yet (see the Status section in `index.html` itself), and structured
-  data is expected to reflect something real, not a placeholder — add it once
+- **JSON-LD structured data** (`application/ld+json`) — a `@graph` of three linked
+  entities (`Person`, `WebSite`, `SoftwareApplication`, cross-referenced via `@id`
+  rather than duplicating the author object) instead of one bare
+  `SoftwareApplication`: lets a search engine index the site itself as a citable entity
+  separately from the app it describes, and show either as a rich result (platforms,
+  price, license) rather than a generic webpage snippet. `softwareVersion` is
+  deliberately omitted from `SoftwareApplication`: there's no tagged release yet (see
+  the Status section in `index.html` itself), and structured data is expected to
+  reflect something real, not a placeholder — add it once
   `.github/workflows/release.yml` has actually published a `v*` tag.
 - **Icons**: `favicon.png` (512×512, also `apps/desktop/build/icon.png` — see
   docs/modules/desktop.md's "App icon"), `favicon.ico` (16/32/48 multi-resolution, for
@@ -63,6 +67,13 @@ generate it with (see "Not a workspace package" below):
   sitemap, and a single-URL sitemap (this is a one-page site — there's nothing else to
   list). Update `sitemap.xml`'s `lastmod` when the page's actual content next changes
   meaningfully, not on every unrelated commit.
+- **`404.html`**: GitHub Pages serves this automatically for any unmatched path under
+  this site (standard convention for both project and user Pages sites — no
+  configuration needed beyond the file existing at the published root). `noindex,
+  follow` in its own `robots` meta, since a 404 page has nothing worth indexing but
+  its outbound links (back to the homepage, to the GitHub repo) are still fine to
+  follow. Reuses `styles.css`'s `.hero` styling for visual consistency with the
+  real homepage rather than GitHub Pages' generic fallback.
 
 **Not automated by this repo**: the GitHub repository's own **social preview image**
 (shown when a bare `https://github.com/Vaporjawn/Last-FM-Scrobbler` link is

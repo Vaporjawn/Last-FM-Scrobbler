@@ -58,35 +58,54 @@
       content="Last.fm Scrobbler — native scrobbling for macOS, Windows and Linux"
     />
 
-    <!-- Structured data (schema.org SoftwareApplication) — lets search engines show
-         this as an app result (category, platforms, price) rather than a generic
-         webpage. softwareVersion is deliberately omitted: there's no tagged release
-         yet (see the Status section below), and Google's structured-data guidelines
+    <!-- Structured data (schema.org), as a @graph of three linked entities rather than
+         a single bare SoftwareApplication — lets search engines index the site itself
+         (WebSite) as a distinct, citable entity from the app it describes
+         (SoftwareApplication), both attributed to the same Person via @id references
+         rather than duplicating the author object twice. softwareVersion is
+         deliberately omitted from SoftwareApplication: there's no tagged release yet
+         (see the Status section below), and Google's structured-data guidelines
          require this to reflect something real, not a placeholder. -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Last.fm Scrobbler",
-        "alternateName": "Last-FM-Scrobbler",
-        "description": "A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux that reads \"now playing\" directly from your OS's media session — no per-player plugins required.",
-        "url": "https://vaporjawn.dev/Last-FM-Scrobbler/",
-        "image": "https://vaporjawn.dev/Last-FM-Scrobbler/og-image.png",
-        "applicationCategory": "MusicApplication",
-        "operatingSystem": "macOS, Windows, Linux",
-        "downloadUrl": "https://github.com/Vaporjawn/Last-FM-Scrobbler/releases",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "author": {
-          "@type": "Person",
-          "name": "Victor Williams",
-          "url": "https://github.com/Vaporjawn"
-        },
-        "license": "https://github.com/Vaporjawn/Last-FM-Scrobbler/blob/main/LICENSE",
-        "sameAs": ["https://github.com/Vaporjawn/Last-FM-Scrobbler"]
+        "@graph": [
+          {
+            "@type": "Person",
+            "@id": "https://github.com/Vaporjawn#person",
+            "name": "Victor Williams",
+            "url": "https://github.com/Vaporjawn"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://vaporjawn.dev/Last-FM-Scrobbler/#website",
+            "url": "https://vaporjawn.dev/Last-FM-Scrobbler/",
+            "name": "Last.fm Scrobbler",
+            "description": "A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux that reads \"now playing\" directly from your OS's media session — no per-player plugins required.",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://github.com/Vaporjawn#person" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://vaporjawn.dev/Last-FM-Scrobbler/#software",
+            "name": "Last.fm Scrobbler",
+            "alternateName": "Last-FM-Scrobbler",
+            "description": "A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux that reads \"now playing\" directly from your OS's media session — no per-player plugins required.",
+            "url": "https://vaporjawn.dev/Last-FM-Scrobbler/",
+            "image": "https://vaporjawn.dev/Last-FM-Scrobbler/og-image.png",
+            "applicationCategory": "MusicApplication",
+            "operatingSystem": "macOS, Windows, Linux",
+            "downloadUrl": "https://github.com/Vaporjawn/Last-FM-Scrobbler/releases",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "author": { "@id": "https://github.com/Vaporjawn#person" },
+            "license": "https://github.com/Vaporjawn/Last-FM-Scrobbler/blob/main/LICENSE",
+            "sameAs": ["https://github.com/Vaporjawn/Last-FM-Scrobbler"]
+          }
+        ]
       }
     </script>
 
