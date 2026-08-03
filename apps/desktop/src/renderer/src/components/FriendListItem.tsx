@@ -3,25 +3,32 @@ import StarIcon from "@mui/icons-material/Star";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
-import Divider from "@mui/material/Divider";
 import ListItem from "@mui/material/ListItem";
-import ListItemText from "@mui/material/ListItemText";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { Friend, RecentTrack } from "@lastfm-scrobbler/core";
 import type { FriendActivityState } from "../hooks/use-friends-activity.js";
-import { PlaybackStatusChip } from "./shared/PlaybackStatusChip.js";
+import { ScrobblingIndicator } from "./ScrobblingIndicator.js";
 import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
 
-/** Friend avatar size — bumped up from MUI's 40px default so real Last.fm photos
- * actually read at list scale; matches `ScrobbleListItem`'s row avatar for a
- * consistent list-avatar size across the app. The activity half's own artwork stays a
- * step smaller (see `ACTIVITY_AVATAR_SIZE` below) to keep the visual hierarchy — the
- * friend is the primary subject of the card, their current track a secondary detail
- * sitting beside them, not competing for the same visual weight. */
-const AVATAR_SIZE = 56;
-const ACTIVITY_AVATAR_SIZE = 48;
+/** Both halves of the card share one avatar size — deliberately equal, not the
+ * friend-bigger/track-smaller split this component used before it became a single
+ * side-by-side card: with the two sitting as visual peers in the same row rather than
+ * a primary row with a secondary card stacked underneath it, matching sizes is what
+ * actually reads as one balanced card instead of two mismatched halves glued
+ * together. */
+const AVATAR_SIZE = 48;
+
+/** Fixed pixel width of the friend avatar+text column when a track column sits next
+ * to it, so the track-art column starts at the exact same x position on every row
+ * regardless of username/real-name/location length — see the `gridTemplateColumns`
+ * comment below for why this is a CSS Grid column now, not a flex item's `width`. */
+const FRIEND_COLUMN_WIDTH = 190;
+
+function formatTimestamp(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleString();
+}
 
 export interface FriendListItemProps {
   readonly friend: Friend;
@@ -51,23 +58,27 @@ export interface FriendListItemProps {
 
 /**
  * One row of `FriendsPage`'s list, rendered as a single outlined `Paper` card split
- * into two halves side by side: the friend's real Last.fm avatar (`friend.avatarUrl` —
- * comes directly from `user.getFriends`, no separate lookup needed; `Avatar` falls
- * back to a letter automatically when it's absent, same as `ProfilePage`'s account
- * card), a small gold star under the avatar for a Last.fm Pro subscriber
- * (`friend.isSubscriber` — also parsed directly out of the same `user.getFriends`
- * response, no separate lookup), and their real name and/or self-reported location
- * (see `formatSecondaryLine` — either, both, or neither, same "no lookup needed"
- * source) on the left; their most recent activity — passed in via `activity`, see that
- * prop's docstring for why this component doesn't fetch it itself — on the right, past
- * a vertical `Divider`, when there is any (real album art via `track.imageUrl`, the
- * same real-image field `ScrobbleListItem` already renders for scrobble history,
- * falling back to a note/play icon the same way, plus the status chip/timestamp and
- * track/artist text). The two halves are independently clickable: the avatar/name half
- * through to the friend's own `ProfilePage` when `onSelectFriend` is given, the
- * activity half through to that track's `ScrobbleDetailPage` when `onSelectTrack` is
- * given — since the two lead to different destinations; either or both can be omitted
- * to leave that half non-interactive.
+ * into two equal-weight halves side by side, both following the exact same
+ * avatar-plus-two-line-text shape so the card reads as one balanced unit rather than
+ * two mismatched pieces glued together: the friend's real Last.fm avatar
+ * (`friend.avatarUrl` — comes directly from `user.getFriends`, no separate lookup
+ * needed; `Avatar` falls back to a letter automatically when it's absent, same as
+ * `ProfilePage`'s account card) plus their username and real name/location (see
+ * `formatSecondaryLine`) on the left; their most recent activity — passed in via
+ * `activity`, see that prop's docstring for why this component doesn't fetch it
+ * itself — on the right, when there is any: real album art (`track.imageUrl`, the same
+ * real-image field `ScrobbleListItem` already renders for scrobble history, falling
+ * back to a note/play icon the same way) plus the track title and, on the line below
+ * it, the artist and either a live equalizer indicator (`ScrobblingIndicator`, while
+ * `track.nowPlaying`) or when it was last scrobbled — deliberately not the padded
+ * `PlaybackStatusChip` pill `ScrobbleListItem` uses: with two avatar-and-text blocks
+ * already sharing one row, a full chip left almost no width for the track title
+ * itself, forcing it onto its own cramped, heavily-truncated line under the chip.
+ * The two halves are independently clickable: the avatar/name half through to the
+ * friend's own `ProfilePage` when `onSelectFriend` is given, the activity half through
+ * to that track's `ScrobbleDetailPage` when `onSelectTrack` is given — since the two
+ * lead to different destinations; either or both can be omitted to leave that half
+ * non-interactive.
  */
 /** Combines `realName` and `location` onto ListItemText's one `secondary` line
  * ("Real Name · Location"), rather than adding a third text row for a single extra
@@ -87,26 +98,38 @@ export function FriendListItem({
 }: FriendListItemProps): JSX.Element {
   const { track } = activity;
 
+  const secondaryLine = formatSecondaryLine(friend);
+
   return (
     <ListItem divider sx={{ py: 1 }}>
-      {/* One shared card for both halves — replaces the previous friend-row-with-a-
-          separate-activity-card-stacked-underneath layout. `flexShrink: 0` on the
-          friend half keeps the avatar/name from being squeezed as the window narrows;
-          `minWidth: 0` + `flex: 1` on the activity half is what lets its `noWrap`
-          track title actually truncate with an ellipsis instead of overflowing. */}
+      {/* One shared card for both halves, each the same avatar-plus-two-line-text
+          shape — see this component's own docstring for why. A real two-column CSS
+          Grid, not a flex row with a fixed-`width` child: grid column tracks are
+          authoritative regardless of a child's content, so the track-art column is
+          guaranteed to start at the same x position on every row. A flex row with
+          `width: 190` on the friend half almost gets there, but a flex item's
+          rendered size can still be pushed wider than its declared `width` by content
+          deep in its subtree unless *every* level between it and that content is
+          `minWidth: 0`-guarded — miss one, and that row's avatar/track-art column
+          visibly drifts left/right depending on whoever's username happened to be on
+          it (exactly the "uneven cards" bug this replaced). Grid doesn't have that
+          failure mode: the template's column boundary holds even if a child overflows
+          it, so `minWidth: 0` on the friend column below is a defensive habit, not
+          something the alignment itself depends on. */}
       <Paper
         variant="outlined"
         sx={{
           width: "100%",
-          display: "flex",
+          display: "grid",
+          gridTemplateColumns: track ? `${FRIEND_COLUMN_WIDTH}px 1fr` : "1fr",
           alignItems: "center",
-          gap: 1.5,
+          gap: 1.75,
           p: 1.25,
         }}
       >
         <Stack
           direction="row"
-          spacing={1.5}
+          spacing={1.25}
           {...(onSelectFriend
             ? {
                 component: ButtonBase,
@@ -118,11 +141,12 @@ export function FriendListItem({
             : {})}
           sx={{
             alignItems: "center",
-            flexShrink: 0,
+            minWidth: 0,
+            overflow: "hidden",
             ...(onSelectFriend ? { textAlign: "left", cursor: "pointer" } : {}),
           }}
         >
-          <Stack spacing={0.25} sx={{ alignItems: "center", flexShrink: 0 }}>
+          <Box sx={{ position: "relative", flexShrink: 0 }}>
             <Avatar
               src={friend.avatarUrl}
               alt={friend.username}
@@ -138,65 +162,86 @@ export function FriendListItem({
             {friend.isSubscriber ? (
               <StarIcon
                 titleAccess="Last.fm Pro subscriber"
-                sx={{ fontSize: 16, color: "warning.main" }}
+                sx={{
+                  position: "absolute",
+                  bottom: -2,
+                  right: -2,
+                  fontSize: 14,
+                  color: "warning.main",
+                  bgcolor: "background.paper",
+                  borderRadius: "50%",
+                  p: "1px",
+                }}
               />
             ) : null}
-          </Stack>
-          <ListItemText
-            primary={friend.username}
-            secondary={formatSecondaryLine(friend)}
-            sx={{ my: 0, maxWidth: 160 }}
-            slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
-          />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+              {friend.username}
+            </Typography>
+            {secondaryLine ? (
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                {secondaryLine}
+              </Typography>
+            ) : null}
+          </Box>
         </Stack>
 
         {track ? (
-          <>
-            <Divider orientation="vertical" flexItem />
-            <Box
-              {...(onSelectTrack
-                ? {
-                    component: ButtonBase,
-                    onClick: () => {
-                      onSelectTrack(track);
-                    },
-                    "aria-label": `View details for ${track.track}`,
-                  }
-                : {})}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.25,
-                flex: 1,
-                minWidth: 0,
-                textAlign: "left",
-                ...(onSelectTrack ? { cursor: "pointer" } : {}),
-              }}
-            >
-              <TrackArtworkAvatar
-                imageUrl={track.imageUrl}
-                title={track.track}
-                nowPlaying={track.nowPlaying}
-                size={ACTIVITY_AVATAR_SIZE}
-                flexShrink
-              />
-              <Box sx={{ minWidth: 0, flex: 1 }}>
-                <PlaybackStatusChip
-                  nowPlaying={track.nowPlaying}
-                  timestamp={track.timestamp}
-                  nowPlayingLabel="Scrobbling now"
-                  sx={{ mb: 0.5 }}
-                />
-                <Typography variant="body2" noWrap>
-                  {track.track}
-                  <Typography component="span" variant="body2" color="text.secondary">
-                    {" — "}
-                    {track.artist}
-                  </Typography>
+          <Box
+            {...(onSelectTrack
+              ? {
+                  component: ButtonBase,
+                  onClick: () => {
+                    onSelectTrack(track);
+                  },
+                  "aria-label": `View details for ${track.track}`,
+                }
+              : {})}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              minWidth: 0,
+              textAlign: "left",
+              ...(onSelectTrack ? { cursor: "pointer" } : {}),
+            }}
+          >
+            <TrackArtworkAvatar
+              imageUrl={track.imageUrl}
+              title={track.track}
+              nowPlaying={track.nowPlaying}
+              size={AVATAR_SIZE}
+              flexShrink
+            />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{ fontWeight: 600, ...(track.nowPlaying ? { color: "primary.main" } : {}) }}
+              >
+                {track.track}
+              </Typography>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", minWidth: 0 }}>
+                {track.nowPlaying ? (
+                  <Box
+                    role="status"
+                    aria-label="Scrobbling now"
+                    sx={{ color: "primary.main", display: "inline-flex" }}
+                  >
+                    <ScrobblingIndicator size={11} />
+                  </Box>
+                ) : null}
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {track.nowPlaying
+                    ? track.artist
+                    : track.timestamp !== undefined
+                      ? `${track.artist} · ${formatTimestamp(track.timestamp)}`
+                      : track.artist}
                 </Typography>
-              </Box>
+              </Stack>
             </Box>
-          </>
+          </Box>
         ) : null}
       </Paper>
     </ListItem>
