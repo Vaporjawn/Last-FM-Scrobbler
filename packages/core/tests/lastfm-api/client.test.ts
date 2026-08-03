@@ -113,6 +113,28 @@ describe("LastfmClient", () => {
     });
   });
 
+  describe("buildAuthUrl", () => {
+    it("defaults to Last.fm's own authorization page", () => {
+      const url = new URL(client.buildAuthUrl("tok"));
+
+      expect(url.origin + url.pathname).toBe("https://www.last.fm/api/auth/");
+      expect(url.searchParams.get("api_key")).toBe(API_KEY);
+      expect(url.searchParams.get("token")).toBe("tok");
+    });
+
+    it("uses a configured authUrl instead, for a different Audioscrobbler-protocol service", () => {
+      const librefmClient = new LastfmClient({
+        apiKey: API_KEY,
+        apiSecret: API_SECRET,
+        authUrl: "https://libre.fm/api/auth/",
+      });
+
+      const url = new URL(librefmClient.buildAuthUrl("tok"));
+
+      expect(url.origin + url.pathname).toBe("https://libre.fm/api/auth/");
+    });
+  });
+
   describe("track.scrobble", () => {
     it("submits a batch using array-index parameter notation", async () => {
       fetchMock.mockResolvedValueOnce(

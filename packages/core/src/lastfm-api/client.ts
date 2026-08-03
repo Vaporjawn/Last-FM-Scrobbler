@@ -22,6 +22,7 @@ import type {
 } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://ws.audioscrobbler.com/2.0/";
+const DEFAULT_AUTH_URL = "https://www.last.fm/api/auth/";
 const MAX_SCROBBLE_BATCH_SIZE = 50;
 
 /** Last.fm's own shared "no photo" placeholder for `artist.getInfo`'s `image` array —
@@ -37,6 +38,17 @@ export interface LastfmClientOptions {
   readonly apiSecret: string;
   readonly sessionKey?: string;
   readonly baseUrl?: string;
+  /** The browser page a user is sent to in order to grant this app access — see
+   * `buildAuthUrl`. Defaults to Last.fm's own authorization page. Only needs
+   * overriding when this client is pointed at a different Audioscrobbler-protocol
+   * service via `baseUrl` (e.g. Libre.fm — see
+   * `apps/desktop/src/main/auth/wire-secondary-auth.ts`), since that service's own
+   * authorization page lives on its own domain, not `baseUrl`'s API host (Last.fm
+   * itself splits these the same way: API calls go to `ws.audioscrobbler.com`, but
+   * the auth page is on `www.last.fm`). **Not independently live-verified for
+   * Libre.fm this session** — see `wire-secondary-auth.ts`'s docstring for what was
+   * and wasn't confirmed against Libre.fm's real service. */
+  readonly authUrl?: string;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -61,6 +73,7 @@ export class LastfmClient {
   private readonly apiSecret: string;
   private readonly sessionKey: string | undefined;
   private readonly baseUrl: string;
+  private readonly authUrl: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: LastfmClientOptions) {
@@ -68,6 +81,7 @@ export class LastfmClient {
     this.apiSecret = options.apiSecret;
     this.sessionKey = options.sessionKey;
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    this.authUrl = options.authUrl ?? DEFAULT_AUTH_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
@@ -127,9 +141,10 @@ export class LastfmClient {
     return result.token;
   }
 
-  /** Builds the URL the user must open in a browser to grant access for `token`. */
+  /** Builds the URL the user must open in a browser to grant access for `token` — see
+   * `LastfmClientOptions.authUrl`. */
   buildAuthUrl(token: string): string {
-    const url = new URL("https://www.last.fm/api/auth/");
+    const url = new URL(this.authUrl);
     url.searchParams.set("api_key", this.apiKey);
     url.searchParams.set("token", token);
     return url.toString();
