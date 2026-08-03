@@ -81,14 +81,19 @@ export interface WireSecondaryAuthOptions {
 }
 
 /** Builds a `LastfmClient` pointed at Libre.fm instead of Last.fm, from whichever
- * key/secret pair is currently saved — constructed fresh on every call rather than
- * once at wiring time, so a newly-saved key takes effect immediately with no relaunch
- * needed (Libre.fm has no baked-in-credentials build variant to take precedence over
- * a saved one, unlike Last.fm — see `LibrefmApi.setCredentials`'s docstring). The real
- * default for `WireSecondaryAuthOptions.createLibrefmAuthFlowClient`. */
-export async function createLibrefmAuthFlowClient(
+ * key/secret pair is currently saved (`undefined` if none is) — constructed fresh on
+ * every call rather than once at wiring time, so a newly-saved key takes effect
+ * immediately with no relaunch needed (Libre.fm has no baked-in-credentials build
+ * variant to take precedence over a saved one, unlike Last.fm — see
+ * `LibrefmApi.setCredentials`'s docstring). Shared by both the login flow
+ * (`createLibrefmAuthFlowClient` below — no `sessionKey` yet, since login is how one
+ * gets minted) and `main/index.ts`'s scrobbling wiring (a session-keyed client, once
+ * an account is connected) — `LastfmClient` satisfies both `AuthFlowClient` and
+ * `ScrobblingClient` structurally, so one factory covers both call sites. */
+export async function buildLibrefmClient(
   librefmAppCredentialsStore: AppCredentialsStore,
-): Promise<AuthFlowClient | undefined> {
+  options: { readonly sessionKey?: string } = {},
+): Promise<LastfmClient | undefined> {
   const credentials = await librefmAppCredentialsStore.get();
   if (!credentials) {
     return undefined;
@@ -98,7 +103,16 @@ export async function createLibrefmAuthFlowClient(
     apiSecret: credentials.apiSecret,
     baseUrl: LIBREFM_BASE_URL,
     authUrl: LIBREFM_AUTH_URL,
+    ...(options.sessionKey !== undefined ? { sessionKey: options.sessionKey } : {}),
   });
+}
+
+/** The real default for `WireSecondaryAuthOptions.createLibrefmAuthFlowClient` — see
+ * `buildLibrefmClient` above. */
+export function createLibrefmAuthFlowClient(
+  librefmAppCredentialsStore: AppCredentialsStore,
+): Promise<AuthFlowClient | undefined> {
+  return buildLibrefmClient(librefmAppCredentialsStore);
 }
 
 /**
