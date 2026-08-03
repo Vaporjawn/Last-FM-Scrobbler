@@ -5,6 +5,7 @@ import type { BugReportApi } from "../../../shared/bug-report-api.js";
 import type { FilterApi } from "../../../shared/filter-api.js";
 import type { LastfmDataApi } from "../../../shared/lastfm-api.js";
 import type { NowPlayingApi } from "../../../shared/now-playing-api.js";
+import type { LibrefmApi, ListenBrainzApi } from "../../../shared/secondary-auth-api.js";
 import type { SettingsApi } from "../../../shared/settings-api.js";
 import type { UpdatesApi } from "../../../shared/updates-api.js";
 
@@ -15,6 +16,8 @@ declare global {
      * in component tests, hence optional rather than asserted non-null. */
     readonly nowPlaying?: NowPlayingApi;
     readonly auth?: AuthApi;
+    readonly librefm?: LibrefmApi;
+    readonly listenbrainz?: ListenBrainzApi;
     readonly lastfm?: LastfmDataApi;
     readonly artistImage?: ArtistImageApi;
     readonly filter?: FilterApi;

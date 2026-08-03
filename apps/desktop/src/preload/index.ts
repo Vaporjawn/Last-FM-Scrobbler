@@ -20,6 +20,7 @@ import type { FilterApi, FilterValidationResult } from "../shared/filter-api.js"
 import type { LastfmDataApi } from "../shared/lastfm-api.js";
 import type { NowPlayingApi } from "../shared/now-playing-api.js";
 import type { NowPlayingSnapshot } from "../shared/now-playing-snapshot.js";
+import type { LibrefmApi, ListenBrainzApi } from "../shared/secondary-auth-api.js";
 import type { AppSettings, SettingsApi } from "../shared/settings-api.js";
 import type { UpdateStatus } from "../shared/update-status.js";
 import type { UpdatesApi } from "../shared/updates-api.js";
@@ -97,6 +98,49 @@ const authApi: AuthApi = {
   },
   relaunch() {
     return ipcRenderer.invoke(IPC_CHANNELS.appRelaunch) as Promise<void>;
+  },
+};
+
+const librefmApi: LibrefmApi = {
+  isConfigured() {
+    return ipcRenderer.invoke(IPC_CHANNELS.librefmIsConfigured) as Promise<boolean>;
+  },
+  setCredentials(apiKey, apiSecret) {
+    return ipcRenderer.invoke(
+      IPC_CHANNELS.librefmSetCredentials,
+      apiKey,
+      apiSecret,
+    ) as Promise<void>;
+  },
+  clearCredentials() {
+    return ipcRenderer.invoke(IPC_CHANNELS.librefmClearCredentials) as Promise<void>;
+  },
+  login() {
+    return ipcRenderer.invoke(IPC_CHANNELS.librefmLogin) as Promise<{ username: string }>;
+  },
+  logout() {
+    return ipcRenderer.invoke(IPC_CHANNELS.librefmLogout) as Promise<void>;
+  },
+  getActiveAccount() {
+    return ipcRenderer.invoke(IPC_CHANNELS.librefmGetActiveAccount) as Promise<
+      string | undefined
+    >;
+  },
+};
+
+const listenBrainzApi: ListenBrainzApi = {
+  connect(token) {
+    return ipcRenderer.invoke(IPC_CHANNELS.listenbrainzConnect, token) as Promise<{
+      username: string;
+    }>;
+  },
+  disconnect() {
+    return ipcRenderer.invoke(IPC_CHANNELS.listenbrainzDisconnect) as Promise<void>;
+  },
+  getActiveAccount() {
+    return ipcRenderer.invoke(IPC_CHANNELS.listenbrainzGetActiveAccount) as Promise<
+      string | undefined
+    >;
   },
 };
 
@@ -225,6 +269,8 @@ const appInfoApi: AppInfoApi = {
 
 contextBridge.exposeInMainWorld("nowPlaying", nowPlayingApi);
 contextBridge.exposeInMainWorld("auth", authApi);
+contextBridge.exposeInMainWorld("librefm", librefmApi);
+contextBridge.exposeInMainWorld("listenbrainz", listenBrainzApi);
 contextBridge.exposeInMainWorld("lastfm", lastfmApi);
 contextBridge.exposeInMainWorld("artistImage", artistImageApi);
 contextBridge.exposeInMainWorld("filter", filterApi);
