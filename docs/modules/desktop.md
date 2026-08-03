@@ -384,7 +384,7 @@ A few things worth knowing if you touch this config:
   platform adapters' compiled native binaries (`**/native-build/**` —
   `MediaRemoteAdapter.framework` for macOS, `SmtcHelper.exe` for Windows, each
   resolved by the adapter relative to its own package root at runtime — see
-  `packages/adapter-macos/src/index.ts` and
+  `packages/adapter-macos/src/media-remote/create-macos-playback-source.ts` and
   `packages/adapter-windows/src/smtc/resolve-helper-path.ts`), and the vendored
   `mediaremote-adapter.pl` script (`**/vendor/mediaremote-adapter/**`) macOS passes as
   a literal file path to a spawned `perl` process. Verified locally: a first attempt

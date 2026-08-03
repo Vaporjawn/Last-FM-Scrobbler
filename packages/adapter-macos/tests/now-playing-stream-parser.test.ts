@@ -223,5 +223,67 @@ describe("NowPlayingStreamParser", () => {
         vi.useRealTimers();
       }
     });
+
+    it("does not crash and reports 0 when a diff carries elapsedTime: null", () => {
+      // Regression test: the vendored native adapter's diff protocol legitimately
+      // emits JSON `null` for a field that momentarily disappears while the track
+      // identity stays the same (see stream.m's createDiff, which sets a removed key
+      // to NSNull) — `duration`/`elapsedTime` aren't preserved across polls, so this is
+      // a real, observed shape. The old `=== undefined` check let `null` through as a
+      // real elapsedTime, and JS's numeric coercion of `null` to `0` silently clamped
+      // the reported position instead of this method's own "no elapsedTime" branch
+      // handling it explicitly.
+      const parser = new NowPlayingStreamParser();
+      parser.handleLine(TRACK_ONE_SNAPSHOT);
+
+      parser.handleLine(JSON.stringify({ type: "data", diff: true, payload: { elapsedTime: null } }));
+
+      expect(parser.getPosition()).toBe(0);
+    });
+
+    it("ignores a diff's null duration instead of clamping position to 0", () => {
+      vi.useFakeTimers();
+      try {
+        const capturedAt = new Date("2026-08-02T02:36:08Z");
+        vi.setSystemTime(capturedAt);
+        const parser = new NowPlayingStreamParser();
+        parser.handleLine(TRACK_ONE_SNAPSHOT); // elapsedTime 0.017, playbackRate 1, playing
+
+        // A duration: null diff must not participate in Math.min(position, duration) —
+        // JS coerces null to 0 in that comparison, which used to clamp position to 0
+        // even though playback is still genuinely progressing.
+        parser.handleLine(JSON.stringify({ type: "data", diff: true, payload: { duration: null } }));
+        vi.setSystemTime(new Date(capturedAt.getTime() + 5000));
+
+        expect(parser.getPosition()).toBeCloseTo(5.017, 1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  it("does not report a null duration as durationSec after a diff nulls it out", () => {
+    // Regression test: toTrackInfo's old `!== undefined` check let a `null` diff
+    // value through as `durationSec`, violating the `number | undefined` TrackInfo
+    // contract this parser is supposed to guarantee.
+    const parser = new NowPlayingStreamParser();
+    parser.handleLine(TRACK_ONE_SNAPSHOT); // duration 256.078, album "Boys & Girls"
+    const onTrackChanged = vi.fn();
+    parser.onTrackChanged(onTrackChanged);
+
+    // A null duration alongside an identity-changing album update, in one diff — the
+    // album change is what forces a fresh onTrackChanged emission to inspect.
+    parser.handleLine(
+      JSON.stringify({
+        type: "data",
+        diff: true,
+        payload: { duration: null, album: "Boys & Girls (Deluxe)" },
+      }),
+    );
+
+    expect(onTrackChanged).toHaveBeenCalledTimes(1);
+    const track = onTrackChanged.mock.calls[0]?.[0] as { durationSec?: number };
+    expect(track.durationSec).toBeUndefined();
+    expect("durationSec" in track).toBe(false);
   });
 });
