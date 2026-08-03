@@ -92,8 +92,8 @@ const authApi: AuthApi = {
 };
 
 const lastfmApi: LastfmDataApi = {
-  getRecentTracks(user, limit) {
-    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetRecentTracks, user, limit) as Promise<
+  getRecentTracks(user, limit, page) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetRecentTracks, user, limit, page) as Promise<
       readonly RecentTrack[]
     >;
   },

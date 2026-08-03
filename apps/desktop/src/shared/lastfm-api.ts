@@ -33,7 +33,15 @@ import type {
  * called for an account other than the active one.
  */
 export interface LastfmDataApi {
-  getRecentTracks(user: string, limit?: number): Promise<readonly RecentTrack[]>;
+  /** `page` is 1-based (Last.fm's own convention — see
+   * `LastfmClient.getRecentTracks`'s docstring) and omitted entirely (defaulting to
+   * page 1) when not given, so every call site that only ever wanted the first page
+   * simply doesn't pass one — same as before this parameter existed. */
+  getRecentTracks(
+    user: string,
+    limit?: number,
+    page?: number,
+  ): Promise<readonly RecentTrack[]>;
   /** `period` defaults to Last.fm's own `"overall"` when omitted (see
    * `LastfmClient.getTopArtists`'s docstring) — every call site that wants the
    * all-time ranking simply doesn't pass one, same as before this parameter existed. */

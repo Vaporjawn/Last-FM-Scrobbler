@@ -388,4 +388,106 @@ describe("ScrobblesPage", () => {
       expect(await screen.findByText("SLOW DANCING IN THE DARK")).toBeInTheDocument();
     });
   });
+
+  describe("pagination", () => {
+    /** `useRecentTracks`'s default `limit` (20) is what `ScrobblesPage` actually
+     * calls it with — a full page needs exactly this many tracks for `hasMore` to
+     * come back `true`. */
+    function fullPage(prefix: string): RecentTrack[] {
+      return Array.from({ length: 20 }, (_, i) => ({
+        artist: "Artist",
+        track: `${prefix}${i}`,
+        nowPlaying: false,
+        loved: false,
+      }));
+    }
+
+    it("does not show a 'Load more' button when the first page is short", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        recentTracks: [{ artist: "Crumb", track: "Ghostride", nowPlaying: false, loved: false }],
+      });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+
+      await screen.findByText("Ghostride");
+      expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
+    });
+
+    it("shows 'Load more', fetches and appends page 2, then hides the button once page 2 is short", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(fullPage("P1-"))
+        .mockResolvedValueOnce([{ artist: "Artist", track: "P2-0", nowPlaying: false, loved: false }]);
+      installFakeApis({ activeAccount: "alice", lastfmOverrides: { getRecentTracks } });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("P1-0");
+      const loadMoreButton = screen.getByRole("button", { name: "Load more" });
+
+      act(() => {
+        fireEvent.click(loadMoreButton);
+      });
+
+      expect(await screen.findByText("P2-0")).toBeInTheDocument();
+      expect(getRecentTracks).toHaveBeenLastCalledWith("alice", 20, 2);
+      // Page 2 came back short, so there's nothing left to load.
+      expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
+    });
+
+    it("shows a distinct loading state on the button while loadMore is in flight", async () => {
+      let resolvePage2!: (tracks: readonly RecentTrack[]) => void;
+      const page2Promise = new Promise<readonly RecentTrack[]>((resolve) => {
+        resolvePage2 = resolve;
+      });
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(fullPage("P1-"))
+        .mockReturnValueOnce(page2Promise);
+      installFakeApis({ activeAccount: "alice", lastfmOverrides: { getRecentTracks } });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("P1-0");
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+      });
+
+      const loadingButton = await screen.findByRole("button", { name: /loading more/i });
+      expect(loadingButton).toBeDisabled();
+      // The already-loaded first page stays visible — loadMore never replaces the
+      // list with a full-page spinner the way the initial fetch does.
+      expect(screen.getByText("P1-0")).toBeInTheDocument();
+
+      await act(async () => {
+        resolvePage2([{ artist: "Artist", track: "P2-0", nowPlaying: false, loved: false }]);
+        await page2Promise;
+      });
+
+      expect(await screen.findByText("P2-0")).toBeInTheDocument();
+    });
+
+    it("shows a failed loadMore's error inline without discarding the already-loaded list", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(fullPage("P1-"))
+        .mockRejectedValueOnce(new Error("network error"));
+      installFakeApis({ activeAccount: "alice", lastfmOverrides: { getRecentTracks } });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("P1-0");
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+      });
+
+      expect(await screen.findByText("network error")).toBeInTheDocument();
+      // The page 1 list is still fully intact — a failed loadMore must not blank the
+      // page the way an initial-fetch failure does.
+      expect(screen.getByText("P1-0")).toBeInTheDocument();
+      expect(screen.getByText("P1-19")).toBeInTheDocument();
+      // hasMore is preserved on failure, so the same control offers a retry.
+      expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+    });
+  });
 });

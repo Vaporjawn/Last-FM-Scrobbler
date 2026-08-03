@@ -253,9 +253,15 @@ export class LastfmClient {
 
   // --- user / artist (read) ----------------------------------------------------
 
+  /** `page` is 1-based, same convention Last.fm's own API uses — verified live
+   * against the real API (`user.getRecentTracks`, `format=json`, `page=2`): the
+   * response's `@attr.page` echoes back whichever page was requested, and each
+   * page's `track` items follow the exact same shape as page 1. Omitted entirely
+   * (Last.fm defaults to page 1) when not given, same convention as `limit`. */
   async getRecentTracks(options: {
     readonly user: string;
     readonly limit?: number;
+    readonly page?: number;
   }): Promise<RecentTrack[]> {
     // extended=1 is what makes Last.fm include `loved` and real per-track artwork on
     // this endpoint at all — see RecentTrackJson's docstring for the response-shape
@@ -263,6 +269,9 @@ export class LastfmClient {
     const params: Record<string, string> = { user: options.user, extended: "1" };
     if (options.limit !== undefined) {
       params.limit = String(options.limit);
+    }
+    if (options.page !== undefined) {
+      params.page = String(options.page);
     }
 
     const result = await this.request<{

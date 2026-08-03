@@ -5,11 +5,14 @@ import LibraryMusicIcon from "@mui/icons-material/LibraryMusic";
 import SearchIcon from "@mui/icons-material/Search";
 import SearchOffIcon from "@mui/icons-material/SearchOff";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import List from "@mui/material/List";
 import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { AsyncState } from "../components/AsyncState.js";
 import { LoginPrompt } from "../components/LoginPrompt.js";
@@ -33,7 +36,7 @@ function matchesSearch(track: RecentTrack, query: string): boolean {
 
 export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PageProps): JSX.Element {
   const { activeAccount } = useAuth();
-  const { tracks, loading, error } = useRecentTracks(activeAccount);
+  const { tracks, loading, loadingMore, error, hasMore, loadMore } = useRecentTracks(activeAccount);
   const [searchQuery, setSearchQuery] = useState("");
 
   const visibleTracks = useMemo(() => {
@@ -55,7 +58,11 @@ export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PagePr
         />
       ) : loading ? (
         <AsyncState kind="loading" label="Loading scrobbles…" />
-      ) : error ? (
+      ) : error && tracks.length === 0 ? (
+        // Only the *initial* fetch failing empties the whole page like this — a
+        // failed loadMore (tracks.length > 0 already) instead shows inline near the
+        // "Load more" control below, so a hiccup loading page 2 doesn't throw away
+        // page 1's already-successfully-loaded list.
         <AsyncState kind="error" message={error} />
       ) : tracks.length === 0 ? (
         <AsyncState kind="empty" icon={<LibraryMusicIcon sx={{ fontSize: 48 }} />} message="No scrobbles yet." />
@@ -117,6 +124,25 @@ export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PagePr
               </List>
             </Paper>
           )}
+
+          {hasMore ? (
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2, gap: 1 }}>
+              {error ? (
+                <Typography variant="body2" color="error">
+                  {error}
+                </Typography>
+              ) : null}
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={loadingMore}
+                onClick={loadMore}
+                startIcon={loadingMore ? <CircularProgress size={16} /> : undefined}
+              >
+                {loadingMore ? "Loading more…" : "Load more"}
+              </Button>
+            </Box>
+          ) : null}
         </>
       )}
     </Box>

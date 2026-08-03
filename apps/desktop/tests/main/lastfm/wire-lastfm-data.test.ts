@@ -58,6 +58,15 @@ describe("wireLastfmData", () => {
     expect(result).toEqual([{ artist: "A", track: "T", nowPlaying: false, loved: false }]);
   });
 
+  it("getRecentTracks also forwards page when given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice", 10, 2);
+
+    expect(client.getRecentTracks).toHaveBeenCalledWith({ user: "alice", limit: 10, page: 2 });
+  });
+
   it("getTopArtists forwards user/limit and returns the client's result", async () => {
     const client = fakeClient();
     wireLastfmData({ client });

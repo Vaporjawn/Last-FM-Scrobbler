@@ -266,6 +266,26 @@ describe("LastfmClient", () => {
       expect(new URL(url).searchParams.get("extended")).toBe("1");
     });
 
+    it("forwards page for user.getRecentTracks", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ recenttracks: { track: [] } }));
+
+      await client.getRecentTracks({ user: "someuser", limit: 20, page: 2 });
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      const params = new URL(url).searchParams;
+      expect(params.get("page")).toBe("2");
+      expect(params.get("limit")).toBe("20");
+    });
+
+    it("omits page for user.getRecentTracks when not given, same as before this parameter existed", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ recenttracks: { track: [] } }));
+
+      await client.getRecentTracks({ user: "someuser" });
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(new URL(url).searchParams.has("page")).toBe(false);
+    });
+
     it("parses user.getTopArtists", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({

@@ -55,13 +55,19 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
 
   ipcMain.handle(
     IPC_CHANNELS.lastfmGetRecentTracks,
-    (_event, user: unknown, limit?: unknown): Promise<readonly RecentTrack[]> => {
+    (
+      _event,
+      user: unknown,
+      limit?: unknown,
+      page?: unknown,
+    ): Promise<readonly RecentTrack[]> => {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
       return client.getRecentTracks({
         user: String(user),
         ...(limit !== undefined ? { limit: Number(limit) } : {}),
+        ...(page !== undefined ? { page: Number(page) } : {}),
       });
     },
   );
