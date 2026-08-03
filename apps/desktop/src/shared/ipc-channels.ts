@@ -47,6 +47,10 @@ export const IPC_CHANNELS = {
   lastfmGetRecentTracks: "lastfm:get-recent-tracks",
   /** `user.getTopArtists` for a given username. */
   lastfmGetTopArtists: "lastfm:get-top-artists",
+  /** `user.getTopTracks` for a given username. */
+  lastfmGetTopTracks: "lastfm:get-top-tracks",
+  /** `user.getTopAlbums` for a given username. */
+  lastfmGetTopAlbums: "lastfm:get-top-albums",
   /** `user.getFriends` for a given username. */
   lastfmGetFriends: "lastfm:get-friends",
   /** `user.getInfo` for a given username — real name + avatar photo. */

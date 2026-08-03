@@ -29,6 +29,8 @@ function fakeClient() {
       .fn()
       .mockResolvedValue([{ artist: "A", track: "T", nowPlaying: false, loved: false }]),
     getTopArtists: vi.fn().mockResolvedValue([{ name: "A", playCount: 5 }]),
+    getTopTracks: vi.fn().mockResolvedValue([{ name: "T", artist: "A", playCount: 5 }]),
+    getTopAlbums: vi.fn().mockResolvedValue([{ name: "Al", artist: "A", playCount: 5 }]),
     getFriends: vi.fn().mockResolvedValue([{ username: "bob" }]),
     getUserInfo: vi.fn().mockResolvedValue({ username: "alice", avatarUrl: "https://example.com/a.png" }),
     getArtistInfo: vi.fn().mockResolvedValue({ name: "A", listeners: 100, playCount: 500 }),
@@ -73,6 +75,44 @@ describe("wireLastfmData", () => {
     await invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice", 5, "7day");
 
     expect(client.getTopArtists).toHaveBeenCalledWith({ user: "alice", limit: 5, period: "7day" });
+  });
+
+  it("getTopTracks forwards user/limit and returns the client's result", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    const result = await invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice", 5);
+
+    expect(client.getTopTracks).toHaveBeenCalledWith({ user: "alice", limit: 5 });
+    expect(result).toEqual([{ name: "T", artist: "A", playCount: 5 }]);
+  });
+
+  it("getTopTracks also forwards period when given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice", 5, "7day");
+
+    expect(client.getTopTracks).toHaveBeenCalledWith({ user: "alice", limit: 5, period: "7day" });
+  });
+
+  it("getTopAlbums forwards user/limit and returns the client's result", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    const result = await invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice", 5);
+
+    expect(client.getTopAlbums).toHaveBeenCalledWith({ user: "alice", limit: 5 });
+    expect(result).toEqual([{ name: "Al", artist: "A", playCount: 5 }]);
+  });
+
+  it("getTopAlbums also forwards period when given", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    await invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice", 5, "7day");
+
+    expect(client.getTopAlbums).toHaveBeenCalledWith({ user: "alice", limit: 5, period: "7day" });
   });
 
   it("getFriends forwards user and returns the client's result", async () => {
@@ -165,6 +205,8 @@ describe("wireLastfmData", () => {
 
     await expect(invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetFriends, "alice")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetUserInfo, "alice")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "A")).rejects.toThrow(/not configured/i);
@@ -184,6 +226,8 @@ describe("wireLastfmData", () => {
 
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetRecentTracks)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopArtists)).toBe(false);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopTracks)).toBe(false);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopAlbums)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetFriends)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetUserInfo)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetArtistInfo)).toBe(false);

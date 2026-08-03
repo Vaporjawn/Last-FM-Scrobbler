@@ -24,6 +24,8 @@ function installFakeApis(options: {
   const lastfm: LastfmDataApi = {
     getRecentTracks: vi.fn().mockResolvedValue([]),
     getTopArtists: options.topArtists ?? vi.fn().mockResolvedValue([]),
+    getTopTracks: vi.fn().mockResolvedValue([]),
+    getTopAlbums: vi.fn().mockResolvedValue([]),
     getFriends: vi.fn().mockResolvedValue([]),
     getUserInfo:
       options.userInfo ??

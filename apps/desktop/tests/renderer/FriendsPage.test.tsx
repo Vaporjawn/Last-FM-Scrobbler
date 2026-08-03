@@ -32,6 +32,8 @@ function installFakeApis(options: {
         Promise.resolve(options.recentTracksByUser?.[user] ?? []),
       ),
     getTopArtists: vi.fn().mockResolvedValue([]),
+    getTopTracks: vi.fn().mockResolvedValue([]),
+    getTopAlbums: vi.fn().mockResolvedValue([]),
     getFriends: options.friends ?? vi.fn().mockResolvedValue([]),
     getUserInfo: vi.fn().mockResolvedValue({ username: "someuser" }),
     getArtistInfo: vi.fn(),

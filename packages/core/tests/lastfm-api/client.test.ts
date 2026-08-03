@@ -278,6 +278,108 @@ describe("LastfmClient", () => {
       expect(result).toEqual([{ name: "Radiohead", playCount: 42 }]);
     });
 
+    it("parses user.getTopTracks, deliberately omitting the shared-placeholder image field", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          toptracks: {
+            track: [
+              {
+                name: "Idioteque",
+                artist: { name: "Radiohead" },
+                playcount: "42",
+                image: [{ size: "extralarge", "#text": "https://.../placeholder.png" }],
+              },
+            ],
+          },
+        }),
+      );
+      const result = await client.getTopTracks({ user: "someuser", period: "7day" });
+      expect(result).toEqual([{ name: "Idioteque", artist: "Radiohead", playCount: 42 }]);
+    });
+
+    it("normalizes a single-track user.getTopTracks response into an array", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          toptracks: { track: { name: "Idioteque", artist: { name: "Radiohead" }, playcount: "1" } },
+        }),
+      );
+      const result = await client.getTopTracks({ user: "someuser" });
+      expect(result).toEqual([{ name: "Idioteque", artist: "Radiohead", playCount: 1 }]);
+    });
+
+    it("forwards period/limit for user.getTopTracks", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ toptracks: { track: [] } }));
+
+      await client.getTopTracks({ user: "someuser", period: "1month", limit: 5 });
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      const params = new URL(url).searchParams;
+      expect(params.get("period")).toBe("1month");
+      expect(params.get("limit")).toBe("5");
+    });
+
+    it("parses user.getTopAlbums, including its real per-album art", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          topalbums: {
+            album: [
+              {
+                name: "In Rainbows",
+                artist: { name: "Radiohead" },
+                playcount: "42",
+                image: [
+                  { size: "small", "#text": "https://.../small.jpg" },
+                  { size: "extralarge", "#text": "https://.../large.jpg" },
+                ],
+              },
+            ],
+          },
+        }),
+      );
+      const result = await client.getTopAlbums({ user: "someuser", period: "7day" });
+      expect(result).toEqual([
+        {
+          name: "In Rainbows",
+          artist: "Radiohead",
+          playCount: 42,
+          imageUrl: "https://.../large.jpg",
+        },
+      ]);
+    });
+
+    it("omits imageUrl for a user.getTopAlbums entry with no art on file", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          topalbums: {
+            album: [{ name: "No Art", artist: { name: "Someone" }, playcount: "1", image: [] }],
+          },
+        }),
+      );
+      const result = await client.getTopAlbums({ user: "someuser" });
+      expect(result).toEqual([{ name: "No Art", artist: "Someone", playCount: 1 }]);
+    });
+
+    it("normalizes a single-album user.getTopAlbums response into an array", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          topalbums: { album: { name: "In Rainbows", artist: { name: "Radiohead" }, playcount: "1" } },
+        }),
+      );
+      const result = await client.getTopAlbums({ user: "someuser" });
+      expect(result).toEqual([{ name: "In Rainbows", artist: "Radiohead", playCount: 1 }]);
+    });
+
+    it("forwards period/limit for user.getTopAlbums", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ topalbums: { album: [] } }));
+
+      await client.getTopAlbums({ user: "someuser", period: "12month", limit: 8 });
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+      const params = new URL(url).searchParams;
+      expect(params.get("period")).toBe("12month");
+      expect(params.get("limit")).toBe("8");
+    });
+
     it("parses user.getFriends", async () => {
       fetchMock.mockResolvedValueOnce(
         jsonResponse({ friends: { user: [{ name: "afriend", realname: "A Friend" }] } }),

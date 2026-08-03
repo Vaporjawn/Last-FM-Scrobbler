@@ -5,7 +5,9 @@ import type {
   Friend,
   RecentTrack,
   SimilarArtist,
+  TopAlbum,
   TopArtist,
+  TopTrack,
   TrackDetail,
   UserProfile,
 } from "@lastfm-scrobbler/core";
@@ -98,6 +100,16 @@ const lastfmApi: LastfmDataApi = {
   getTopArtists(user, limit, period) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetTopArtists, user, limit, period) as Promise<
       readonly TopArtist[]
+    >;
+  },
+  getTopTracks(user, limit, period) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetTopTracks, user, limit, period) as Promise<
+      readonly TopTrack[]
+    >;
+  },
+  getTopAlbums(user, limit, period) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetTopAlbums, user, limit, period) as Promise<
+      readonly TopAlbum[]
     >;
   },
   getFriends(user) {

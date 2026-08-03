@@ -10,8 +10,12 @@ import type {
   ScrobbleResultItem,
   ScrobbleSubmission,
   SimilarArtist,
+  TopAlbum,
+  TopAlbumsPeriod,
   TopArtist,
   TopArtistsPeriod,
+  TopTrack,
+  TopTracksPeriod,
   TrackDetail,
   TrackRef,
   UserProfile,
@@ -304,6 +308,71 @@ export class LastfmClient {
     return items.map((item) => ({ name: item.name, playCount: Number(item.playcount) }));
   }
 
+  /** Verified live against the real API (`user.getTopTracks`, `format=json`): every
+   * track's `image` array points at the same shared placeholder graphic `TopTrack`'s
+   * docstring documents — deliberately not surfaced, same reasoning as
+   * `getTopArtists`. */
+  async getTopTracks(options: {
+    readonly user: string;
+    readonly period?: TopTracksPeriod;
+    readonly limit?: number;
+  }): Promise<TopTrack[]> {
+    const params: Record<string, string> = { user: options.user };
+    if (options.period !== undefined) {
+      params.period = options.period;
+    }
+    if (options.limit !== undefined) {
+      params.limit = String(options.limit);
+    }
+
+    const result = await this.request<{
+      toptracks: { track: TopTrackJson | readonly TopTrackJson[] };
+    }>("user.getTopTracks", params, { httpMethod: "GET", signed: false });
+
+    const raw = result.toptracks.track;
+    const items: readonly TopTrackJson[] = Array.isArray(raw) ? raw : [raw];
+    return items.map((item) => ({
+      name: item.name,
+      artist: item.artist.name,
+      playCount: Number(item.playcount),
+    }));
+  }
+
+  /** Verified live against the real API (`user.getTopAlbums`, `format=json`): unlike
+   * `getTopTracks`/`getTopArtists`, each album's `image` array points at a genuinely
+   * distinct hash per album — see `TopAlbum.imageUrl`'s docstring — so this one *is*
+   * surfaced, via the same `pickLargestImageUrl` helper every other real-art field in
+   * this client uses. */
+  async getTopAlbums(options: {
+    readonly user: string;
+    readonly period?: TopAlbumsPeriod;
+    readonly limit?: number;
+  }): Promise<TopAlbum[]> {
+    const params: Record<string, string> = { user: options.user };
+    if (options.period !== undefined) {
+      params.period = options.period;
+    }
+    if (options.limit !== undefined) {
+      params.limit = String(options.limit);
+    }
+
+    const result = await this.request<{
+      topalbums: { album: TopAlbumJson | readonly TopAlbumJson[] };
+    }>("user.getTopAlbums", params, { httpMethod: "GET", signed: false });
+
+    const raw = result.topalbums.album;
+    const items: readonly TopAlbumJson[] = Array.isArray(raw) ? raw : [raw];
+    return items.map((item) => {
+      const imageUrl = pickLargestImageUrl(item.image);
+      return {
+        name: item.name,
+        artist: item.artist.name,
+        playCount: Number(item.playcount),
+        ...(imageUrl ? { imageUrl } : {}),
+      };
+    });
+  }
+
   async getFriends(options: { readonly user: string }): Promise<Friend[]> {
     const result = await this.request<{
       friends: { user: FriendJson | readonly FriendJson[] };
@@ -521,6 +590,19 @@ interface ScrobbleResponseItemJson {
 interface TopArtistJson {
   readonly name: string;
   readonly playcount: string;
+}
+
+interface TopTrackJson {
+  readonly name: string;
+  readonly artist: { readonly name: string };
+  readonly playcount: string;
+}
+
+interface TopAlbumJson {
+  readonly name: string;
+  readonly artist: { readonly name: string };
+  readonly playcount: string;
+  readonly image?: readonly LastfmImageJson[];
 }
 
 interface FriendJson {

@@ -5,8 +5,12 @@ import type {
   LastfmClient,
   RecentTrack,
   SimilarArtist,
+  TopAlbum,
+  TopAlbumsPeriod,
   TopArtist,
   TopArtistsPeriod,
+  TopTrack,
+  TopTracksPeriod,
   TrackDetail,
   UserProfile,
 } from "@lastfm-scrobbler/core";
@@ -20,6 +24,8 @@ const { ipcMain } = electron;
 export interface LastfmDataClient {
   getRecentTracks: LastfmClient["getRecentTracks"];
   getTopArtists: LastfmClient["getTopArtists"];
+  getTopTracks: LastfmClient["getTopTracks"];
+  getTopAlbums: LastfmClient["getTopAlbums"];
   getFriends: LastfmClient["getFriends"];
   getUserInfo: LastfmClient["getUserInfo"];
   getArtistInfo: LastfmClient["getArtistInfo"];
@@ -75,6 +81,44 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
         user: String(user),
         ...(limit !== undefined ? { limit: Number(limit) } : {}),
         ...(period !== undefined ? { period: period as TopArtistsPeriod } : {}),
+      });
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.lastfmGetTopTracks,
+    (
+      _event,
+      user: unknown,
+      limit?: unknown,
+      period?: unknown,
+    ): Promise<readonly TopTrack[]> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      return client.getTopTracks({
+        user: String(user),
+        ...(limit !== undefined ? { limit: Number(limit) } : {}),
+        ...(period !== undefined ? { period: period as TopTracksPeriod } : {}),
+      });
+    },
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.lastfmGetTopAlbums,
+    (
+      _event,
+      user: unknown,
+      limit?: unknown,
+      period?: unknown,
+    ): Promise<readonly TopAlbum[]> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      return client.getTopAlbums({
+        user: String(user),
+        ...(limit !== undefined ? { limit: Number(limit) } : {}),
+        ...(period !== undefined ? { period: period as TopAlbumsPeriod } : {}),
       });
     },
   );
@@ -160,6 +204,8 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
   return () => {
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetRecentTracks);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopArtists);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopTracks);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopAlbums);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetFriends);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetUserInfo);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetArtistInfo);
