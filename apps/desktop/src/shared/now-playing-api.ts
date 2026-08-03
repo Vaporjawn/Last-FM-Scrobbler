@@ -14,4 +14,8 @@ export interface NowPlayingApi {
   getCurrent(): Promise<NowPlayingSnapshot>;
   onTrackChanged(callback: (track: TrackInfo) => void): () => void;
   onPlaybackStateChanged(callback: (state: PlaybackState) => void): () => void;
+  /** Elapsed playback position in seconds — pushed roughly every second while
+   * something is actively playing, not while paused/stopped (see
+   * `IPC_CHANNELS.nowPlayingPositionChanged`'s docstring). */
+  onPositionChanged(callback: (positionSec: number) => void): () => void;
 }

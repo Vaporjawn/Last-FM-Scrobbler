@@ -7,6 +7,7 @@ import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
+import LinearProgress from "@mui/material/LinearProgress";
 import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -74,7 +75,7 @@ function NowPlayingArtwork({ imageUrl, title }: { imageUrl: string | undefined; 
 }
 
 export function NowPlayingPage(): JSX.Element {
-  const { track, state } = useNowPlaying();
+  const { track, state, positionSec } = useNowPlaying();
   const { activeAccount } = useAuth();
   const {
     info,
@@ -144,12 +145,28 @@ export function NowPlayingPage(): JSX.Element {
                 size="small"
                 color={state === "playing" ? "primary" : "default"}
               />
-              {track.durationSec !== undefined ? (
-                <Typography variant="caption" color="text.secondary">
-                  {formatDuration(track.durationSec)}
-                </Typography>
-              ) : null}
             </Stack>
+            {track.durationSec !== undefined ? (
+              <Box sx={{ mb: 1.5 }}>
+                <LinearProgress
+                  variant="determinate"
+                  // Clamped defensively — every current PlaybackSource adapter
+                  // already clamps its own reported position to the track's
+                  // duration (see e.g. adapter-macos's getPosition), but a progress
+                  // bar over 100% would look broken if one ever didn't.
+                  value={Math.min(100, Math.max(0, (positionSec / track.durationSec) * 100))}
+                  sx={{ borderRadius: 1, height: 6, mb: 0.5 }}
+                />
+                <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDuration(Math.min(positionSec, track.durationSec))}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDuration(track.durationSec)}
+                  </Typography>
+                </Stack>
+              </Box>
+            ) : null}
             <Typography variant="h4" sx={{ wordBreak: "break-word" }} gutterBottom>
               {track.title}
             </Typography>

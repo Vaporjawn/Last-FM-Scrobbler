@@ -6,6 +6,12 @@
 export const IPC_CHANNELS = {
   nowPlayingTrackChanged: "now-playing:track-changed",
   nowPlayingStateChanged: "now-playing:state-changed",
+  /** Pushed roughly every second (see wireNowPlaying's TRACKER_TICK_INTERVAL_MS)
+   * while something is actively playing — elapsed playback position in seconds. Not
+   * pushed while paused/stopped, since the position isn't moving; renderer state
+   * resets to 0 on every track change independently (see use-now-playing.ts) rather
+   * than waiting on this channel to do it. */
+  nowPlayingPositionChanged: "now-playing:position-changed",
   /** Renderer -> main `invoke`: pulls the current snapshot on mount, since a
    * newly-attached listener otherwise only sees *future* push updates and would show
    * nothing until the next track/state change even if something is already playing. */

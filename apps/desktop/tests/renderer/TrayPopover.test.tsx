@@ -19,9 +19,10 @@ function unsubscribe(): void {
 
 function installFakeNowPlayingApi(initial: { track: TrackInfo | undefined; state: PlaybackState }): void {
   const api: NowPlayingApi = {
-    getCurrent: () => Promise.resolve(initial),
+    getCurrent: () => Promise.resolve({ ...initial, positionSec: 0 }),
     onTrackChanged: () => unsubscribe,
     onPlaybackStateChanged: () => unsubscribe,
+    onPositionChanged: () => unsubscribe,
   };
   Object.defineProperty(window, "nowPlaying", { value: api, configurable: true });
 }

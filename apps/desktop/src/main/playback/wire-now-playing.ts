@@ -74,8 +74,9 @@ export function wireNowPlaying(
     mainWindow.webContents.send(IPC_CHANNELS.nowPlayingStateChanged, state);
   });
 
-  ipcMain.handle(IPC_CHANNELS.nowPlayingGetCurrent, (): NowPlayingSnapshot => {
-    return { track: currentTrack, state: currentState };
+  ipcMain.handle(IPC_CHANNELS.nowPlayingGetCurrent, async (): Promise<NowPlayingSnapshot> => {
+    const positionSec = await source.getPosition();
+    return { track: currentTrack, state: currentState, positionSec };
   });
 
   const tracker = new Tracker({
@@ -86,6 +87,27 @@ export function wireNowPlaying(
   tracker.start();
   const tickHandle = setInterval(() => {
     tracker.tick();
+
+    // Only worth polling while something is actually advancing — paused/stopped
+    // playback has no reason to change every tick, and every current adapter's
+    // `getPosition()` is either a live IPC/D-Bus round trip (Windows/Linux) or a
+    // spawned-process read (macOS), not free to call for no reason.
+    if (currentState === "playing") {
+      source
+        .getPosition()
+        .then((positionSec) => {
+          mainWindow.webContents.send(IPC_CHANNELS.nowPlayingPositionChanged, positionSec);
+        })
+        .catch((error: unknown) => {
+          // Defensive only — every current adapter's getPosition() already never
+          // rejects (see e.g. adapter-macos's MacosPlaybackSource.getPosition,
+          // adapter-linux's queryMprisPosition), but the PlaybackSource interface
+          // itself doesn't guarantee that. Playback position is decorative, not
+          // scrobble-critical (see Tracker, which never reads it) — never worth
+          // crashing the tick loop over.
+          console.error("Failed to read playback position:", error);
+        });
+    }
   }, TRACKER_TICK_INTERVAL_MS);
 
   return () => {

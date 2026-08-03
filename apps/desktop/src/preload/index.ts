@@ -50,6 +50,15 @@ const nowPlayingApi: NowPlayingApi = {
       ipcRenderer.removeListener(IPC_CHANNELS.nowPlayingStateChanged, listener);
     };
   },
+  onPositionChanged(callback) {
+    const listener = (_event: Electron.IpcRendererEvent, positionSec: number): void => {
+      callback(positionSec);
+    };
+    ipcRenderer.on(IPC_CHANNELS.nowPlayingPositionChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.nowPlayingPositionChanged, listener);
+    };
+  },
 };
 
 const authApi: AuthApi = {

@@ -33,19 +33,24 @@ const TRACK: TrackInfo = {
 // property — omitting the key entirely is the valid way to express "no duration".
 const { durationSec: _durationSec, ...TRACK_WITHOUT_DURATION } = TRACK;
 
-/** Fake `window.nowPlaying` whose emit* helpers drive real subscribed callbacks. */
+/** Fake `window.nowPlaying` whose emit* helpers drive real subscribed callbacks.
+ * `positionSec` on `initial` is optional (defaulting to 0) so every existing call
+ * site that doesn't care about playback position doesn't need to specify one. */
 function installFakeNowPlayingApi(initial: {
   track: TrackInfo | undefined;
   state: PlaybackState;
+  positionSec?: number;
 }): {
   emitTrackChanged: (track: TrackInfo) => void;
   emitPlaybackStateChanged: (state: PlaybackState) => void;
+  emitPositionChanged: (positionSec: number) => void;
 } {
   const trackListeners = new Set<(track: TrackInfo) => void>();
   const stateListeners = new Set<(state: PlaybackState) => void>();
+  const positionListeners = new Set<(positionSec: number) => void>();
 
   const api: NowPlayingApi = {
-    getCurrent: () => Promise.resolve(initial),
+    getCurrent: () => Promise.resolve({ ...initial, positionSec: initial.positionSec ?? 0 }),
     onTrackChanged: (callback) => {
       trackListeners.add(callback);
       return () => trackListeners.delete(callback);
@@ -53,6 +58,10 @@ function installFakeNowPlayingApi(initial: {
     onPlaybackStateChanged: (callback) => {
       stateListeners.add(callback);
       return () => stateListeners.delete(callback);
+    },
+    onPositionChanged: (callback) => {
+      positionListeners.add(callback);
+      return () => positionListeners.delete(callback);
     },
   };
 
@@ -64,6 +73,9 @@ function installFakeNowPlayingApi(initial: {
     },
     emitPlaybackStateChanged: (state) => {
       for (const listener of stateListeners) listener(state);
+    },
+    emitPositionChanged: (positionSec) => {
+      for (const listener of positionListeners) listener(positionSec);
     },
   };
 }
@@ -363,6 +375,101 @@ describe("NowPlayingPage", () => {
 
       await screen.findByText("Weights");
       expect(screen.queryByText(/^\d+:\d{2}$/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("playback position", () => {
+    it("seeds the progress bar and elapsed time from the initial snapshot", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing", positionSec: 170 });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+
+      // 170s elapsed of a 340s track is exactly the midpoint.
+      const progressBar = await screen.findByRole("progressbar");
+      expect(progressBar).toHaveAttribute("aria-valuenow", "50");
+      expect(screen.getByText("2:50")).toBeInTheDocument();
+      expect(screen.getByText("5:40")).toBeInTheDocument();
+    });
+
+    it("updates the progress bar and elapsed time when a position update arrives", async () => {
+      const { emitPositionChanged } = installFakeNowPlayingApi({
+        track: TRACK,
+        state: "playing",
+        positionSec: 0,
+      });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+      await screen.findByText("0:00");
+
+      act(() => {
+        emitPositionChanged(85);
+      });
+
+      // 85s of 340s = 25%.
+      expect(await screen.findByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
+      expect(screen.getByText("1:25")).toBeInTheDocument();
+    });
+
+    it("resets to 0 immediately when the track changes, without waiting for a position push", async () => {
+      const { emitTrackChanged, emitPositionChanged } = installFakeNowPlayingApi({
+        track: TRACK,
+        state: "playing",
+        positionSec: 200,
+      });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+      await screen.findByText("3:20");
+
+      act(() => {
+        emitTrackChanged({ ...TRACK, title: "Cool Blue", durationSec: 200 });
+      });
+
+      expect(await screen.findByText("Cool Blue")).toBeInTheDocument();
+      expect(screen.getByText("0:00")).toBeInTheDocument();
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+
+      // Confirms this really is the reset-on-track-change path, not a coincidental
+      // leftover render: a later position push for the new track still applies.
+      act(() => {
+        emitPositionChanged(50);
+      });
+      expect(await screen.findByText("0:50")).toBeInTheDocument();
+    });
+
+    it("clamps the displayed elapsed time and progress to the track's duration", async () => {
+      // A position update arriving slightly over duration (e.g. timing jitter at the
+      // very end of a track) shouldn't show 101% or an elapsed time past the total.
+      const { emitPositionChanged } = installFakeNowPlayingApi({
+        track: TRACK,
+        state: "playing",
+        positionSec: 0,
+      });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+      await screen.findByText("0:00");
+
+      act(() => {
+        emitPositionChanged(345);
+      });
+
+      expect(await screen.findByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+      // "5:40" appears twice once clamped — the elapsed-time label and the
+      // already-existing total-duration label read identically.
+      expect(screen.getAllByText("5:40")).toHaveLength(2);
+    });
+
+    it("doesn't render a progress bar when the track has no known duration", async () => {
+      installFakeNowPlayingApi({ track: TRACK_WITHOUT_DURATION, state: "playing" });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+
+      await screen.findByText("Weights");
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     });
   });
 
