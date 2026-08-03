@@ -6,6 +6,7 @@ import {
   compileFilter,
   FilterSyntaxError,
   LastfmClient,
+  ListenBrainzClient,
   Logger,
   ScrobbleQueue,
   type CompiledFilter,
@@ -26,6 +27,7 @@ import { wireArtistImage } from "./artist-images/wire-artist-image.js";
 import { createAccountStore } from "./auth/create-account-store.js";
 import { wireFilterValidation } from "./filters/wire-filter-validation.js";
 import { wireAuth } from "./auth/wire-auth.js";
+import { buildLibrefmClient, wireSecondaryAuth } from "./auth/wire-secondary-auth.js";
 import { applyLoginItemSettings } from "./login-items/apply-login-item-settings.js";
 import { wireScrobbling } from "./scrobbling/wire-scrobbling.js";
 import { wireBugReport } from "./bug-report/wire-bug-report.js";
@@ -196,6 +198,26 @@ void app.whenReady().then(async () => {
     logger.warn("Secure storage unavailable this run — bring-your-own-key is disabled.");
   }
 
+  // Libre.fm and ListenBrainz — additional scrobbling destinations connected
+  // alongside Last.fm, not switched between (see wire-scrobbling.ts's docstring on
+  // this app's "submit to all connected services at once" model). Separate
+  // secret-storage files from Last.fm's own (secrets.json/app-credentials.json
+  // above), via the same createAccountStore/createAppCredentialsStore factories —
+  // `undefined` under the exact same condition accountStore/appCredentialsStore are
+  // (they all share one `safeStorage`), so no separate warning is logged for these.
+  const librefmAccountStore = createAccountStore({
+    filePath: join(userDataDir, "librefm-secrets.json"),
+    safeStorage,
+  });
+  const librefmAppCredentialsStore = createAppCredentialsStore({
+    filePath: join(userDataDir, "librefm-app-credentials.json"),
+    safeStorage,
+  });
+  const listenbrainzAccountStore = createAccountStore({
+    filePath: join(userDataDir, "listenbrainz-secrets.json"),
+    safeStorage,
+  });
+
   // LASTFM_API_KEY/LASTFM_API_SECRET (baked into this build) take precedence, falling
   // back to a key the end user saved themselves via Settings → Accounts. undefined
   // when neither is available — the app still launches; login and Last.fm data views
@@ -273,6 +295,43 @@ void app.whenReady().then(async () => {
       });
     },
   });
+  wireSecondaryAuth({
+    expectedOrigin: expectedRendererOrigin,
+    librefmAccountStore,
+    librefmAppCredentialsStore,
+    listenbrainzAccountStore,
+    openUrl: (url) => shell.openExternal(url),
+    // Same reasoning as wireAuth's onLoginSuccess/onLoginFailed above, just for
+    // Libre.fm's own browser-authorization step — see wire-secondary-auth.ts.
+    onLibrefmLoginSuccess: (username) => {
+      logger.info(`Libre.fm login succeeded (${username}) — bringing the app to the foreground.`);
+      const [window] = BrowserWindow.getAllWindows();
+      if (window) {
+        bringAppToForeground(app, window);
+      } else {
+        logger.warn("Libre.fm login succeeded but no window exists to bring forward.");
+      }
+      showNotification({
+        title: "Logged in to Libre.fm",
+        body: `You're now connected to Libre.fm as ${username}.`,
+        ...notificationIconOption,
+        onClick: () => {
+          const [clickedWindow] = BrowserWindow.getAllWindows();
+          if (clickedWindow) {
+            bringAppToForeground(app, clickedWindow);
+          }
+        },
+      });
+    },
+    onLibrefmLoginFailed: (message) => {
+      logger.warn(`Libre.fm login failed — ${message}`);
+      showNotification({
+        title: "Libre.fm login failed",
+        body: message,
+        ...notificationIconOption,
+      });
+    },
+  });
   wireLastfmData({ client: lastfmClient });
   // Tries Last.fm's own artist photo first when `lastfmClient` is configured (usually
   // a miss — see wire-artist-image.ts's docstring), Deezer's public artist search
@@ -300,14 +359,42 @@ void app.whenReady().then(async () => {
 
   let onScrobbleEligible: CreateMainWindowOptions["onScrobbleEligible"];
   let onTrackChanged: CreateMainWindowOptions["onTrackChanged"];
-  if (accountStore && lastfmClient && createSessionClient) {
+  // Gated on accountStore alone (secure storage being available at all), not also on
+  // lastfmClient/createSessionClient — those two require *Last.fm* credentials
+  // specifically, but scrobbling should still run when only Libre.fm and/or
+  // ListenBrainz end up connected and Last.fm has none configured. accountStore and
+  // librefmAccountStore/listenbrainzAccountStore all share one safeStorage instance,
+  // so they're either all defined or all undefined together — this one check stands
+  // in for "is secure storage available" generally, not just for Last.fm.
+  if (accountStore) {
     const scrobbleQueue = new ScrobbleQueue({
       databasePath: join(userDataDir, "scrobble-queue.sqlite3"),
     });
     const scrobbling = wireScrobbling({
       queue: scrobbleQueue,
-      accountStore,
-      createSessionClient,
+      ...(lastfmClient && createSessionClient ? { accountStore, createSessionClient } : {}),
+      additionalServices: [
+        {
+          id: "librefm",
+          getClient: async () => {
+            if (!librefmAccountStore || !librefmAppCredentialsStore) {
+              return undefined;
+            }
+            const active = await librefmAccountStore.getActiveAccount();
+            if (!active) {
+              return undefined;
+            }
+            return buildLibrefmClient(librefmAppCredentialsStore, { sessionKey: active.sessionKey });
+          },
+        },
+        {
+          id: "listenbrainz",
+          getClient: async () => {
+            const active = await listenbrainzAccountStore?.getActiveAccount();
+            return active ? new ListenBrainzClient({ token: active.sessionKey }) : undefined;
+          },
+        },
+      ],
       onScrobbled: (items) => {
         // Read fresh on every call, not captured once at wiring time — lets toggling
         // Settings → Notifications take effect immediately, no restart needed, same
@@ -335,7 +422,7 @@ void app.whenReady().then(async () => {
           return;
         }
         showNotification({
-          title: "Scrobbling is having trouble reaching Last.fm",
+          title: "Scrobbling is having trouble reaching your connected services",
           body: `${reason} — will keep retrying in the background.`,
           ...notificationIconOption,
         });
