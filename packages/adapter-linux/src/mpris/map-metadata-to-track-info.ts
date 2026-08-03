@@ -1,15 +1,8 @@
 import type { TrackInfo } from "@lastfm-scrobbler/shared-types";
-
-/** Unwraps a dbus-next `Variant` (`{signature, value}`) if present; passes plain values through. */
-function unwrap(value: unknown): unknown {
-  if (value && typeof value === "object" && "value" in value) {
-    return value.value;
-  }
-  return value;
-}
+import { unwrapVariant } from "./unwrap-variant.js";
 
 function readString(value: unknown): string | undefined {
-  const unwrapped = unwrap(value);
+  const unwrapped = unwrapVariant(value);
   return typeof unwrapped === "string" ? unwrapped : undefined;
 }
 
@@ -19,7 +12,7 @@ function readString(value: unknown): string | undefined {
  * multi-artist arrays with ", " (matches how Last.fm scrobbles multi-artist tracks).
  */
 function readStringOrStringList(value: unknown): string | undefined {
-  const unwrapped = unwrap(value);
+  const unwrapped = unwrapVariant(value);
   if (typeof unwrapped === "string") {
     return unwrapped;
   }
@@ -38,7 +31,7 @@ function readStringOrStringList(value: unknown): string | undefined {
 
 /** `mpris:length` is microseconds, as a signed 64-bit int — commonly a `bigint`, sometimes a plain `number`. */
 function readDurationSec(value: unknown): number | undefined {
-  const unwrapped = unwrap(value);
+  const unwrapped = unwrapVariant(value);
   let micros: number | undefined;
   if (typeof unwrapped === "bigint") {
     micros = Number(unwrapped);
@@ -77,6 +70,14 @@ export function mapMetadataToTrackInfo(
     ...(albumArtist ? { albumArtist } : {}),
     ...(durationSec !== undefined ? { durationSec } : {}),
     sourceApp,
-    isStream: durationSec === undefined,
+    // MPRIS has no dedicated "this is a live stream/radio" field the way macOS's
+    // MediaRemote does (`radioStationIdentifier`/`radioStationHash`) — deriving this
+    // from "no mpris:length reported" used to misclassify any ordinary track from a
+    // non-conformant player (common; many minimal MPRIS clients simply don't populate
+    // it) as a stream, while the exact same content on macOS was correctly
+    // `isStream: false`. Without a real signal to key off, `false` is the honest
+    // default: "duration unknown" and "is a stream" are two distinct concepts that
+    // shouldn't be conflated just because this adapter has no explicit indicator yet.
+    isStream: false,
   };
 }

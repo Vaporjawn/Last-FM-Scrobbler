@@ -1,8 +1,9 @@
 import { sessionBus as defaultSessionBus, type MessageBus } from "dbus-next";
+import { listMprisPlayerBusNames } from "./list-mpris-player-bus-names.js";
 import { PlayerRegistry, type ActiveSnapshot } from "./player-registry.js";
-import { listMprisPlayerBusNames, watchMprisPlayerLifecycle } from "./mpris-player-bus-names.js";
-import { watchMprisPlayer, type Unsubscribe as WatchUnsubscribe } from "./watch-mpris-player.js";
 import { queryMprisPosition } from "./query-mpris-position.js";
+import { watchMprisPlayerLifecycle } from "./watch-mpris-player-lifecycle.js";
+import { watchMprisPlayer } from "./watch-mpris-player.js";
 import type {
   PlaybackSource,
   PlaybackState,
@@ -58,10 +59,10 @@ export function createLinuxPlaybackSource(
   const trackListeners = new Set<(track: TrackInfo) => void>();
   const stateListeners = new Set<(state: PlaybackState) => void>();
   const registry = new PlayerRegistry(options.now ? { now: options.now } : {});
-  const playerWatchers = new Map<string, WatchUnsubscribe>();
+  const playerWatchers = new Map<string, Unsubscribe>();
 
   let bus: MessageBus | undefined;
-  let lifecycleUnsubscribe: WatchUnsubscribe | undefined;
+  let lifecycleUnsubscribe: Unsubscribe | undefined;
   let lastEmitted: ActiveSnapshot = { track: null, state: "stopped" };
   let starting: Promise<void> | undefined;
 
@@ -105,6 +106,16 @@ export function createLinuxPlaybackSource(
   async function start(): Promise<void> {
     const activeBus = getSessionBus();
     bus = activeBus;
+    // `getSessionBus()` returns synchronously, but the underlying connection/`Hello`
+    // handshake completes asynchronously — a failure there (no session bus reachable,
+    // the bus restarting, a logout mid-session) is forwarded via `bus.emit('error',
+    // ...)` per dbus-next's own Bus/Connection implementation. With no listener
+    // attached, Node's default EventEmitter behavior for an unhandled `'error'` event
+    // is to throw, crashing the entire host process — this routes it through the same
+    // `onError` callback every other failure path in this adapter already uses.
+    activeBus.on("error", (error: unknown) => {
+      options.onError?.(error);
+    });
 
     const initialNames = await listMprisPlayerBusNames(activeBus);
     await Promise.all(initialNames.map((name) => watchPlayer(name, activeBus)));

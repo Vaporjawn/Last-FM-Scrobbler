@@ -1,4 +1,5 @@
-const MPRIS_PREFIX = "org.mpris.MediaPlayer2.";
+import { MPRIS_PREFIX } from "./mpris-discovery-dbus-names.js";
+
 const INSTANCE_SUFFIX = /\.instance[^.]*$/;
 
 /**

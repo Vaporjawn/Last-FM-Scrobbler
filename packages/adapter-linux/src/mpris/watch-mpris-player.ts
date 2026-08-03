@@ -1,23 +1,11 @@
 import type { MessageBus } from "dbus-next";
+import type { PlaybackState, TrackInfo, Unsubscribe } from "@lastfm-scrobbler/shared-types";
+import { callDBusMethod } from "./call-dbus-method.js";
+import { deriveSourceAppFromBusName } from "./derive-source-app-from-bus-name.js";
 import { mapMetadataToTrackInfo } from "./map-metadata-to-track-info.js";
 import { mapPlaybackStatus } from "./map-playback-status.js";
-import { deriveSourceAppFromBusName } from "./derive-source-app-from-bus-name.js";
-import { callDBusMethod } from "./call-dbus-method.js";
-import type { PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
-
-export const MPRIS_PATH = "/org/mpris/MediaPlayer2";
-export const PLAYER_IFACE = "org.mpris.MediaPlayer2.Player";
-export const PROPERTIES_IFACE = "org.freedesktop.DBus.Properties";
-
-export type Unsubscribe = () => void;
-
-/** Unwraps a dbus-next `Variant` if present; passes plain values through unchanged. */
-export function unwrapVariant(value: unknown): unknown {
-  if (value && typeof value === "object" && "value" in value) {
-    return value.value;
-  }
-  return value;
-}
+import { MPRIS_PATH, PLAYER_IFACE, PROPERTIES_IFACE } from "./mpris-dbus-names.js";
+import { unwrapVariant } from "./unwrap-variant.js";
 
 /** Coerces a value to a plain object, defaulting to `{}` for anything else (including arrays). */
 function asRecord(value: unknown): Record<string, unknown> {
@@ -64,10 +52,35 @@ export async function watchMprisPlayer(
   };
   emit();
 
+  /** Per the D-Bus Properties spec, a player may report a property changed by listing
+   * its name in `PropertiesChanged`'s third ("invalidated") argument instead of
+   * inlining the new value in the second — typically for expensive-to-serialize
+   * properties. The signal alone carries no new value in that case, so this re-fetches
+   * via `GetAll` for whichever of our two fields of interest were invalidated. */
+  async function refetchInvalidated(fields: readonly string[]): Promise<void> {
+    try {
+      const latest = (await callDBusMethod(properties, "GetAll", PLAYER_IFACE)) as Record<
+        string,
+        unknown
+      >;
+      if (fields.includes("Metadata")) {
+        currentMetadata = asRecord(unwrapVariant(latest.Metadata));
+      }
+      if (fields.includes("PlaybackStatus")) {
+        currentStatus = asStringOrUndefined(unwrapVariant(latest.PlaybackStatus));
+      }
+      emit();
+    } catch {
+      // The player may have vanished between the invalidation signal and this
+      // refetch — same "player lifecycle on a real desktop is racy" tolerance this
+      // whole module already applies elsewhere; not a fatal adapter error.
+    }
+  }
+
   const listener = (
     interfaceName: string,
     changed: Record<string, unknown>,
-    _invalidated: string[],
+    invalidated: string[],
   ): void => {
     if (interfaceName !== PLAYER_IFACE) {
       return;
@@ -81,6 +94,15 @@ export async function watchMprisPlayer(
       currentStatus = asStringOrUndefined(unwrapVariant(changed.PlaybackStatus));
       changedRelevantField = true;
     }
+
+    const relevantInvalidated = invalidated.filter(
+      (name) => name === "Metadata" || name === "PlaybackStatus",
+    );
+    if (relevantInvalidated.length > 0) {
+      void refetchInvalidated(relevantInvalidated);
+      return;
+    }
+
     if (changedRelevantField) {
       emit();
     }

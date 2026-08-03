@@ -1,25 +1,12 @@
 import type { MessageBus } from "dbus-next";
-import { callDBusMethod } from "./call-dbus-method.js";
-
-const MPRIS_PREFIX = "org.mpris.MediaPlayer2.";
-const DBUS_SERVICE = "org.freedesktop.DBus";
-const DBUS_PATH = "/org/freedesktop/DBus";
-
-/** Lists the bus names of every currently-running MPRIS2 player on the given bus. */
-export async function listMprisPlayerBusNames(bus: MessageBus): Promise<string[]> {
-  const obj = await bus.getProxyObject(DBUS_SERVICE, DBUS_PATH);
-  const iface = obj.getInterface(DBUS_SERVICE);
-  const names = (await callDBusMethod(iface, "ListNames")) as string[];
-  return names.filter((name) => name.startsWith(MPRIS_PREFIX));
-}
+import type { Unsubscribe } from "@lastfm-scrobbler/shared-types";
+import { DBUS_PATH, DBUS_SERVICE, MPRIS_PREFIX } from "./mpris-discovery-dbus-names.js";
 
 export interface NameOwnerChange {
   readonly busName: string;
   /** True if this name just appeared (a player started); false if it just vanished. */
   readonly appeared: boolean;
 }
-
-export type Unsubscribe = () => void;
 
 /**
  * Watches for MPRIS players starting or stopping, via `org.freedesktop.DBus`'s

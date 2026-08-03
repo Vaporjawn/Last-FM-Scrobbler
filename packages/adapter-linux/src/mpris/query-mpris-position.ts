@@ -1,6 +1,7 @@
 import type { MessageBus } from "dbus-next";
-import { MPRIS_PATH, PLAYER_IFACE, PROPERTIES_IFACE, unwrapVariant } from "./watch-mpris-player.js";
 import { callDBusMethod } from "./call-dbus-method.js";
+import { MPRIS_PATH, PLAYER_IFACE, PROPERTIES_IFACE } from "./mpris-dbus-names.js";
+import { unwrapVariant } from "./unwrap-variant.js";
 
 /**
  * Queries an MPRIS player's current transport position on demand, converted from

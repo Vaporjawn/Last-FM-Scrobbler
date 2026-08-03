@@ -31,7 +31,12 @@ function createFakeBus() {
   const state = new Map<string, Record<string, unknown>>();
 
   const disconnect = vi.fn();
-  const bus = {
+  // A real MessageBus extends EventEmitter (it emits 'connect'/'message'/'error') —
+  // the fake needs to too, both so `create-linux-playback-source.ts`'s `bus.on("error",
+  // ...)` call doesn't throw "bus.on is not a function", and so tests can actually
+  // simulate a connection-level failure via `emitError` below.
+  const emitter = new EventEmitter();
+  const bus = Object.assign(emitter, {
     getProxyObject: vi.fn((name: string, path: string) => {
       if (path === "/org/freedesktop/DBus") {
         return Promise.resolve({ getInterface: () => dbusIface });
@@ -39,7 +44,7 @@ function createFakeBus() {
       return Promise.resolve({ getInterface: () => propsFor(name) });
     }),
     disconnect,
-  } as unknown as MessageBus;
+  }) as unknown as MessageBus;
 
   return {
     bus,
@@ -50,11 +55,23 @@ function createFakeBus() {
     setPlayerState(busName: string, metadata: Record<string, unknown>, playbackStatus: string) {
       state.set(busName, { Metadata: metadata, PlaybackStatus: playbackStatus });
     },
-    firePropertiesChanged(busName: string, changed: Record<string, unknown>) {
-      propsFor(busName).emit("PropertiesChanged", "org.mpris.MediaPlayer2.Player", changed, []);
+    firePropertiesChanged(
+      busName: string,
+      changed: Record<string, unknown>,
+      invalidated: string[] = [],
+    ) {
+      propsFor(busName).emit(
+        "PropertiesChanged",
+        "org.mpris.MediaPlayer2.Player",
+        changed,
+        invalidated,
+      );
     },
     fireNameOwnerChanged(busName: string, oldOwner: string, newOwner: string) {
       dbusIface.emit("NameOwnerChanged", busName, oldOwner, newOwner);
+    },
+    emitError(error: unknown) {
+      emitter.emit("error", error);
     },
   };
 }
@@ -78,7 +95,7 @@ describe("createLinuxPlaybackSource", () => {
     source.onPlaybackStateChanged((s) => states.push(s));
     await flush();
 
-    expect(tracks).toEqual([{ title: "Song", artist: "Artist", sourceApp: "vlc", isStream: true }]);
+    expect(tracks).toEqual([{ title: "Song", artist: "Artist", sourceApp: "vlc", isStream: false }]);
     expect(states).toEqual(["playing"]);
   });
 
@@ -191,5 +208,58 @@ describe("createLinuxPlaybackSource", () => {
     const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
 
     await expect(source.getPosition()).resolves.toBe(0);
+  });
+
+  it("routes a bus-level connection error through onError instead of leaving it unhandled", async () => {
+    // Regression test: `getSessionBus()` returns synchronously, but the underlying
+    // connection/handshake completes asynchronously — a failure there (no session bus
+    // reachable, the bus restarting, a logout mid-session) is forwarded via
+    // `bus.emit('error', ...)`. With no listener attached, Node's default
+    // EventEmitter behavior for an unhandled 'error' event is to throw, crashing the
+    // whole host process.
+    const fake = createFakeBus();
+    fake.setInitialNames([]);
+    const onError = vi.fn();
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus, onError });
+
+    source.onTrackChanged(() => undefined);
+    await flush();
+
+    const connectionError = new Error("ECONNREFUSED");
+    expect(() => {
+      fake.emitError(connectionError);
+    }).not.toThrow();
+    expect(onError).toHaveBeenCalledWith(connectionError);
+  });
+
+  it("re-fetches and reports a property invalidated (not inlined) by PropertiesChanged", async () => {
+    // Regression test: per the D-Bus Properties spec, a player may report a changed
+    // property by listing its name in the "invalidated" (3rd) argument instead of
+    // inlining the new value in the 2nd — the old code only ever read the 2nd
+    // argument, silently dropping such an update.
+    const fake = createFakeBus();
+    fake.setInitialNames(["org.mpris.MediaPlayer2.vlc"]);
+    fake.setPlayerState(
+      "org.mpris.MediaPlayer2.vlc",
+      { "xesam:title": "Song A" },
+      "Playing",
+    );
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+    const tracks: unknown[] = [];
+    source.onTrackChanged((t) => tracks.push(t));
+    await flush();
+
+    // The player updates its state on the bus (what GetAll will now return) but
+    // signals the change via invalidation rather than inlining the new value.
+    fake.setPlayerState(
+      "org.mpris.MediaPlayer2.vlc",
+      { "xesam:title": "Song B" },
+      "Playing",
+    );
+    fake.firePropertiesChanged("org.mpris.MediaPlayer2.vlc", {}, ["Metadata"]);
+    await flush();
+
+    expect(tracks.map((t) => (t as { title: string }).title)).toEqual(["Song A", "Song B"]);
   });
 });

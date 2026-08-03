@@ -86,27 +86,32 @@ describe("mapMetadataToTrackInfo", () => {
     expect(track?.albumArtist).toBeUndefined();
   });
 
-  it("omits durationSec and marks isStream when mpris:length is absent (e.g. internet radio)", () => {
+  it("omits durationSec when mpris:length is absent, without inferring isStream from it", () => {
+    // Regression test: MPRIS has no dedicated "this is a live stream" field, unlike
+    // macOS's MediaRemote — deriving isStream from "no mpris:length reported" used to
+    // misclassify any ordinary track from a non-conformant player (common; many
+    // minimal MPRIS clients don't populate it) as a stream. Duration-unknown and
+    // is-a-stream are two distinct concepts.
     const track = mapMetadataToTrackInfo(
-      metadata({ "xesam:title": new Variant("s", "Live Stream") }),
+      metadata({ "xesam:title": new Variant("s", "Some Song") }),
       "vlc",
     );
 
     expect(track?.durationSec).toBeUndefined();
-    expect(track?.isStream).toBe(true);
+    expect(track?.isStream).toBe(false);
   });
 
-  it("omits durationSec and marks isStream when mpris:length is zero", () => {
+  it("omits durationSec when mpris:length is zero, without inferring isStream from it", () => {
     const track = mapMetadataToTrackInfo(
       metadata({
-        "xesam:title": new Variant("s", "Live Stream"),
+        "xesam:title": new Variant("s", "Some Song"),
         "mpris:length": new Variant("x", 0n),
       }),
       "vlc",
     );
 
     expect(track?.durationSec).toBeUndefined();
-    expect(track?.isStream).toBe(true);
+    expect(track?.isStream).toBe(false);
   });
 
   it("tolerates mpris:length as a plain number instead of bigint", () => {
