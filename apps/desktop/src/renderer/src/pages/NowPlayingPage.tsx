@@ -13,6 +13,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { PlaybackState } from "@lastfm-scrobbler/shared-types";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
+import { AsyncState } from "../components/AsyncState.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { ScrobblingIndicator } from "../components/ScrobblingIndicator.js";
 import { RefreshButton } from "../components/shared/RefreshButton.js";
@@ -114,11 +115,21 @@ export function NowPlayingPage(): JSX.Element {
           textAlign: "center",
         }}
       >
-        <AlbumIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
         <Typography variant="h6" gutterBottom>
           Now Playing
         </Typography>
-        <Typography color="text.secondary">Nothing is playing right now.</Typography>
+        {/* The shared empty-state treatment every other "nothing here" state in this
+            app already uses (see AsyncState's own docstring) — this was the one
+            hand-built exception, predating AsyncState's introduction. Kept as its own
+            centered Typography above rather than switching to PageHeader (which the
+            non-empty return below uses): PageHeader's title is left-aligned, and
+            AsyncState's icon/message are inherently centered — mixing the two would
+            read as a mismatched layout rather than one coherent centered empty state. */}
+        <AsyncState
+          kind="empty"
+          icon={<AlbumIcon sx={{ fontSize: 64 }} />}
+          message="Nothing is playing right now."
+        />
       </Box>
     );
   }
