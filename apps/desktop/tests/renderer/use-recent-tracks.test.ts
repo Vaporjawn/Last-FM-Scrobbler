@@ -278,4 +278,133 @@ describe("useRecentTracks", () => {
 
     expect(result.current.tracks).toEqual([track("BOB-0")]);
   });
+
+  describe("refetch", () => {
+    it("re-fetches page 1 and replaces tracks, discarding any accumulated pages", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(Array.from({ length: 20 }, (_, i) => track(`P1-${i}`)))
+        .mockResolvedValueOnce([track("P2-0")])
+        // A full page again, so hasMore is true afterward and loadMore fires below.
+        .mockResolvedValueOnce(Array.from({ length: 20 }, (_, i) => track(`FRESH-${i}`)))
+        .mockResolvedValueOnce([track("FRESH-PAGE2")]);
+      installFakeLastfmApi(getRecentTracks);
+
+      const { result } = renderHook(() => useRecentTracks("alice", 20));
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      act(() => {
+        result.current.loadMore();
+      });
+      await waitFor(() => {
+        expect(result.current.loadingMore).toBe(false);
+      });
+      expect(result.current.tracks).toHaveLength(21);
+
+      act(() => {
+        result.current.refetch();
+      });
+      expect(result.current.refreshing).toBe(true);
+      // Existing (stale) tracks stay on screen while refreshing — no blank flash.
+      expect(result.current.tracks).toHaveLength(21);
+
+      await waitFor(() => {
+        expect(result.current.refreshing).toBe(false);
+      });
+      expect(result.current.tracks).toHaveLength(20);
+      expect(result.current.tracks[0]).toEqual(track("FRESH-0"));
+      expect(getRecentTracks).toHaveBeenLastCalledWith("alice", 20, 1);
+
+      // loadMore works again after a refetch — proves pageRef was actually reset to 1,
+      // not left at whatever page loadMore had advanced it to before the refetch.
+      act(() => {
+        result.current.loadMore();
+      });
+      await waitFor(() => {
+        expect(result.current.loadingMore).toBe(false);
+      });
+      expect(getRecentTracks).toHaveBeenLastCalledWith("alice", 20, 2);
+      expect(result.current.tracks).toHaveLength(21);
+    });
+
+    it("is a no-op while a fetch is already in flight", async () => {
+      const getRecentTracks = vi.fn().mockResolvedValue([track("A")]);
+      installFakeLastfmApi(getRecentTracks);
+
+      const { result } = renderHook(() => useRecentTracks("alice", 20));
+      expect(result.current.loading).toBe(true);
+
+      act(() => {
+        result.current.refetch();
+      });
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      // Only the initial fetch fired — refetch() while it was still in flight did
+      // nothing.
+      expect(getRecentTracks).toHaveBeenCalledTimes(1);
+      expect(result.current.refreshing).toBe(false);
+    });
+
+    it("keeps existing tracks and lets the user retry after a failed refetch", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce([track("A")])
+        .mockRejectedValueOnce(new Error("network error"));
+      installFakeLastfmApi(getRecentTracks);
+
+      const { result } = renderHook(() => useRecentTracks("alice", 20));
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        result.current.refetch();
+      });
+      await waitFor(() => {
+        expect(result.current.refreshing).toBe(false);
+      });
+
+      expect(result.current.error).toBe("network error");
+      expect(result.current.tracks).toEqual([track("A")]);
+    });
+
+    it("drops a refetch response that resolves after username has already changed", async () => {
+      const alicePage1 = [track("ALICE-0")];
+      const staleAliceRefetch = deferred<readonly RecentTrack[]>();
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(alicePage1)
+        .mockReturnValueOnce(staleAliceRefetch.promise)
+        .mockResolvedValueOnce([track("BOB-0")]);
+      installFakeLastfmApi(getRecentTracks);
+
+      const { result, rerender } = renderHook(({ username }) => useRecentTracks(username, 20), {
+        initialProps: { username: "alice" },
+      });
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        result.current.refetch();
+      });
+      expect(result.current.refreshing).toBe(true);
+
+      rerender({ username: "bob" });
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      expect(result.current.tracks).toEqual([track("BOB-0")]);
+
+      await act(async () => {
+        staleAliceRefetch.resolve([track("ALICE-STALE")]);
+        await staleAliceRefetch.promise;
+      });
+
+      expect(result.current.tracks).toEqual([track("BOB-0")]);
+    });
+  });
 });

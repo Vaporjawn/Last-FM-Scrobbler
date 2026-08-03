@@ -4,7 +4,13 @@ import { useLastfmFetch } from "./use-lastfm-fetch.js";
 export interface TopTracksState {
   readonly tracks: readonly TopTrack[];
   readonly loading: boolean;
+  /** True only while a manual `refetch()` is in flight — see
+   * `LastfmFetchState.refreshing`'s docstring. */
+  readonly refreshing: boolean;
   readonly error: string | undefined;
+  /** Re-fetches `user.getTopTracks` for the same `username`/`limit`/`period` — see
+   * `LastfmFetchState.refetch`'s docstring. */
+  readonly refetch: () => void;
 }
 
 const EMPTY_TRACKS: readonly TopTrack[] = [];
@@ -24,6 +30,10 @@ export function useTopTracks(
   const lastfm = window.lastfm;
   const call =
     username && lastfm ? () => lastfm.getTopTracks(username, limit, period) : undefined;
-  const { data, loading, error } = useLastfmFetch(EMPTY_TRACKS, call, [username, limit, period]);
-  return { tracks: data, loading, error };
+  const { data, loading, refreshing, error, refetch } = useLastfmFetch(EMPTY_TRACKS, call, [
+    username,
+    limit,
+    period,
+  ]);
+  return { tracks: data, loading, refreshing, error, refetch };
 }

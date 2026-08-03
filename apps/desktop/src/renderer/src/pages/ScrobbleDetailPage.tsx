@@ -14,6 +14,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
+import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { TrackLoveTagControls } from "../components/shared/TrackLoveTagControls.js";
 import { useArtistInfo } from "../hooks/use-artist-info.js";
 import { useArtistTopTags } from "../hooks/use-artist-top-tags.js";
@@ -58,14 +59,34 @@ export function ScrobbleDetailPage({
   onBack,
   backLabel = "Scrobbles",
 }: ScrobbleDetailPageProps): JSX.Element {
-  const { track: trackDetail } = useTrackInfo(track.artist, track.track, activeAccount);
+  const {
+    track: trackDetail,
+    refreshing: trackInfoRefreshing,
+    refetch: refetchTrackInfo,
+  } = useTrackInfo(track.artist, track.track, activeAccount);
   const {
     info: artistInfo,
     similarArtists,
     loading: artistInfoLoading,
+    refreshing: artistInfoRefreshing,
     error: artistInfoError,
+    refetch: refetchArtistInfo,
   } = useArtistInfo(track.artist, activeAccount);
-  const topTags = useArtistTopTags(track.artist);
+  const {
+    tags: topTags,
+    refreshing: topTagsRefreshing,
+    refetch: refetchTopTags,
+  } = useArtistTopTags(track.artist);
+  // One combined refresh for the whole page: track stats, artist bio/similar
+  // artists, and popular tags are three independent fetches (see each hook's own
+  // docstring for why), but from the user's point of view this page shows one
+  // track's worth of Last.fm data, refreshed together.
+  const refreshing = trackInfoRefreshing || artistInfoRefreshing || topTagsRefreshing;
+  const refetchAll = (): void => {
+    refetchTrackInfo();
+    refetchArtistInfo();
+    refetchTopTags();
+  };
 
   // Last.fm's own URL scheme (artist/_/track) — built synchronously so the "view on
   // Last.fm" link works immediately, not just once track.getInfo resolves; swapped for
@@ -84,7 +105,14 @@ export function ScrobbleDetailPage({
       <Stack
         direction="row"
         spacing={1}
-        sx={{ alignItems: "center", px: 3, py: 1.5, borderBottom: 1, borderColor: "divider" }}
+        sx={{
+          alignItems: "center",
+          justifyContent: "space-between",
+          px: 3,
+          py: 1.5,
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
       >
         <Button
           size="small"
@@ -94,6 +122,7 @@ export function ScrobbleDetailPage({
         >
           Back to {backLabel}
         </Button>
+        <RefreshButton onRefresh={refetchAll} refreshing={refreshing} label="Refresh track info" />
       </Stack>
 
       <Box sx={{ p: 4 }}>

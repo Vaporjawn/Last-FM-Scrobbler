@@ -3,7 +3,13 @@ import { useLastfmFetch } from "./use-lastfm-fetch.js";
 export interface LovedTracksCountState {
   readonly count: number | undefined;
   readonly loading: boolean;
+  /** True only while a manual `refetch()` is in flight — see
+   * `LastfmFetchState.refreshing`'s docstring. */
+  readonly refreshing: boolean;
   readonly error: string | undefined;
+  /** Re-fetches `user.getLovedTracks`'s total count for the same `username` — see
+   * `LastfmFetchState.refetch`'s docstring. */
+  readonly refetch: () => void;
 }
 
 const EMPTY_COUNT: number | undefined = undefined;
@@ -21,6 +27,8 @@ const EMPTY_COUNT: number | undefined = undefined;
 export function useLovedTracksCount(username: string | undefined): LovedTracksCountState {
   const lastfm = window.lastfm;
   const call = username && lastfm ? () => lastfm.getLovedTracksCount(username) : undefined;
-  const { data, loading, error } = useLastfmFetch(EMPTY_COUNT, call, [username]);
-  return { count: data, loading, error };
+  const { data, loading, refreshing, error, refetch } = useLastfmFetch(EMPTY_COUNT, call, [
+    username,
+  ]);
+  return { count: data, loading, refreshing, error, refetch };
 }

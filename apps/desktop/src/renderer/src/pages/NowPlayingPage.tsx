@@ -15,6 +15,7 @@ import type { PlaybackState } from "@lastfm-scrobbler/shared-types";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { ScrobblingIndicator } from "../components/ScrobblingIndicator.js";
+import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { StatBox } from "../components/shared/StatBox.js";
 import { TrackLoveTagControls } from "../components/shared/TrackLoveTagControls.js";
 import { useArtistInfo } from "../hooks/use-artist-info.js";
@@ -81,9 +82,24 @@ export function NowPlayingPage(): JSX.Element {
     info,
     similarArtists,
     loading: artistInfoLoading,
+    refreshing: artistInfoRefreshing,
     error: artistInfoError,
+    refetch: refetchArtistInfo,
   } = useArtistInfo(track?.artist);
-  const trackDetail = useTrackDetail(track?.artist, track?.title, activeAccount);
+  const {
+    detail: trackDetail,
+    refreshing: trackDetailRefreshing,
+    refetch: refetchTrackDetail,
+  } = useTrackDetail(track?.artist, track?.title, activeAccount);
+  // One combined refresh for the whole page's Last.fm data — the "now playing" track
+  // itself is pushed live over IPC (see useNowPlaying), so there's nothing to refetch
+  // there; this refreshes the two things that genuinely are point-in-time fetches
+  // (track stats/link, artist bio/similar artists).
+  const refreshing = trackDetailRefreshing || artistInfoRefreshing;
+  const refetchAll = (): void => {
+    refetchTrackDetail();
+    refetchArtistInfo();
+  };
 
   if (!track) {
     return (
@@ -134,7 +150,10 @@ export function NowPlayingPage(): JSX.Element {
       </Stack>
 
       <Box sx={{ p: 4 }}>
-        <PageHeader title="Now Playing" />
+        <PageHeader
+          title="Now Playing"
+          action={<RefreshButton onRefresh={refetchAll} refreshing={refreshing} label="Refresh track info" />}
+        />
         <Stack direction={{ xs: "column", sm: "row" }} spacing={4} sx={{ alignItems: { sm: "flex-start" } }}>
           <NowPlayingArtwork imageUrl={trackDetail?.imageUrl} title={track.title} />
           <Box sx={{ minWidth: 0, flex: 1 }}>

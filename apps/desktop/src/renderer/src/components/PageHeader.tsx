@@ -18,6 +18,11 @@ export interface PageHeaderProps {
    * default, stacked layout) for a full sentence — inline reads badly once the
    * subtitle is long enough to wrap or crowd the title. */
   readonly inlineSubtitle?: boolean;
+  /** Rendered at the header's trailing edge, vertically centered against the title
+   * line — e.g. a `RefreshButton`. Omitted entirely (no layout change at all, same
+   * markup as before this prop existed) when not given, so every page that doesn't
+   * need a header action keeps its exact current look. */
+  readonly action?: ReactNode;
 }
 
 /**
@@ -29,30 +34,36 @@ export interface PageHeaderProps {
  * that stays on each page's own outer `Box`, since this is a title-block component,
  * not a page-layout one.
  */
-export function PageHeader({ title, subtitle, inlineSubtitle }: PageHeaderProps): JSX.Element {
-  if (subtitle && inlineSubtitle) {
-    return (
-      <Box sx={{ mb: 3 }}>
-        <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
-          <Typography variant="h5">{title}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {subtitle}
-          </Typography>
-        </Stack>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ mb: 3 }}>
-      <Typography variant="h5" gutterBottom={Boolean(subtitle)}>
-        {title}
-      </Typography>
-      {subtitle ? (
+export function PageHeader({ title, subtitle, inlineSubtitle, action }: PageHeaderProps): JSX.Element {
+  const titleBlock =
+    subtitle && inlineSubtitle ? (
+      <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+        <Typography variant="h5">{title}</Typography>
         <Typography variant="body2" color="text.secondary">
           {subtitle}
         </Typography>
-      ) : null}
-    </Box>
+      </Stack>
+    ) : (
+      <>
+        <Typography variant="h5" gutterBottom={Boolean(subtitle)}>
+          {title}
+        </Typography>
+        {subtitle ? (
+          <Typography variant="body2" color="text.secondary">
+            {subtitle}
+          </Typography>
+        ) : null}
+      </>
+    );
+
+  if (!action) {
+    return <Box sx={{ mb: 3 }}>{titleBlock}</Box>;
+  }
+
+  return (
+    <Stack direction="row" spacing={1} sx={{ mb: 3, alignItems: "center", justifyContent: "space-between" }}>
+      <Box>{titleBlock}</Box>
+      {action}
+    </Stack>
   );
 }

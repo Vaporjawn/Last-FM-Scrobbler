@@ -637,4 +637,29 @@ describe("NowPlayingPage", () => {
       expect(await screen.findByText("Tags added.")).toBeInTheDocument();
     });
   });
+
+  describe("refresh", () => {
+    it("re-fetches track stats and artist info when the refresh button is clicked", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      const getTrackInfo = vi
+        .fn()
+        .mockResolvedValueOnce({ ...DEFAULT_TRACK_DETAIL, listeners: 1 })
+        .mockResolvedValueOnce({ ...DEFAULT_TRACK_DETAIL, listeners: 2 });
+      installFakeLastfmApi({ getTrackInfo });
+
+      render(<NowPlayingPage />);
+      await screen.findByText("1");
+
+      fireEvent.click(screen.getByRole("button", { name: "Refresh track info" }));
+
+      expect(await screen.findByText("2")).toBeInTheDocument();
+      expect(getTrackInfo).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't show a refresh button when nothing is playing", () => {
+      render(<NowPlayingPage />);
+
+      expect(screen.queryByRole("button", { name: "Refresh track info" })).not.toBeInTheDocument();
+    });
+  });
 });

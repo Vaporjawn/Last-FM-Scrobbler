@@ -18,6 +18,7 @@ import { AsyncState } from "../components/AsyncState.js";
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { ScrobbleListItem } from "../components/ScrobbleListItem.js";
+import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { useAuth } from "../hooks/use-auth.js";
 import { useRecentTracks } from "../hooks/use-recent-tracks.js";
 import type { PageProps } from "./page-props.js";
@@ -36,7 +37,16 @@ function matchesSearch(track: RecentTrack, query: string): boolean {
 
 export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PageProps): JSX.Element {
   const { activeAccount } = useAuth();
-  const { tracks, loading, loadingMore, error, hasMore, loadMore } = useRecentTracks(activeAccount);
+  const {
+    tracks,
+    loading,
+    loadingMore,
+    refreshing,
+    error,
+    hasMore,
+    loadMore,
+    refetch,
+  } = useRecentTracks(activeAccount);
   const [searchQuery, setSearchQuery] = useState("");
 
   const visibleTracks = useMemo(() => {
@@ -49,6 +59,9 @@ export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PagePr
       <PageHeader
         title="Scrobbles"
         subtitle={activeAccount ? `Showing recent activity for ${activeAccount}` : undefined}
+        action={
+          activeAccount ? <RefreshButton onRefresh={refetch} refreshing={refreshing} /> : undefined
+        }
       />
 
       {!activeAccount ? (

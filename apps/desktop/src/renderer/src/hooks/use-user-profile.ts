@@ -4,7 +4,13 @@ import { useLastfmFetch } from "./use-lastfm-fetch.js";
 export interface UserProfileState {
   readonly profile: UserProfile | undefined;
   readonly loading: boolean;
+  /** True only while a manual `refetch()` is in flight — see
+   * `LastfmFetchState.refreshing`'s docstring. */
+  readonly refreshing: boolean;
   readonly error: string | undefined;
+  /** Re-fetches `user.getInfo` for the same `username` — see
+   * `LastfmFetchState.refetch`'s docstring. */
+  readonly refetch: () => void;
 }
 
 const EMPTY_PROFILE: UserProfile | undefined = undefined;
@@ -19,6 +25,8 @@ const EMPTY_PROFILE: UserProfile | undefined = undefined;
 export function useUserProfile(username: string | undefined): UserProfileState {
   const lastfm = window.lastfm;
   const call = username && lastfm ? () => lastfm.getUserInfo(username) : undefined;
-  const { data, loading, error } = useLastfmFetch(EMPTY_PROFILE, call, [username]);
-  return { profile: data, loading, error };
+  const { data, loading, refreshing, error, refetch } = useLastfmFetch(EMPTY_PROFILE, call, [
+    username,
+  ]);
+  return { profile: data, loading, refreshing, error, refetch };
 }

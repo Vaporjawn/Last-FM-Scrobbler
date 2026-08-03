@@ -368,4 +368,31 @@ describe("FriendsPage", () => {
       expect(bobIndex).toBeLessThan(carolIndex);
     });
   });
+
+  describe("refresh", () => {
+    it("re-fetches the friend list and everyone's activity when the refresh button is clicked", async () => {
+      const getFriends = vi
+        .fn()
+        .mockResolvedValueOnce([{ username: "bob" }])
+        .mockResolvedValueOnce([{ username: "carol" }]);
+      installFakeApis({ activeAccount: "alice", friends: getFriends });
+
+      render(<FriendsPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("bob");
+
+      fireEvent.click(screen.getByRole("button", { name: "Refresh friends" }));
+
+      expect(await screen.findByText("carol")).toBeInTheDocument();
+      expect(getFriends).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't show a refresh button when there's no active account", async () => {
+      installFakeApis({});
+
+      render(<FriendsPage onNavigateToSettings={vi.fn()} />);
+
+      await screen.findByText(/log in.*settings/i);
+      expect(screen.queryByRole("button", { name: "Refresh friends" })).not.toBeInTheDocument();
+    });
+  });
 });

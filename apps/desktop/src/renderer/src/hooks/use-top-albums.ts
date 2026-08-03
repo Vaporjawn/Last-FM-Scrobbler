@@ -4,7 +4,13 @@ import { useLastfmFetch } from "./use-lastfm-fetch.js";
 export interface TopAlbumsState {
   readonly albums: readonly TopAlbum[];
   readonly loading: boolean;
+  /** True only while a manual `refetch()` is in flight — see
+   * `LastfmFetchState.refreshing`'s docstring. */
+  readonly refreshing: boolean;
   readonly error: string | undefined;
+  /** Re-fetches `user.getTopAlbums` for the same `username`/`limit`/`period` — see
+   * `LastfmFetchState.refetch`'s docstring. */
+  readonly refetch: () => void;
 }
 
 const EMPTY_ALBUMS: readonly TopAlbum[] = [];
@@ -24,6 +30,10 @@ export function useTopAlbums(
   const lastfm = window.lastfm;
   const call =
     username && lastfm ? () => lastfm.getTopAlbums(username, limit, period) : undefined;
-  const { data, loading, error } = useLastfmFetch(EMPTY_ALBUMS, call, [username, limit, period]);
-  return { albums: data, loading, error };
+  const { data, loading, refreshing, error, refetch } = useLastfmFetch(EMPTY_ALBUMS, call, [
+    username,
+    limit,
+    period,
+  ]);
+  return { albums: data, loading, refreshing, error, refetch };
 }

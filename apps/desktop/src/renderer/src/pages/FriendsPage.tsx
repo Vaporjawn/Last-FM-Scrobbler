@@ -15,6 +15,7 @@ import { AsyncState } from "../components/AsyncState.js";
 import { FriendListItem, FRIEND_COLUMN_WIDTH } from "../components/FriendListItem.js";
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
+import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { useAuth } from "../hooks/use-auth.js";
 import { useFriends } from "../hooks/use-friends.js";
 import { friendActivityOrEmpty, useFriendsActivity } from "../hooks/use-friends-activity.js";
@@ -33,14 +34,30 @@ export function FriendsPage({
   onSelectFriend,
 }: PageProps): JSX.Element {
   const { activeAccount } = useAuth();
-  const { friends, loading, error } = useFriends(activeAccount);
+  const {
+    friends,
+    loading,
+    refreshing: friendsRefreshing,
+    error,
+    refetch: refetchFriends,
+  } = useFriends(activeAccount);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Fetched once per friend regardless of the search filter below — search is a pure
   // client-side narrowing of already-loaded data, not something that should re-fire
   // API calls on every keystroke. See useFriendsActivity's docstring for why this
   // lives here (page level) rather than inside each FriendListItem row.
-  const activityByUsername = useFriendsActivity(friends.map((friend) => friend.username));
+  const { activityByUsername, refetch: refetchActivity } = useFriendsActivity(
+    friends.map((friend) => friend.username),
+  );
+  // One combined refresh for the whole page: the friend list itself and everyone's
+  // current activity are two independent fetches (see useFriendsActivity's own
+  // docstring for why activity isn't just folded into useFriends), but from the
+  // user's point of view "refresh Friends" means both at once.
+  const refetchAll = (): void => {
+    refetchFriends();
+    refetchActivity();
+  };
 
   const visibleFriends = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -70,6 +87,11 @@ export function FriendsPage({
             : undefined
         }
         inlineSubtitle
+        action={
+          activeAccount ? (
+            <RefreshButton onRefresh={refetchAll} refreshing={friendsRefreshing} label="Refresh friends" />
+          ) : undefined
+        }
       />
 
       {!activeAccount ? (

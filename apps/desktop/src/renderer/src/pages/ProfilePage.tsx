@@ -12,6 +12,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
+import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { StatBox } from "../components/shared/StatBox.js";
 import { TopAlbumsSection, type TopAlbumsViewMode } from "../components/TopAlbumsSection.js";
 import { TopArtistsSection, type TopArtistsViewMode } from "../components/TopArtistsSection.js";
@@ -81,22 +82,30 @@ export function ProfilePage({
   const {
     artists: weekArtists,
     loading: weekLoading,
+    refreshing: weekRefreshing,
     error: weekError,
+    refetch: refetchWeekArtists,
   } = useTopArtists(targetUsername, THIS_WEEK_LIMIT, "7day");
   const {
     artists: overallArtists,
     loading: overallLoading,
+    refreshing: overallRefreshing,
     error: overallError,
+    refetch: refetchOverallArtists,
   } = useTopArtists(targetUsername, OVERALL_LIMIT);
   const {
     tracks: topTracks,
     loading: topTracksLoading,
+    refreshing: topTracksRefreshing,
     error: topTracksError,
+    refetch: refetchTopTracks,
   } = useTopTracks(targetUsername, TOP_TRACKS_ALBUMS_LIMIT);
   const {
     albums: topAlbums,
     loading: topAlbumsLoading,
+    refreshing: topAlbumsRefreshing,
     error: topAlbumsError,
+    refetch: refetchTopAlbums,
   } = useTopAlbums(targetUsername, TOP_TRACKS_ALBUMS_LIMIT);
   // Real avatar photo for the account card below — see use-user-profile.ts and
   // UserProfile.avatarUrl's docstring for why this (unlike the per-artist images
@@ -104,10 +113,33 @@ export function ProfilePage({
   // `undefined` while loading, on fetch failure, or if the account has no photo set;
   // MUI's `Avatar` falls back to the letter children automatically whenever `src` is
   // `undefined` (and self-heals to that fallback if a real `src` fails to load).
-  const { profile } = useUserProfile(targetUsername);
+  const { profile, refreshing: profileRefreshing, refetch: refetchProfile } =
+    useUserProfile(targetUsername);
   // Separate call from `useUserProfile` above — see `getLovedTracksCount`'s own
   // docstring for why `user.getInfo` can't provide this count itself.
-  const { count: lovedTracksCount } = useLovedTracksCount(targetUsername);
+  const {
+    count: lovedTracksCount,
+    refreshing: lovedTracksRefreshing,
+    refetch: refetchLovedTracks,
+  } = useLovedTracksCount(targetUsername);
+  // One combined refresh for the whole page — six independent fetches (see each
+  // hook's own docstring for why), but from the user's point of view this page shows
+  // one account's worth of Last.fm data, refreshed together.
+  const refreshing =
+    weekRefreshing ||
+    overallRefreshing ||
+    topTracksRefreshing ||
+    topAlbumsRefreshing ||
+    profileRefreshing ||
+    lovedTracksRefreshing;
+  const refetchAll = (): void => {
+    refetchWeekArtists();
+    refetchOverallArtists();
+    refetchTopTracks();
+    refetchTopAlbums();
+    refetchProfile();
+    refetchLovedTracks();
+  };
   // Session-only, not persisted to AppSettings — a lighter-weight version of the
   // reference Last.fm client's own "Chart style" preference (which also configures a
   // default timeframe and artist count via a whole settings panel); this app just
@@ -153,7 +185,10 @@ export function ProfilePage({
   return (
     <Box sx={{ p: 3 }}>
       {backButton}
-      <PageHeader title={isOwnProfile ? "Profile" : targetUsername} />
+      <PageHeader
+        title={isOwnProfile ? "Profile" : targetUsername}
+        action={<RefreshButton onRefresh={refetchAll} refreshing={refreshing} />}
+      />
 
       <Card variant="outlined" sx={{ p: 2.5, mb: 3, maxWidth: 480 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>

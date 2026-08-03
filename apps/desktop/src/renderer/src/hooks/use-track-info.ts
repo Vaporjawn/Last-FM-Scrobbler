@@ -1,13 +1,19 @@
-import { useEffect, useState } from "react";
 import type { TrackDetail } from "@lastfm-scrobbler/core";
+import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
 export interface TrackInfoState {
   readonly track: TrackDetail | undefined;
   readonly loading: boolean;
+  /** True only while a manual `refetch()` is in flight — see
+   * `LastfmFetchState.refreshing`'s docstring. */
+  readonly refreshing: boolean;
   readonly error: string | undefined;
+  /** Re-fetches `track.getInfo` for the same `artist`/`track`/`username` — see
+   * `LastfmFetchState.refetch`'s docstring. */
+  readonly refetch: () => void;
 }
 
-const EMPTY: TrackInfoState = { track: undefined, loading: false, error: undefined };
+const EMPTY_TRACK: TrackDetail | undefined = undefined;
 
 /**
  * Fetches `track.getInfo` for an artist+track pair via `window.lastfm` (see
@@ -24,37 +30,13 @@ export function useTrackInfo(
   track: string | undefined,
   username?: string,
 ): TrackInfoState {
-  const [state, setState] = useState<TrackInfoState>(EMPTY);
-
-  useEffect(() => {
-    if (!artist || !track || !window.lastfm) {
-      setState(EMPTY);
-      return;
-    }
-    let cancelled = false;
-    setState((previous) => ({ ...previous, loading: true, error: undefined }));
-
-    window.lastfm
-      .getTrackInfo(artist, track, username)
-      .then((result) => {
-        if (!cancelled) {
-          setState({ track: result, loading: false, error: undefined });
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({
-            track: undefined,
-            loading: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [artist, track, username]);
-
-  return state;
+  const lastfm = window.lastfm;
+  const call =
+    artist && track && lastfm ? () => lastfm.getTrackInfo(artist, track, username) : undefined;
+  const { data, loading, refreshing, error, refetch } = useLastfmFetch(EMPTY_TRACK, call, [
+    artist,
+    track,
+    username,
+  ]);
+  return { track: data, loading, refreshing, error, refetch };
 }

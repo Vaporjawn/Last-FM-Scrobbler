@@ -225,4 +225,44 @@ describe("ScrobbleDetailPage", () => {
       });
     });
   });
+
+  describe("refresh", () => {
+    it("re-fetches track info, artist info, and top tags when the refresh button is clicked", async () => {
+      const getTrackInfo = vi
+        .fn()
+        .mockResolvedValueOnce({
+          artist: "Fleece",
+          track: "Under the Light",
+          listeners: 1,
+          playCount: 1,
+          userPlayCount: 4,
+          loved: false,
+          url: "https://www.last.fm/music/Fleece/_/Under+the+Light",
+        })
+        .mockResolvedValueOnce({
+          artist: "Fleece",
+          track: "Under the Light",
+          listeners: 1,
+          playCount: 1,
+          userPlayCount: 9,
+          loved: false,
+          url: "https://www.last.fm/music/Fleece/_/Under+the+Light",
+        });
+      installFakeLastfmApi({ getTrackInfo });
+
+      renderWithSnackbar();
+      let statsParagraph: HTMLElement | undefined;
+      await waitFor(() => {
+        statsParagraph = screen.getByText(/you've listened to/i).closest("p") ?? undefined;
+        expect(statsParagraph).toHaveTextContent("Under the Light 4 times");
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Refresh track info" }));
+
+      await waitFor(() => {
+        expect(statsParagraph).toHaveTextContent("Under the Light 9 times");
+      });
+      expect(getTrackInfo).toHaveBeenCalledTimes(2);
+    });
+  });
 });

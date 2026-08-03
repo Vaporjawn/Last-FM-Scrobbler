@@ -494,4 +494,33 @@ describe("ScrobblesPage", () => {
       expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
     });
   });
+
+  describe("refresh", () => {
+    it("re-fetches recent tracks when the refresh button is clicked", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce([{ artist: "Crumb", track: "Ghostride", nowPlaying: false, loved: false }])
+        .mockResolvedValueOnce([{ artist: "Aphex Twin", track: "Windowlicker", nowPlaying: false, loved: false }]);
+      installFakeApis({ activeAccount: "alice", lastfmOverrides: { getRecentTracks } });
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("Ghostride");
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+      });
+
+      expect(await screen.findByText("Windowlicker")).toBeInTheDocument();
+      expect(getRecentTracks).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't show a refresh button when there's no active account", async () => {
+      installFakeApis({});
+
+      render(<ScrobblesPage onNavigateToSettings={vi.fn()} />);
+
+      await screen.findByText(/log in.*settings/i);
+      expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+    });
+  });
 });

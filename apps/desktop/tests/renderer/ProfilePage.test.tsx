@@ -443,4 +443,31 @@ describe("ProfilePage", () => {
       expect(screen.getByText(/log in.*settings/i)).toBeInTheDocument();
     });
   });
+
+  describe("refresh", () => {
+    it("re-fetches everything (profile, loved tracks, top artists/tracks/albums) when the refresh button is clicked", async () => {
+      const userInfo = vi
+        .fn()
+        .mockResolvedValueOnce({ username: "alice", totalScrobbles: 1 })
+        .mockResolvedValueOnce({ username: "alice", totalScrobbles: 2 });
+      installFakeApis({ activeAccount: "alice", userInfo });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+      await screen.findByText("1");
+
+      fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+      expect(await screen.findByText("2")).toBeInTheDocument();
+      expect(userInfo).toHaveBeenCalledTimes(2);
+    });
+
+    it("doesn't show a refresh button on the login-gate screen", async () => {
+      installFakeApis({});
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      await screen.findByText(/log in.*settings/i);
+      expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
+    });
+  });
 });
