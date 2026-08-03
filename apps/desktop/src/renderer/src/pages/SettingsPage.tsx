@@ -14,11 +14,13 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
-import FormControlLabel from "@mui/material/FormControlLabel";
+import FormControl from "@mui/material/FormControl";
 import InputAdornment from "@mui/material/InputAdornment";
+import InputLabel from "@mui/material/InputLabel";
 import Link from "@mui/material/Link";
+import MenuItem from "@mui/material/MenuItem";
 import Radio from "@mui/material/Radio";
-import RadioGroup from "@mui/material/RadioGroup";
+import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
@@ -754,26 +756,23 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
               title="Window"
               description="Locks resizing to a ratio — takes effect immediately, no restart needed"
             >
-              <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-                Aspect ratio
-              </Typography>
-              <RadioGroup
-                row
-                value={settings.aspectRatio}
-                onChange={(event) => {
-                  handleUpdateSetting({ aspectRatio: event.target.value as AspectRatioOption });
-                }}
-              >
-                {ASPECT_RATIO_OPTIONS.map((option) => (
-                  <FormControlLabel
-                    key={option.value}
-                    value={option.value}
-                    control={<Radio size="small" />}
-                    label={option.label}
-                    sx={{ mr: 2 }}
-                  />
-                ))}
-              </RadioGroup>
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel id="aspect-ratio-label">Aspect ratio</InputLabel>
+                <Select
+                  labelId="aspect-ratio-label"
+                  label="Aspect ratio"
+                  value={settings.aspectRatio}
+                  onChange={(event) => {
+                    handleUpdateSetting({ aspectRatio: event.target.value });
+                  }}
+                >
+                  {ASPECT_RATIO_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </SettingsSectionCard>
           ) : null}
 

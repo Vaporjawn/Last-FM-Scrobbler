@@ -1257,13 +1257,30 @@ describe("SettingsPage", () => {
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
 
-      const verticalRadio = await screen.findByRole("radio", { name: /9:14/i });
-      expect(verticalRadio).toBeChecked();
-      expect(screen.getByRole("radio", { name: /free/i })).not.toBeChecked();
-      expect(screen.getByRole("radio", { name: /16:9/i })).not.toBeChecked();
-      expect(screen.getByRole("radio", { name: /4:3/i })).not.toBeChecked();
-      expect(screen.getByRole("radio", { name: /1:1/i })).not.toBeChecked();
-      expect(screen.getByRole("radio", { name: /9:16/i })).not.toBeChecked();
+      // A closed MUI Select only ever displays its one current value (unlike the
+      // RadioGroup this replaced, where every option was visible with one checked) —
+      // opening it and checking each option's `aria-selected` state is the
+      // dropdown-equivalent of the old "every other option is unchecked" assertions.
+      const aspectRatioSelect = await screen.findByLabelText("Aspect ratio");
+      expect(aspectRatioSelect).toHaveTextContent("9:14 (vertical, default)");
+
+      fireEvent.mouseDown(aspectRatioSelect);
+      expect(
+        await screen.findByRole("option", { name: "9:14 (vertical, default)", selected: true }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "Free", selected: false })).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "16:9 (widescreen)", selected: false }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "4:3 (standard)", selected: false }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "1:1 (square)", selected: false }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: "9:16 (vertical)", selected: false }),
+      ).toBeInTheDocument();
     });
 
     it("selecting a different aspect ratio calls window.settings.set and updates the selection", async () => {
@@ -1277,65 +1294,59 @@ describe("SettingsPage", () => {
       installFakeSettingsApi({ set });
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
-      const widescreenRadio = await screen.findByRole("radio", { name: /16:9/i });
-
-      act(() => {
-        fireEvent.click(widescreenRadio);
-      });
+      fireEvent.mouseDown(await screen.findByLabelText("Aspect ratio"));
+      fireEvent.click(await screen.findByRole("option", { name: "16:9 (widescreen)" }));
 
       await waitFor(() => {
         expect(set).toHaveBeenCalledWith({ aspectRatio: "16:9" });
       });
-      expect(await screen.findByRole("radio", { name: /16:9/i })).toBeChecked();
-      expect(screen.getByRole("radio", { name: /free/i })).not.toBeChecked();
+      expect(await screen.findByLabelText("Aspect ratio")).toHaveTextContent(
+        "16:9 (widescreen)",
+      );
     });
 
     it("selecting the vertical (9:16) aspect ratio calls window.settings.set", async () => {
       const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
       installFakeAuthApi();
-      // Starts from "free", not the "9:14" default — clicking an already-checked
-      // radio fires no change event at all, so this needs to switch *to* "9:16" from
-      // something else to actually exercise the selection.
+      // Starts from "free", not the "9:14" default — MUI's Select only fires onChange
+      // when the clicked option's value actually differs from the current one
+      // (verified directly against SelectInput.js's handleItemClick), so this needs
+      // to switch *to* "9:16" from something else to actually exercise the selection.
       installFakeSettingsApi({
         get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, aspectRatio: "free" }),
         set,
       });
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
-      const verticalRadio = await screen.findByRole("radio", { name: /9:16/i });
-
-      act(() => {
-        fireEvent.click(verticalRadio);
-      });
+      fireEvent.mouseDown(await screen.findByLabelText("Aspect ratio"));
+      fireEvent.click(await screen.findByRole("option", { name: "9:16 (vertical)" }));
 
       await waitFor(() => {
         expect(set).toHaveBeenCalledWith({ aspectRatio: "9:16" });
       });
-      expect(await screen.findByRole("radio", { name: /9:16/i })).toBeChecked();
+      expect(await screen.findByLabelText("Aspect ratio")).toHaveTextContent("9:16 (vertical)");
     });
 
     it("selecting the vertical (9:14) aspect ratio calls window.settings.set", async () => {
       const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
       installFakeAuthApi();
-      // Starts from "free", not the "9:14" default — clicking an already-checked
-      // radio fires no change event at all, so this needs to switch *to* "9:14" from
-      // something else to actually exercise the selection.
+      // Starts from "free", not the "9:14" default — see the identical reasoning in
+      // the "9:16" test above.
       installFakeSettingsApi({
         get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, aspectRatio: "free" }),
         set,
       });
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
-      const verticalRadio = await screen.findByRole("radio", { name: /9:14/i });
-
-      act(() => {
-        fireEvent.click(verticalRadio);
-      });
+      fireEvent.mouseDown(await screen.findByLabelText("Aspect ratio"));
+      fireEvent.click(await screen.findByRole("option", { name: "9:14 (vertical, default)" }));
 
       await waitFor(() => {
         expect(set).toHaveBeenCalledWith({ aspectRatio: "9:14" });
       });
-      expect(await screen.findByRole("radio", { name: /9:14/i })).toBeChecked();
+      expect(await screen.findByLabelText("Aspect ratio")).toHaveTextContent(
+        "9:14 (vertical, default)",
+      );
     });
 
     it("reflects a previously-saved aspect ratio on load", async () => {
@@ -1346,7 +1357,7 @@ describe("SettingsPage", () => {
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
 
-      expect(await screen.findByRole("radio", { name: /4:3/i })).toBeChecked();
+      expect(await screen.findByLabelText("Aspect ratio")).toHaveTextContent("4:3 (standard)");
     });
 
     it("shows an error snackbar when saving the aspect ratio fails", async () => {
@@ -1354,10 +1365,8 @@ describe("SettingsPage", () => {
       installFakeSettingsApi({ set: vi.fn().mockRejectedValue(new Error("disk full")) });
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
-      const squareRadio = await screen.findByRole("radio", { name: /1:1/i });
-      act(() => {
-        fireEvent.click(squareRadio);
-      });
+      fireEvent.mouseDown(await screen.findByLabelText("Aspect ratio"));
+      fireEvent.click(await screen.findByRole("option", { name: "1:1 (square)" }));
 
       expect(await screen.findByText("disk full")).toBeInTheDocument();
     });
