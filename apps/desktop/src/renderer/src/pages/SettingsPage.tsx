@@ -144,6 +144,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
   } = useAuth();
   const {
     isConfigured: librefmIsConfigured,
+    credentialsSource: librefmCredentialsSource,
     activeAccount: librefmActiveAccount,
     isLoggingIn: librefmIsLoggingIn,
     isSavingCredentials: librefmIsSavingCredentials,
@@ -285,6 +286,20 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
           notify({ message: loginResult.error, severity: "error" });
         }
       });
+    });
+  };
+
+  const handleLibrefmLoginOnly = (): void => {
+    // Used when credentials are already available (baked into this build via
+    // LIBREFM_API_KEY/LIBREFM_API_SECRET, or previously saved) — no key/secret form
+    // to fill in first, unlike handleLibrefmConnect above; this is the "just click
+    // login" path the environment-credentials source exists to enable.
+    void librefmLogin().then((result) => {
+      notify(
+        result.success
+          ? { message: "Connected to Libre.fm.", severity: "success" }
+          : { message: result.error, severity: "error" },
+      );
     });
   };
 
@@ -935,11 +950,14 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
               description="Scrobbles and now-playing updates go to every connected service at once, alongside Last.fm."
               fullWidth
             >
-              {/* Libre.fm — same browser-authorization flow as Last.fm, just always
-                  "bring your own key" (no baked-in build variant — see
-                  useLibrefmAuth's docstring), so the key/secret form and the login
-                  step are combined into one "Connect" action here rather than two
-                  separate cards the way Last.fm's own Accounts/API-key split works. */}
+              {/* Libre.fm — same browser-authorization flow as Last.fm. Three states:
+                  connected (Disconnect row); credentials already available, baked
+                  into this build via LIBREFM_API_KEY/LIBREFM_API_SECRET or
+                  previously saved (a single "Log in" button, no key entry — this is
+                  the "instead of asking for the API key" path); or nothing
+                  configured yet (the bring-your-own-key form, where "Connect"
+                  chains saveCredentials + login into one click — see
+                  handleLibrefmConnect). */}
               {librefmActiveAccount ? (
                 <SettingsRow
                   label="Libre.fm"
@@ -950,6 +968,27 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                     </Button>
                   }
                 />
+              ) : librefmIsConfigured ? (
+                <Box sx={{ py: 1.25, borderBottom: 1, borderColor: "divider" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                    Libre.fm
+                  </Typography>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={handleLibrefmLoginOnly}
+                      disabled={librefmIsLoggingIn}
+                    >
+                      {librefmIsLoggingIn ? "Waiting for approval on Libre.fm…" : "Log in with Libre.fm"}
+                    </Button>
+                    {librefmCredentialsSource === "user-supplied" ? (
+                      <Button size="small" color="inherit" onClick={handleLibrefmClearCredentials}>
+                        Remove saved key
+                      </Button>
+                    ) : null}
+                  </Stack>
+                </Box>
               ) : (
                 <Box sx={{ py: 1.25, borderBottom: 1, borderColor: "divider" }}>
                   <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
@@ -985,35 +1024,33 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                       autoComplete="off"
                     />
                   </Stack>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={handleLibrefmConnect}
-                      disabled={
-                        librefmIsLoggingIn ||
-                        librefmIsSavingCredentials ||
-                        !librefmApiKey.trim() ||
-                        !librefmApiSecret.trim()
-                      }
-                    >
-                      {librefmIsLoggingIn
-                        ? "Waiting for approval on Libre.fm…"
-                        : librefmIsSavingCredentials
-                          ? "Saving…"
-                          : "Connect to Libre.fm"}
-                    </Button>
-                    {librefmIsConfigured ? (
-                      <Button size="small" color="inherit" onClick={handleLibrefmClearCredentials}>
-                        Remove saved key
-                      </Button>
-                    ) : null}
-                  </Stack>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={handleLibrefmConnect}
+                    disabled={
+                      librefmIsLoggingIn ||
+                      librefmIsSavingCredentials ||
+                      !librefmApiKey.trim() ||
+                      !librefmApiSecret.trim()
+                    }
+                  >
+                    {librefmIsLoggingIn
+                      ? "Waiting for approval on Libre.fm…"
+                      : librefmIsSavingCredentials
+                        ? "Saving…"
+                        : "Connect to Libre.fm"}
+                  </Button>
                 </Box>
               )}
 
-              {/* ListenBrainz — no browser flow at all, just a per-account token
-                  pasted in from the user's own ListenBrainz profile settings page. */}
+              {/* ListenBrainz — genuinely has no browser-authorization/OAuth flow for
+                  third-party listen submission (verified against its own API docs
+                  and source: only a manually-copied per-account token is supported —
+                  see `ListenBrainzApi`'s docstring in packages/core), so a token
+                  paste is unavoidable here, unlike Libre.fm/Last.fm above. The link
+                  below at least opens the exact page the token lives on, so there's
+                  nothing to hunt for. */}
               {listenBrainzActiveAccount ? (
                 <SettingsRow
                   label="ListenBrainz"
@@ -1029,6 +1066,17 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                     ListenBrainz
                   </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    ListenBrainz has no "log in" step to offer here — just{" "}
+                    <Link
+                      href="https://listenbrainz.org/settings/"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      open your ListenBrainz token
+                    </Link>{" "}
+                    and paste it below.
+                  </Typography>
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560 }}>
                     <TextField
                       label="User token"
@@ -1040,7 +1088,6 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                       size="small"
                       fullWidth
                       autoComplete="off"
-                      helperText="From your ListenBrainz profile's settings page"
                     />
                     <Button
                       size="small"

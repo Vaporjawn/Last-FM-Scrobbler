@@ -514,6 +514,75 @@ describe("SettingsPage", () => {
       });
     });
 
+    it("shows a single 'Log in with Libre.fm' button, no key fields, when credentials are baked in", async () => {
+      const login = vi.fn().mockResolvedValue({ username: "alice" });
+      installFakeAuthApi();
+      installFakeLibrefmApi({
+        isConfigured: vi.fn().mockResolvedValue(true),
+        credentialsSource: vi.fn().mockResolvedValue("environment"),
+        login,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const loginButton = await screen.findByRole("button", { name: /^log in with libre\.fm$/i });
+
+      expect(screen.queryByLabelText(/^key$/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^secret$/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /remove saved key/i })).not.toBeInTheDocument();
+
+      act(() => {
+        fireEvent.click(loginButton);
+      });
+
+      await waitFor(() => {
+        expect(login).toHaveBeenCalled();
+      });
+    });
+
+    it("shows a 'Log in with Libre.fm' button plus 'Remove saved key' for a previously-saved key", async () => {
+      installFakeAuthApi();
+      installFakeLibrefmApi({
+        isConfigured: vi.fn().mockResolvedValue(true),
+        credentialsSource: vi.fn().mockResolvedValue("user-supplied"),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByRole("button", { name: /^log in with libre\.fm$/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /remove saved key/i })).toBeInTheDocument();
+    });
+
+    it("clicking 'Remove saved key' for Libre.fm calls clearCredentials", async () => {
+      const clearCredentials = vi.fn().mockResolvedValue(undefined);
+      installFakeAuthApi();
+      installFakeLibrefmApi({
+        isConfigured: vi.fn().mockResolvedValue(true),
+        credentialsSource: vi.fn().mockResolvedValue("user-supplied"),
+        clearCredentials,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const removeButton = await screen.findByRole("button", { name: /remove saved key/i });
+
+      act(() => {
+        fireEvent.click(removeButton);
+      });
+
+      await waitFor(() => {
+        expect(clearCredentials).toHaveBeenCalled();
+      });
+    });
+
+    it("shows a link to open the ListenBrainz token page", async () => {
+      installFakeAuthApi();
+      installFakeListenBrainzApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const tokenLink = await screen.findByRole("link", { name: /open your listenbrainz token/i });
+
+      expect(tokenLink).toHaveAttribute("href", "https://listenbrainz.org/settings/");
+    });
+
     it("shows the connected Libre.fm account and disconnects it", async () => {
       const logout = vi.fn().mockResolvedValue(undefined);
       installFakeAuthApi();
