@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { AccountStore, AppCredentialsStore, type SecretStorage } from "@lastfm-scrobbler/core";
+import { resolveLibrefmCredentials } from "../../../src/main/auth/resolve-librefm-credentials.js";
 
 const ipcMainHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 const ipcMain = {
@@ -51,18 +52,34 @@ function fakeAuthFlowClient(username: string) {
   };
 }
 
+/** Builds the `resolveLibrefmCredentials` option `wireSecondaryAuth` requires, backed
+ * by the real `resolveLibrefmCredentials` (already independently tested in
+ * `resolve-librefm-credentials.test.ts`) reading from `librefmAppCredentialsStore` —
+ * the same wiring `main/index.ts` uses in production, just with no env vars set by
+ * default (a test wanting to exercise the "environment" source passes its own `env`
+ * override). */
+function resolverFor(
+  librefmAppCredentialsStore: AppCredentialsStore,
+  env: Record<string, string> = {},
+) {
+  return () => resolveLibrefmCredentials({ env, librefmAppCredentialsStore });
+}
+
 describe("wireSecondaryAuth", () => {
   describe("Libre.fm", () => {
-    it("librefmIsConfigured reports false when no credentials are saved", async () => {
+    it("librefmIsConfigured reports false when no credentials are saved or baked in", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
 
       await expect(invoke(IPC_CHANNELS.librefmIsConfigured)).resolves.toBe(false);
+      await expect(invoke(IPC_CHANNELS.librefmCredentialsSource)).resolves.toBe("none");
     });
 
     it("librefmIsConfigured reports true once a key/secret pair is saved", async () => {
@@ -71,6 +88,7 @@ describe("wireSecondaryAuth", () => {
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
         librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
@@ -78,17 +96,39 @@ describe("wireSecondaryAuth", () => {
       await invoke(IPC_CHANNELS.librefmSetCredentials, "key", "secret");
 
       await expect(invoke(IPC_CHANNELS.librefmIsConfigured)).resolves.toBe(true);
+      await expect(invoke(IPC_CHANNELS.librefmCredentialsSource)).resolves.toBe("user-supplied");
       await expect(librefmAppCredentialsStore.get()).resolves.toEqual({
         apiKey: "key",
         apiSecret: "secret",
       });
     });
 
-    it("librefmSetCredentials rejects an empty key or secret", async () => {
+    it("librefmCredentialsSource reports 'environment' when baked-in credentials take precedence", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      await librefmAppCredentialsStore.set({ apiKey: "user-key", apiSecret: "user-secret" });
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore, {
+          LIBREFM_API_KEY: "env-key",
+          LIBREFM_API_SECRET: "env-secret",
+        }),
+        listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+        openUrl: vi.fn(),
+      });
+
+      await expect(invoke(IPC_CHANNELS.librefmIsConfigured)).resolves.toBe(true);
+      await expect(invoke(IPC_CHANNELS.librefmCredentialsSource)).resolves.toBe("environment");
+    });
+
+    it("librefmSetCredentials rejects an empty key or secret", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore: new AccountStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
@@ -104,6 +144,7 @@ describe("wireSecondaryAuth", () => {
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
         librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
@@ -113,11 +154,13 @@ describe("wireSecondaryAuth", () => {
       await expect(librefmAppCredentialsStore.get()).resolves.toBeUndefined();
     });
 
-    it("librefmLogin throws when no credentials are saved", async () => {
+    it("librefmLogin throws when no credentials are saved or baked in", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
@@ -135,10 +178,11 @@ describe("wireSecondaryAuth", () => {
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore,
         librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl,
         onLibrefmLoginSuccess,
-        createLibrefmAuthFlowClient: () => Promise.resolve(fakeAuthFlowClient("alice")),
+        createLibrefmAuthFlowClient: () => fakeAuthFlowClient("alice"),
       });
 
       const result = await invoke(IPC_CHANNELS.librefmLogin);
@@ -152,6 +196,31 @@ describe("wireSecondaryAuth", () => {
       expect(onLibrefmLoginSuccess).toHaveBeenCalledExactlyOnceWith("alice");
     });
 
+    it("librefmLogin works from baked-in environment credentials with nothing saved", async () => {
+      const librefmAccountStore = new AccountStore(inMemoryStorage());
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore,
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore, {
+          LIBREFM_API_KEY: "env-key",
+          LIBREFM_API_SECRET: "env-secret",
+        }),
+        listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+        openUrl: vi.fn(),
+        createLibrefmAuthFlowClient: () => fakeAuthFlowClient("alice"),
+      });
+
+      const result = await invoke(IPC_CHANNELS.librefmLogin);
+
+      expect(result).toEqual({ username: "alice" });
+      await expect(librefmAccountStore.getActiveAccount()).resolves.toEqual({
+        username: "alice",
+        sessionKey: "sk-123",
+      });
+    });
+
     it("librefmLogin calls onLibrefmLoginFailed and rethrows when the flow fails", async () => {
       const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       await librefmAppCredentialsStore.set({ apiKey: "key", apiSecret: "secret" });
@@ -160,15 +229,15 @@ describe("wireSecondaryAuth", () => {
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
         librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
         onLibrefmLoginFailed,
-        createLibrefmAuthFlowClient: () =>
-          Promise.resolve({
-            getAuthToken: () => Promise.reject(new Error("boom")),
-            buildAuthUrl: () => "https://libre.fm/auth",
-            getSession: () => Promise.reject(new Error("unreachable")),
-          }),
+        createLibrefmAuthFlowClient: () => ({
+          getAuthToken: () => Promise.reject(new Error("boom")),
+          buildAuthUrl: () => "https://libre.fm/auth",
+          getSession: () => Promise.reject(new Error("unreachable")),
+        }),
       });
 
       await expect(invoke(IPC_CHANNELS.librefmLogin)).rejects.toThrow("boom");
@@ -178,10 +247,12 @@ describe("wireSecondaryAuth", () => {
     it("librefmLogout disconnects the active account", async () => {
       const librefmAccountStore = new AccountStore(inMemoryStorage());
       await librefmAccountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore,
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
@@ -193,10 +264,12 @@ describe("wireSecondaryAuth", () => {
 
     it("librefmGetActiveAccount reports the connected username, or undefined", async () => {
       const librefmAccountStore = new AccountStore(inMemoryStorage());
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore,
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
@@ -212,11 +285,13 @@ describe("wireSecondaryAuth", () => {
   describe("ListenBrainz", () => {
     it("listenbrainzConnect validates the token, stores it, and makes it active", async () => {
       const listenbrainzAccountStore = new AccountStore(inMemoryStorage());
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       const validateToken = vi.fn().mockResolvedValue({ valid: true, username: "alice" });
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore,
         openUrl: vi.fn(),
         createListenBrainzClient: () => ({ validateToken }),
@@ -233,11 +308,13 @@ describe("wireSecondaryAuth", () => {
     });
 
     it("listenbrainzConnect throws a friendly error for an invalid token", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       const validateToken = vi.fn().mockResolvedValue({ valid: false });
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
         createListenBrainzClient: () => ({ validateToken }),
@@ -247,11 +324,13 @@ describe("wireSecondaryAuth", () => {
     });
 
     it("listenbrainzConnect rejects an empty token without calling validateToken", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       const validateToken = vi.fn();
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
         createListenBrainzClient: () => ({ validateToken }),
@@ -264,10 +343,12 @@ describe("wireSecondaryAuth", () => {
     it("listenbrainzDisconnect disconnects the active account", async () => {
       const listenbrainzAccountStore = new AccountStore(inMemoryStorage());
       await listenbrainzAccountStore.addAccount({ username: "alice", sessionKey: "lb-token" });
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore,
         openUrl: vi.fn(),
       });
@@ -279,10 +360,12 @@ describe("wireSecondaryAuth", () => {
 
     it("listenbrainzGetActiveAccount reports the connected username, or undefined", async () => {
       const listenbrainzAccountStore = new AccountStore(inMemoryStorage());
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore,
         openUrl: vi.fn(),
       });
@@ -297,10 +380,12 @@ describe("wireSecondaryAuth", () => {
 
   describe("untrusted sender", () => {
     it("rejects every handler when senderFrame doesn't match expectedOrigin", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
         librefmAccountStore: new AccountStore(inMemoryStorage()),
-        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
         listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
         openUrl: vi.fn(),
       });
@@ -315,10 +400,12 @@ describe("wireSecondaryAuth", () => {
   });
 
   it("the returned cleanup function removes every registered handler", () => {
+    const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
     const cleanup = wireSecondaryAuth({
       expectedOrigin: EXPECTED_ORIGIN,
       librefmAccountStore: new AccountStore(inMemoryStorage()),
-      librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+      librefmAppCredentialsStore,
+      resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
       listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
       openUrl: vi.fn(),
     });

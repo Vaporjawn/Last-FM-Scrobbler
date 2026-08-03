@@ -29,6 +29,10 @@ import { createAccountStore } from "./auth/create-account-store.js";
 import { wireFilterValidation } from "./filters/wire-filter-validation.js";
 import { wireAuth } from "./auth/wire-auth.js";
 import { buildLibrefmClient, wireSecondaryAuth } from "./auth/wire-secondary-auth.js";
+import {
+  resolveLibrefmCredentials,
+  type ResolvedLibrefmCredentials,
+} from "./auth/resolve-librefm-credentials.js";
 import { applyLoginItemSettings } from "./login-items/apply-login-item-settings.js";
 import { wireScrobbling } from "./scrobbling/wire-scrobbling.js";
 import { wireBugReport } from "./bug-report/wire-bug-report.js";
@@ -219,6 +223,15 @@ void app.whenReady().then(async () => {
     filePath: join(userDataDir, "listenbrainz-secrets.json"),
     safeStorage,
   });
+  // LIBREFM_API_KEY/LIBREFM_API_SECRET (baked into this build) take precedence,
+  // falling back to a key the end user saved themselves — exact mirror of
+  // resolvedCredentials/resolveLastfmCredentials below, just for Libre.fm. Kept as a
+  // closure (not resolved once into a value) since wireSecondaryAuth calls this fresh
+  // on every login/is-configured/credentials-source check — see that function's
+  // resolveLibrefmCredentials option for why: unlike Last.fm's environment path,
+  // Libre.fm needs no relaunch for a newly-saved key to apply.
+  const resolveLibrefmAppCredentials = (): Promise<ResolvedLibrefmCredentials | undefined> =>
+    resolveLibrefmCredentials({ librefmAppCredentialsStore });
 
   // LASTFM_API_KEY/LASTFM_API_SECRET (baked into this build) take precedence, falling
   // back to a key the end user saved themselves via Settings → Accounts. undefined
@@ -301,6 +314,7 @@ void app.whenReady().then(async () => {
     expectedOrigin: expectedRendererOrigin,
     librefmAccountStore,
     librefmAppCredentialsStore,
+    resolveLibrefmCredentials: resolveLibrefmAppCredentials,
     listenbrainzAccountStore,
     openUrl: (url) => shell.openExternal(url),
     // Same reasoning as wireAuth's onLoginSuccess/onLoginFailed above, just for
@@ -379,14 +393,18 @@ void app.whenReady().then(async () => {
         {
           id: "librefm",
           getClient: async () => {
-            if (!librefmAccountStore || !librefmAppCredentialsStore) {
+            if (!librefmAccountStore) {
               return undefined;
             }
             const active = await librefmAccountStore.getActiveAccount();
             if (!active) {
               return undefined;
             }
-            return buildLibrefmClient(librefmAppCredentialsStore, { sessionKey: active.sessionKey });
+            const credentials = await resolveLibrefmAppCredentials();
+            if (!credentials) {
+              return undefined;
+            }
+            return buildLibrefmClient(credentials, { sessionKey: active.sessionKey });
           },
         },
         {

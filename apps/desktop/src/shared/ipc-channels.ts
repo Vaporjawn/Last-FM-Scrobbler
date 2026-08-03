@@ -43,9 +43,15 @@ export const IPC_CHANNELS = {
   /** Restarts the app so newly-saved credentials take effect. */
   appRelaunch: "app:relaunch",
 
-  /** Whether a user-supplied Libre.fm API key/secret pair has been saved. */
+  /** Whether Libre.fm credentials are available at all right now — baked in via
+   * `LIBREFM_API_KEY`/`LIBREFM_API_SECRET`, or saved by the user. */
   librefmIsConfigured: "librefm:is-configured",
-  /** Saves a Libre.fm API key/secret pair — always user-supplied, see `LibrefmApi`. */
+  /** Where the active Libre.fm API key/secret came from — `"environment"` (this build
+   * has `LIBREFM_API_KEY`/`LIBREFM_API_SECRET` baked in), `"user-supplied"` (saved via
+   * Settings → Accounts), or `"none"`. Same shape as `authCredentialsSource`. */
+  librefmCredentialsSource: "librefm:credentials-source",
+  /** Saves a Libre.fm API key/secret pair — the "bring your own key" alternative for
+   * builds with no `LIBREFM_API_KEY`/`LIBREFM_API_SECRET` baked in, see `LibrefmApi`. */
   librefmSetCredentials: "librefm:set-credentials",
   /** Clears a previously-saved Libre.fm API key/secret pair. */
   librefmClearCredentials: "librefm:clear-credentials",

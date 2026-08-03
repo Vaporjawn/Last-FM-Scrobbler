@@ -105,6 +105,11 @@ const librefmApi: LibrefmApi = {
   isConfigured() {
     return ipcRenderer.invoke(IPC_CHANNELS.librefmIsConfigured) as Promise<boolean>;
   },
+  credentialsSource() {
+    return ipcRenderer.invoke(IPC_CHANNELS.librefmCredentialsSource) as Promise<
+      "environment" | "user-supplied" | "none"
+    >;
+  },
   setCredentials(apiKey, apiSecret) {
     return ipcRenderer.invoke(
       IPC_CHANNELS.librefmSetCredentials,

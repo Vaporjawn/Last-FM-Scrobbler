@@ -4,11 +4,13 @@ import {
   LastfmClient,
   ListenBrainzClient,
   type AccountStore,
+  type AppCredentials,
   type AppCredentialsStore,
   type AuthFlowClient,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import { assertTrustedSender } from "../validate-ipc-sender.js";
+import type { ResolvedLibrefmCredentials } from "./resolve-librefm-credentials.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
@@ -36,8 +38,8 @@ const LIBREFM_AUTH_URL = "https://libre.fm/api/auth/";
 
 const LIBREFM_NOT_CONFIGURED_MESSAGE =
   "Libre.fm login is not configured this run — either no Libre.fm API key/secret has " +
-  "been saved yet (Settings → Accounts), or secure account storage couldn't be set up " +
-  "on this system.";
+  "been baked into this build or saved yet (Settings → Accounts), or secure account " +
+  "storage couldn't be set up on this system.";
 const LIBREFM_NO_STORAGE_MESSAGE =
   "Can't save a Libre.fm API key on this system — secure storage isn't available.";
 const LISTENBRAINZ_NOT_CONFIGURED_MESSAGE =
@@ -52,7 +54,22 @@ export interface WireSecondaryAuthOptions {
    * here reports "not configured" rather than throwing an unhandled error in that
    * case, same convention as `wire-auth.ts`. */
   readonly librefmAccountStore: AccountStore | undefined;
+  /** The *write* side of Libre.fm's app credentials — only used by
+   * `librefmSetCredentials`/`librefmClearCredentials` below. Reads go through
+   * `resolveLibrefmCredentials` instead (see that option), which also checks
+   * `LIBREFM_API_KEY`/`LIBREFM_API_SECRET` — same environment-first, then-saved-key
+   * precedence Last.fm's own `resolveLastfmCredentials` uses, see that function's
+   * docstring for the full reasoning. */
   readonly librefmAppCredentialsStore: AppCredentialsStore | undefined;
+  /** Resolves the Libre.fm credentials `librefmIsConfigured`/`librefmCredentialsSource`/
+   * `librefmLogin` should use right now — called fresh on every one of those calls
+   * (not captured once at wiring time) so a newly-saved key takes effect immediately,
+   * no relaunch needed (Libre.fm has no "restart to apply a baked-in key" story the
+   * way Last.fm's environment-variable path does, since `main/index.ts` re-checks
+   * `process.env` on every call here, not just once at startup). Real callers pass
+   * `() => resolveLibrefmCredentials({ librefmAppCredentialsStore })` — see
+   * `resolve-librefm-credentials.ts`. */
+  readonly resolveLibrefmCredentials: () => Promise<ResolvedLibrefmCredentials | undefined>;
   readonly listenbrainzAccountStore: AccountStore | undefined;
   /** Opens the Libre.fm authorization page — real callers pass Electron's
    * `shell.openExternal`, same as `wire-auth.ts`'s `openUrl`. */
@@ -66,38 +83,30 @@ export interface WireSecondaryAuthOptions {
    * one signal guaranteed to reach the user after they've been sent away to their
    * browser for Libre.fm's own "Allow Access" step. Defaults to a no-op. */
   readonly onLibrefmLoginFailed?: (message: string) => void;
-  /** Constructs the `AuthFlowClient` `login` drives, from whichever Libre.fm key/secret
-   * pair is currently saved (or `undefined` if none is) — injectable for testing (real
-   * tests supply a fake `AuthFlowClient` directly, same convention `wire-auth.test.ts`
-   * uses, without needing a real `fetch`); defaults to `createLibrefmAuthFlowClient`
-   * below, which real callers never need to override. */
-  readonly createLibrefmAuthFlowClient?: (
-    librefmAppCredentialsStore: AppCredentialsStore,
-  ) => Promise<AuthFlowClient | undefined>;
+  /** Constructs the `AuthFlowClient` `login` drives, from an already-resolved Libre.fm
+   * key/secret pair — injectable for testing (real tests supply a fake
+   * `AuthFlowClient` directly, same convention `wire-auth.test.ts` uses, without
+   * needing a real `fetch`); defaults to `createLibrefmAuthFlowClient` below, which
+   * real callers never need to override. */
+  readonly createLibrefmAuthFlowClient?: (credentials: AppCredentials) => AuthFlowClient;
   /** Constructs the client `listenbrainzConnect` validates a candidate token against —
    * injectable for testing, same reasoning as `createLibrefmAuthFlowClient`. Defaults
    * to a real `ListenBrainzClient`. */
   readonly createListenBrainzClient?: (token: string) => Pick<ListenBrainzClient, "validateToken">;
 }
 
-/** Builds a `LastfmClient` pointed at Libre.fm instead of Last.fm, from whichever
- * key/secret pair is currently saved (`undefined` if none is) — constructed fresh on
- * every call rather than once at wiring time, so a newly-saved key takes effect
- * immediately with no relaunch needed (Libre.fm has no baked-in-credentials build
- * variant to take precedence over a saved one, unlike Last.fm — see
- * `LibrefmApi.setCredentials`'s docstring). Shared by both the login flow
- * (`createLibrefmAuthFlowClient` below — no `sessionKey` yet, since login is how one
- * gets minted) and `main/index.ts`'s scrobbling wiring (a session-keyed client, once
- * an account is connected) — `LastfmClient` satisfies both `AuthFlowClient` and
- * `ScrobblingClient` structurally, so one factory covers both call sites. */
-export async function buildLibrefmClient(
-  librefmAppCredentialsStore: AppCredentialsStore,
+/** Builds a `LastfmClient` pointed at Libre.fm instead of Last.fm, from an
+ * already-resolved key/secret pair (see `resolve-librefm-credentials.ts` — this
+ * function itself does no env/storage lookups, just client construction). Shared by
+ * both the login flow (`createLibrefmAuthFlowClient` below — no `sessionKey` yet,
+ * since login is how one gets minted) and `main/index.ts`'s scrobbling wiring (a
+ * session-keyed client, once an account is connected) — `LastfmClient` satisfies both
+ * `AuthFlowClient` and `ScrobblingClient` structurally, so one factory covers both
+ * call sites. */
+export function buildLibrefmClient(
+  credentials: AppCredentials,
   options: { readonly sessionKey?: string } = {},
-): Promise<LastfmClient | undefined> {
-  const credentials = await librefmAppCredentialsStore.get();
-  if (!credentials) {
-    return undefined;
-  }
+): LastfmClient {
   return new LastfmClient({
     apiKey: credentials.apiKey,
     apiSecret: credentials.apiSecret,
@@ -109,10 +118,8 @@ export async function buildLibrefmClient(
 
 /** The real default for `WireSecondaryAuthOptions.createLibrefmAuthFlowClient` — see
  * `buildLibrefmClient` above. */
-export function createLibrefmAuthFlowClient(
-  librefmAppCredentialsStore: AppCredentialsStore,
-): Promise<AuthFlowClient | undefined> {
-  return buildLibrefmClient(librefmAppCredentialsStore);
+export function createLibrefmAuthFlowClient(credentials: AppCredentials): AuthFlowClient {
+  return buildLibrefmClient(credentials);
 }
 
 /**
@@ -130,6 +137,7 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
     expectedOrigin,
     librefmAccountStore,
     librefmAppCredentialsStore,
+    resolveLibrefmCredentials,
     listenbrainzAccountStore,
     openUrl,
     onLibrefmLoginSuccess,
@@ -140,11 +148,20 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
 
   ipcMain.handle(IPC_CHANNELS.librefmIsConfigured, async (event): Promise<boolean> => {
     assertTrustedSender(event, expectedOrigin);
-    if (!librefmAccountStore || !librefmAppCredentialsStore) {
+    if (!librefmAccountStore) {
       return false;
     }
-    return (await librefmAppCredentialsStore.get()) !== undefined;
+    return (await resolveLibrefmCredentials()) !== undefined;
   });
+
+  ipcMain.handle(
+    IPC_CHANNELS.librefmCredentialsSource,
+    async (event): Promise<"environment" | "user-supplied" | "none"> => {
+      assertTrustedSender(event, expectedOrigin);
+      const resolved = await resolveLibrefmCredentials();
+      return resolved?.source ?? "none";
+    },
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.librefmSetCredentials,
@@ -169,13 +186,11 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
 
   ipcMain.handle(IPC_CHANNELS.librefmLogin, async (event): Promise<{ username: string }> => {
     assertTrustedSender(event, expectedOrigin);
-    const client =
-      librefmAccountStore && librefmAppCredentialsStore
-        ? await buildLibrefmAuthFlowClient(librefmAppCredentialsStore)
-        : undefined;
-    if (!librefmAccountStore || !client) {
+    const credentials = await resolveLibrefmCredentials();
+    if (!librefmAccountStore || !credentials) {
       throw new Error(LIBREFM_NOT_CONFIGURED_MESSAGE);
     }
+    const client = buildLibrefmAuthFlowClient(credentials);
     const authFlow = new AuthFlow({ client, openUrl });
     try {
       const session = await authFlow.authenticate();
@@ -259,6 +274,7 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
 
   return () => {
     ipcMain.removeHandler(IPC_CHANNELS.librefmIsConfigured);
+    ipcMain.removeHandler(IPC_CHANNELS.librefmCredentialsSource);
     ipcMain.removeHandler(IPC_CHANNELS.librefmSetCredentials);
     ipcMain.removeHandler(IPC_CHANNELS.librefmClearCredentials);
     ipcMain.removeHandler(IPC_CHANNELS.librefmLogin);
