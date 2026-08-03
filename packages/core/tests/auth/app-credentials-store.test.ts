@@ -68,4 +68,31 @@ describe("AppCredentialsStore", () => {
 
     expect(await second.get()).toEqual({ apiKey: "user-key", apiSecret: "user-secret" });
   });
+
+  describe("namespace", () => {
+    it("keeps two namespaced instances over the same storage fully independent", async () => {
+      const storage = createInMemoryStorage();
+      const lastfm = new AppCredentialsStore(storage, { namespace: "lastfm:" });
+      const librefm = new AppCredentialsStore(storage, { namespace: "librefm:" });
+
+      await lastfm.set({ apiKey: "lastfm-key", apiSecret: "lastfm-secret" });
+      await librefm.set({ apiKey: "librefm-key", apiSecret: "librefm-secret" });
+
+      expect(await lastfm.get()).toEqual({ apiKey: "lastfm-key", apiSecret: "lastfm-secret" });
+      expect(await librefm.get()).toEqual({ apiKey: "librefm-key", apiSecret: "librefm-secret" });
+
+      await librefm.clear();
+
+      expect(await librefm.get()).toBeUndefined();
+      expect(await lastfm.get()).toEqual({ apiKey: "lastfm-key", apiSecret: "lastfm-secret" });
+    });
+
+    it("defaults to no namespace, matching this store's original on-disk key shape", async () => {
+      const storage = createInMemoryStorage();
+      const unnamespaced = new AppCredentialsStore(storage);
+      await unnamespaced.set({ apiKey: "key", apiSecret: "secret" });
+
+      expect(await storage.list()).toEqual(["app-credentials"]);
+    });
+  });
 });

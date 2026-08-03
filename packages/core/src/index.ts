@@ -39,10 +39,14 @@ export type {
 } from "./lastfm-api/types.js";
 export { fetchArtistImageUrl } from "./artist-images/fetch-artist-image-url.js";
 export { AccountStore } from "./auth/account-store.js";
-export type { StoredAccount } from "./auth/account-store.js";
+export type { AccountStoreOptions, StoredAccount } from "./auth/account-store.js";
 export { AppCredentialsStore } from "./auth/app-credentials-store.js";
-export type { AppCredentials } from "./auth/app-credentials-store.js";
+export type { AppCredentials, AppCredentialsStoreOptions } from "./auth/app-credentials-store.js";
 export type { SecretStorage } from "./auth/secret-storage.js";
+export type { ScrobblingClient } from "./scrobbling-client.js";
+export { ListenBrainzClient } from "./listenbrainz-api/client.js";
+export type { ListenBrainzClientOptions } from "./listenbrainz-api/client.js";
+export { ListenBrainzApiError } from "./listenbrainz-api/listenbrainz-error.js";
 export { AuthFlow, AuthTimeoutError } from "./auth/auth-flow.js";
 export type { AuthFlowClient, AuthFlowOptions } from "./auth/auth-flow.js";
 export { compileFilter, FilterSyntaxError } from "./filters/filter-expression.js";

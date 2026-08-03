@@ -105,4 +105,37 @@ describe("AccountStore", () => {
     expect(await second.listAccounts()).toEqual([{ username: "alice", sessionKey: "sk-alice" }]);
     expect((await second.getActiveAccount())?.username).toBe("alice");
   });
+
+  describe("namespace", () => {
+    it("keeps two namespaced instances over the same storage fully independent", async () => {
+      const storage = createInMemoryStorage();
+      const lastfm = new AccountStore(storage, { namespace: "lastfm:" });
+      const librefm = new AccountStore(storage, { namespace: "librefm:" });
+
+      await lastfm.addAccount({ username: "alice", sessionKey: "sk-lastfm-alice" });
+      await librefm.addAccount({ username: "alice", sessionKey: "sk-librefm-alice" });
+      await librefm.addAccount({ username: "bob", sessionKey: "sk-librefm-bob" });
+
+      expect(await lastfm.listAccounts()).toEqual([{ username: "alice", sessionKey: "sk-lastfm-alice" }]);
+      expect(await librefm.listAccounts()).toHaveLength(2);
+      expect((await lastfm.getActiveAccount())?.sessionKey).toBe("sk-lastfm-alice");
+      expect((await librefm.getActiveAccount())?.username).toBe("alice");
+
+      await librefm.setActiveAccount("bob");
+
+      expect((await librefm.getActiveAccount())?.username).toBe("bob");
+      // The other namespace's active account is untouched by the switch above.
+      expect((await lastfm.getActiveAccount())?.username).toBe("alice");
+    });
+
+    it("defaults to no namespace, matching this store's original on-disk key shape", async () => {
+      const storage = createInMemoryStorage();
+      const unnamespaced = new AccountStore(storage);
+      await unnamespaced.addAccount({ username: "alice", sessionKey: "sk-alice" });
+
+      expect(await storage.list()).toEqual(
+        expect.arrayContaining(["account:alice", "__active_account__"]),
+      );
+    });
+  });
 });
