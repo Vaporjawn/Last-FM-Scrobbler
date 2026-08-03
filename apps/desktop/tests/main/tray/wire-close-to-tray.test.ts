@@ -22,7 +22,7 @@ function fakeSettingsStore(closeToTray: boolean) {
       closeToTray,
       autoUpdateEnabled: true,
       hasShownTrayHint: false,
-      aspectRatio: "9:16" as const,
+      aspectRatio: "9:14" as const,
       themeMode: "dark" as const,
       notifyOnScrobble: true,
       notifyOnScrobbleFailure: true,

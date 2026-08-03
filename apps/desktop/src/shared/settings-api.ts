@@ -9,7 +9,7 @@ export interface WindowBounds {
 }
 
 /**
- * A user-selectable resize constraint for the main window — `"9:16"` is the default
+ * A user-selectable resize constraint for the main window — `"9:14"` is the default
  * (see `DEFAULT_APP_SETTINGS`), locking the window to a portrait shape out of the box;
  * `"free"` is unconstrained resizing, this app's *original* default before this
  * setting existed, still available as an explicit opt-out. `"9:16"` and `"9:14"` are
@@ -72,7 +72,7 @@ export interface AppSettings {
    */
   readonly windowBounds?: WindowBounds;
   /**
-   * The main window's resize aspect-ratio lock — `"9:16"` is the default, locking the
+   * The main window's resize aspect-ratio lock — `"9:14"` is the default, locking the
    * window to a portrait shape out of the box; `"free"` (this app's original,
    * unconstrained-resize default before this setting existed) is still available as an
    * explicit choice. Settings → Window offers every option. See
@@ -206,7 +206,7 @@ export interface AppSettings {
  * `docs/modules/desktop.md`). `hasShownTrayHint` starts `false` — every fresh install
  * gets the one-time explanation once, the first time it actually happens.
  * `windowBounds` starts unset — nothing to restore until a real session saves one.
- * `aspectRatio` starts `"9:16"` — a deliberate default, not this app's original
+ * `aspectRatio` starts `"9:14"` — a deliberate default, not this app's original
  * unconstrained-resize behavior: a fresh install now launches in a locked portrait
  * window (see `create-main-window.ts`'s portrait-aware initial sizing) rather than the
  * `"free"` resizing this app shipped with before this setting existed — anyone who
@@ -226,7 +226,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   closeToTray: true,
   autoUpdateEnabled: true,
   hasShownTrayHint: false,
-  aspectRatio: "9:16",
+  aspectRatio: "9:14",
   themeMode: "dark",
   notifyOnScrobble: true,
   notifyOnScrobbleFailure: true,

@@ -1203,19 +1203,19 @@ describe("SettingsPage", () => {
   });
 
   describe("window", () => {
-    it("shows the aspect ratio options with '9:16' selected by default", async () => {
+    it("shows the aspect ratio options with '9:14' selected by default", async () => {
       installFakeAuthApi();
       installFakeSettingsApi();
 
       renderSettingsPage({ onNavigateToSettings: vi.fn() });
 
-      const verticalRadio = await screen.findByRole("radio", { name: /9:16/i });
+      const verticalRadio = await screen.findByRole("radio", { name: /9:14/i });
       expect(verticalRadio).toBeChecked();
       expect(screen.getByRole("radio", { name: /free/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /16:9/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /4:3/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /1:1/i })).not.toBeChecked();
-      expect(screen.getByRole("radio", { name: /9:14/i })).not.toBeChecked();
+      expect(screen.getByRole("radio", { name: /9:16/i })).not.toBeChecked();
     });
 
     it("selecting a different aspect ratio calls window.settings.set and updates the selection", async () => {
@@ -1245,7 +1245,7 @@ describe("SettingsPage", () => {
     it("selecting the vertical (9:16) aspect ratio calls window.settings.set", async () => {
       const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
       installFakeAuthApi();
-      // Starts from "free", not the "9:16" default — clicking an already-checked
+      // Starts from "free", not the "9:14" default — clicking an already-checked
       // radio fires no change event at all, so this needs to switch *to* "9:16" from
       // something else to actually exercise the selection.
       installFakeSettingsApi({
@@ -1264,6 +1264,30 @@ describe("SettingsPage", () => {
         expect(set).toHaveBeenCalledWith({ aspectRatio: "9:16" });
       });
       expect(await screen.findByRole("radio", { name: /9:16/i })).toBeChecked();
+    });
+
+    it("selecting the vertical (9:14) aspect ratio calls window.settings.set", async () => {
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeAuthApi();
+      // Starts from "free", not the "9:14" default — clicking an already-checked
+      // radio fires no change event at all, so this needs to switch *to* "9:14" from
+      // something else to actually exercise the selection.
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, aspectRatio: "free" }),
+        set,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const verticalRadio = await screen.findByRole("radio", { name: /9:14/i });
+
+      act(() => {
+        fireEvent.click(verticalRadio);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ aspectRatio: "9:14" });
+      });
+      expect(await screen.findByRole("radio", { name: /9:14/i })).toBeChecked();
     });
 
     it("reflects a previously-saved aspect ratio on load", async () => {
