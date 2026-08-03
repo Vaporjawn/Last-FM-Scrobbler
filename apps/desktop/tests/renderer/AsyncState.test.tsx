@@ -16,6 +16,52 @@ describe("AsyncState", () => {
 
       expect(screen.getByRole("progressbar")).toHaveAccessibleName("Loading scrobbles…");
     });
+
+    it("renders the spinner when variant is explicitly \"spinner\"", () => {
+      render(<AsyncState kind="loading" variant="spinner" />);
+
+      expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    });
+
+    describe("list variant", () => {
+      it("renders 5 row-shaped skeletons (avatar + two text lines) by default", () => {
+        const { container } = render(<AsyncState kind="loading" variant="list" />);
+
+        expect(screen.getByRole("status")).toHaveAccessibleName("Loading…");
+        expect(container.querySelectorAll(".MuiSkeleton-circular")).toHaveLength(5);
+        expect(container.querySelectorAll(".MuiSkeleton-text")).toHaveLength(10);
+        expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+      });
+
+      it("renders a caller-supplied count instead", () => {
+        const { container } = render(<AsyncState kind="loading" variant="list" count={3} />);
+
+        expect(container.querySelectorAll(".MuiSkeleton-circular")).toHaveLength(3);
+        expect(container.querySelectorAll(".MuiSkeleton-text")).toHaveLength(6);
+      });
+
+      it("uses a caller-supplied label for the live region", () => {
+        render(<AsyncState kind="loading" variant="list" label="Loading friends…" />);
+
+        expect(screen.getByRole("status")).toHaveAccessibleName("Loading friends…");
+      });
+    });
+
+    describe("grid variant", () => {
+      it("renders 5 square tile skeletons by default", () => {
+        const { container } = render(<AsyncState kind="loading" variant="grid" />);
+
+        expect(screen.getByRole("status")).toHaveAccessibleName("Loading…");
+        expect(container.querySelectorAll(".MuiSkeleton-rounded")).toHaveLength(5);
+        expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+      });
+
+      it("renders a caller-supplied count instead", () => {
+        const { container } = render(<AsyncState kind="loading" variant="grid" count={8} />);
+
+        expect(container.querySelectorAll(".MuiSkeleton-rounded")).toHaveLength(8);
+      });
+    });
   });
 
   describe("empty", () => {

@@ -70,7 +70,13 @@ export function TopAlbumsSection({
         </Select>
       </Stack>
       {loading ? (
-        <AsyncState kind="loading" label={`Loading ${title.toLowerCase()}…`} />
+        <AsyncState
+          kind="loading"
+          // Grid-shaped placeholder tiles only for the "tiles" viewMode — see
+          // TopArtistsSection's identical comment for why "list" keeps the spinner.
+          {...(viewMode === "tiles" ? { variant: "grid" as const } : {})}
+          label={`Loading ${title.toLowerCase()}…`}
+        />
       ) : error ? (
         <AsyncState kind="error" message={error} />
       ) : albums.length === 0 ? (

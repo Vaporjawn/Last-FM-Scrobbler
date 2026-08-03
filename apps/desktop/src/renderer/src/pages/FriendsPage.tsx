@@ -100,7 +100,7 @@ export function FriendsPage({
           onNavigateToSettings={onNavigateToSettings}
         />
       ) : loading ? (
-        <AsyncState kind="loading" label="Loading friends…" />
+        <AsyncState kind="loading" variant="list" label="Loading friends…" />
       ) : error ? (
         <AsyncState kind="error" message={error} />
       ) : friends.length === 0 ? (

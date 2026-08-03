@@ -3,7 +3,20 @@ import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
+import Skeleton from "@mui/material/Skeleton";
+import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
+
+/** Used for both `"list"` (an avatar's `width`/`height`) and, via `ArtworkTile`'s own
+ * matching `borderRadius: 2`, kept in visual step with `"grid"`'s square tiles. Doesn't
+ * try to match `ScrobbleListItem`'s 56px or `FriendListItem`'s 48px row avatar
+ * exactly — one shared skeleton row shape approximates both close enough that the
+ * difference isn't worth two near-identical variants. */
+const SKELETON_ROW_AVATAR_SIZE = 48;
+/** Reasonable default placeholder count for `"list"`/`"grid"` — enough to plausibly
+ * fill a typical viewport without rendering an arbitrarily large number of DOM nodes
+ * for content nobody will see before the real data replaces it. */
+const DEFAULT_SKELETON_COUNT = 5;
 
 interface AsyncStateLoadingProps {
   readonly kind: "loading";
@@ -11,6 +24,17 @@ interface AsyncStateLoadingProps {
    * label of its own. Defaults to "Loading…"; pass something more specific ("Loading
    * scrobbles…") where it helps. */
   readonly label?: string;
+  /** `"spinner"` (the default, and every existing call site's unchanged behavior) is a
+   * single centered `CircularProgress` — right for content with no obvious placeholder
+   * shape (a bio panel, a flat stat). `"list"`/`"grid"` instead render `count`
+   * `Skeleton` placeholders shaped like the eventual content, for pages where that
+   * shape is already known ahead of time (a row of scrobbles, a grid of artist tiles):
+   * replacing the whole area with an unrelated spinner blob for a second reads as
+   * "please wait"; a shape-matched placeholder reads as "content is arriving". */
+  readonly variant?: "spinner" | "list" | "grid";
+  /** How many placeholder rows/tiles to render for `"list"`/`"grid"` — ignored for
+   * `"spinner"`. Defaults to `DEFAULT_SKELETON_COUNT`. */
+  readonly count?: number;
 }
 
 interface AsyncStateEmptyProps {
@@ -47,9 +71,58 @@ export type AsyncStateProps = AsyncStateLoadingProps | AsyncStateEmptyProps | As
  */
 export function AsyncState(props: AsyncStateProps): JSX.Element {
   if (props.kind === "loading") {
+    const variant = props.variant ?? "spinner";
+    const label = props.label ?? "Loading…";
+
+    if (variant === "list") {
+      const rows = Array.from({ length: props.count ?? DEFAULT_SKELETON_COUNT });
+      return (
+        <Box role="status" aria-live="polite" aria-label={label}>
+          {rows.map((_, index) => (
+            <Stack
+              key={index}
+              direction="row"
+              spacing={2}
+              sx={{ alignItems: "center", py: 1.5 }}
+            >
+              <Skeleton
+                variant="circular"
+                width={SKELETON_ROW_AVATAR_SIZE}
+                height={SKELETON_ROW_AVATAR_SIZE}
+              />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Skeleton variant="text" sx={{ fontSize: "0.875rem" }} width="45%" />
+                <Skeleton variant="text" sx={{ fontSize: "0.875rem" }} width="70%" />
+              </Box>
+            </Stack>
+          ))}
+        </Box>
+      );
+    }
+
+    if (variant === "grid") {
+      const tiles = Array.from({ length: props.count ?? DEFAULT_SKELETON_COUNT });
+      return (
+        <Box
+          role="status"
+          aria-live="polite"
+          aria-label={label}
+          sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 2 }}
+        >
+          {tiles.map((_, index) => (
+            <Skeleton
+              key={index}
+              variant="rounded"
+              sx={{ width: "100%", aspectRatio: "1", borderRadius: 2 }}
+            />
+          ))}
+        </Box>
+      );
+    }
+
     return (
       <Box role="status" aria-live="polite" sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-        <CircularProgress aria-label={props.label ?? "Loading…"} />
+        <CircularProgress aria-label={label} />
       </Box>
     );
   }

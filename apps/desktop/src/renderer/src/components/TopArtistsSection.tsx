@@ -49,7 +49,14 @@ export function TopArtistsSection({
         {title}
       </Typography>
       {loading ? (
-        <AsyncState kind="loading" label={`Loading ${title.toLowerCase()}…`} />
+        <AsyncState
+          kind="loading"
+          // Grid-shaped placeholder tiles only for the "tiles" viewMode — a row of
+          // Skeleton bars doesn't obviously belong to the "list" viewMode's own
+          // TopArtistListItem shape, so that one keeps the default spinner.
+          {...(viewMode === "tiles" ? { variant: "grid" as const } : {})}
+          label={`Loading ${title.toLowerCase()}…`}
+        />
       ) : error ? (
         <AsyncState kind="error" message={error} />
       ) : artists.length === 0 ? (

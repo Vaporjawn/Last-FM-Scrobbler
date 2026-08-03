@@ -70,7 +70,7 @@ export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PagePr
           onNavigateToSettings={onNavigateToSettings}
         />
       ) : loading ? (
-        <AsyncState kind="loading" label="Loading scrobbles…" />
+        <AsyncState kind="loading" variant="list" label="Loading scrobbles…" />
       ) : error && tracks.length === 0 ? (
         // Only the *initial* fetch failing empties the whole page like this — a
         // failed loadMore (tracks.length > 0 already) instead shows inline near the
