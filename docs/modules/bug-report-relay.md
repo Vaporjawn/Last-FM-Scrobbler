@@ -59,7 +59,18 @@ configured (correctly validates requests, responds `503`).
 ## Public interface
 
 - `parseBugReportRequest(payload: unknown): BugReportRequest` — validates
-  `{title, body, diagnostics?}`, throws with a descriptive message on invalid input.
+  `{title, body, diagnostics?}`, throws with a descriptive message on invalid input,
+  including per-field length limits: `title` ≤ 256 characters (GitHub's own real
+  limit — verified against GitHub's actual validation error text, "title is too long
+  (maximum is 256 characters)"), `body` ≤ 60,000 characters (comfortably under
+  GitHub's real 65,536-character body limit, leaving headroom for the diagnostics
+  section and disclaimer `formatIssueBody` appends), each `diagnostics` value ≤
+  10,000 characters, and `diagnostics` itself ≤ 20 keys. These exist specifically
+  because this endpoint is reachable by anyone with no authentication (see "Rate
+  limiting" below) — without them, an oversized payload would be fully buffered and
+  forwarded to GitHub's API before GitHub's own limits eventually rejected it, paying
+  the full cost (Worker CPU, egress, a wasted call against the shared PAT) of a
+  request that was always going to fail.
 - `formatIssueBody(report: BugReportRequest): string` — the reporter's text, an
   optional collapsed `<details>` diagnostics section, and a fixed disclaimer noting the
   report has no linked GitHub account.
@@ -77,6 +88,34 @@ configured (correctly validates requests, responds `503`).
     server-side via `console.error`, not returned to the caller — an anonymous,
     unauthenticated endpoint shouldn't echo internal error detail).
   - `201` with `{issueUrl, issueNumber}` on success.
+
+## Module layout (`src/`)
+
+- `bug-report-request.ts` — `BugReportRequest`, the validated shape
+  (`{title, body, diagnostics?: Record<string, string>}`) every other file in this
+  package works with.
+- `env.ts` — `Env`, the Worker's binding shape: just `GITHUB_PAT`, the classic
+  `public_repo`-scoped PAT (see "Setup" above and ADR 0004 for why classic over
+  fine-grained is this repo owner's deliberate choice).
+- `parse-bug-report-request.ts` — see "Public interface" above.
+- `format-issue-body.ts` — `formatIssueBody(report): string`, joining the reporter's
+  body, an optional collapsed `<details>` diagnostics block (one `**key**` + fenced
+  code block per diagnostic, only rendered when at least one diagnostic is present),
+  and the fixed no-linked-account disclaimer.
+- `github-issue-creation-error.ts` — `GitHubIssueCreationError`, carrying the HTTP
+  `status` GitHub responded with alongside the message — lets a caller distinguish a
+  transient 5xx from a permanent 4xx in principle, though `index.ts`'s `fetch` handler
+  currently collapses every case to a flat `502` regardless.
+- `create-github-issue.ts` — `createGitHubIssue(report, githubPat, fetchImpl?)`. Posts
+  to `https://api.github.com/repos/Vaporjawn/Last-FM-Scrobbler/issues` with
+  `Authorization: Bearer <pat>`, `Accept: application/vnd.github+json`, and a pinned
+  `X-GitHub-Api-Version` header (GitHub's REST API requires this to select a stable
+  API version rather than whatever's currently default). Title is prefixed
+  `[BUG]: ` to match this project's issue-title convention (see
+  `docs/CONTRIBUTING.md`'s commit/issue/branch table).
+- `index.ts` — the Worker's `fetch` handler (default export) and the rate limiter (see
+  "Rate limiting" below); ties `parseBugReportRequest` → `createGitHubIssue` together
+  with the HTTP status mapping listed above.
 
 ## Rate limiting
 
