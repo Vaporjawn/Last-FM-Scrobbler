@@ -43,6 +43,8 @@ integration required.
 - [Quick start](#quick-start)
 - [Packages](#packages)
 - [Community and support](#community-and-support)
+- [Contributors](#contributors)
+- [GitHub stats](#github-stats)
 - [License](#license)
 
 ## Features
@@ -147,7 +149,29 @@ contributor guide.
   requests (see the [issue templates](https://github.com/Vaporjawn/Last-FM-Scrobbler/issues/new/choose))
 - [Contributing guide](docs/CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Security policy](SECURITY.md) — please report vulnerabilities privately, not as a public issue
-- [Contributors](CONTRIBUTORS.md)
+
+## Contributors
+
+Thanks to everyone who's contributed — see [CONTRIBUTORS.md](CONTRIBUTORS.md) for the full
+list, and [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for how to add yourself to it.
+
+<div align="center">
+
+[![Contributors](https://contrib.rocks/image?repo=Vaporjawn/Last-FM-Scrobbler)](https://github.com/Vaporjawn/Last-FM-Scrobbler/graphs/contributors)
+
+</div>
+
+## GitHub stats
+
+[Metrics](https://github.com/lowlighter/metrics) below is scoped to the maintainer's
+whole GitHub account, not this repo specifically — its isometric commit calendar plugin
+only supports that scope, not a single repository:
+
+<div align="center">
+
+![Metrics](https://metrics.lecoq.io/Vaporjawn?isocalendar=1&languages=1&stargazers=1)
+
+</div>
 
 ## License
 
