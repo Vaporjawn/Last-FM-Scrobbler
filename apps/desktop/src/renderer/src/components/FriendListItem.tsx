@@ -20,10 +20,12 @@ import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
  * together. */
 const AVATAR_SIZE = 48;
 
-/** Fixed pixel width of the friend avatar+text column when a track column sits next
- * to it, so the track-art column starts at the exact same x position on every row
- * regardless of username/real-name/location length — see the `gridTemplateColumns`
- * comment below for why this is a CSS Grid column now, not a flex item's `width`. */
+/** Fixed pixel width of the friend avatar+text column, applied unconditionally on
+ * every row (whether or not that friend has a track to show), so the track-art column
+ * starts at the exact same x position on every row regardless of username/real-name/
+ * location length *or* whether the row next to it happens to have any activity — see
+ * the `gridTemplateColumns` comment below for why this is a CSS Grid column now, not a
+ * flex item's `width`, and why it's unconditional. */
 const FRIEND_COLUMN_WIDTH = 190;
 
 function formatTimestamp(timestamp: number): string {
@@ -115,13 +117,27 @@ export function FriendListItem({
           it (exactly the "uneven cards" bug this replaced). Grid doesn't have that
           failure mode: the template's column boundary holds even if a child overflows
           it, so `minWidth: 0` on the friend column below is a defensive habit, not
-          something the alignment itself depends on. */}
+          something the alignment itself depends on.
+
+          The two columns are a *constant* `${FRIEND_COLUMN_WIDTH}px 1fr` — not
+          conditional on whether this particular friend has a `track` to show, the way
+          an earlier version had it (full-width single column when there's no
+          activity). That reads fine for any one row in isolation, but across a whole
+          Friends list (`FriendsPage` renders one of these per friend, up to 50), some
+          friends inevitably have no recent scrobble at all — their row's friend
+          column would then be a completely different width than every neighboring
+          row's, which is exactly the kind of "cards don't line up" unevenness this is
+          trying to eliminate, just moved from *within* a row to *across* rows instead
+          of actually fixed. Reserving the same two columns unconditionally means the
+          friend column's left edge, width, and the track column's start position are
+          identical on every single row, whether or not that particular friend has
+          anything to show on the right. */}
       <Paper
         variant="outlined"
         sx={{
           width: "100%",
           display: "grid",
-          gridTemplateColumns: track ? `${FRIEND_COLUMN_WIDTH}px 1fr` : "1fr",
+          gridTemplateColumns: `${FRIEND_COLUMN_WIDTH}px 1fr`,
           alignItems: "center",
           gap: 1.75,
           p: 1.25,
