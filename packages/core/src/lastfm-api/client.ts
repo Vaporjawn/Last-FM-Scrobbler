@@ -1,4 +1,5 @@
-import { LastfmApiError, isRetryableScrobbleIgnoreCode } from "./lastfm-error.js";
+import { isRetryableScrobbleIgnoreCode } from "./is-retryable-scrobble-ignore-code.js";
+import { LastfmApiError } from "./lastfm-error.js";
 import { signRequest } from "./sign-request.js";
 import type {
   ArtistInfo,
@@ -68,6 +69,14 @@ function isErrorPayload(value: unknown): value is { error: number; message: stri
   );
 }
 
+/**
+ * Thin wrapper over the Last.fm/Audioscrobbler REST API (auth, scrobbling, and the
+ * read-only profile/artist/track lookups the renderer's pages need) — every write call
+ * is signed per `signRequest`, every response checked via `isErrorPayload` and thrown
+ * as a `LastfmApiError` on failure. Also the concrete client Libre.fm's identical-
+ * protocol service reuses (see `LastfmClientOptions.baseUrl`/`authUrl`), so nothing
+ * here should assume "Last.fm" beyond the default URLs.
+ */
 export class LastfmClient {
   private readonly apiKey: string;
   private readonly apiSecret: string;
@@ -183,6 +192,14 @@ export class LastfmClient {
   }
 
   async scrobble(submissions: readonly ScrobbleSubmission[]): Promise<ScrobbleBatchResult> {
+    // Mirrors `ListenBrainzClient.scrobble`'s equivalent guard. Without it, an empty
+    // batch still hit the network: Last.fm's `track.scrobble` response shape for zero
+    // items doesn't include a `scrobble` field at all, so `result.scrobbles.scrobble`
+    // is `undefined` and the `.map` below throws a raw `TypeError` instead of this
+    // client ever getting the chance to return a clean, empty result.
+    if (submissions.length === 0) {
+      return { accepted: 0, ignored: 0, results: [] };
+    }
     if (submissions.length > MAX_SCROBBLE_BATCH_SIZE) {
       throw new Error(
         `LastfmClient.scrobble: batch of ${submissions.length} exceeds Last.fm's limit of ${MAX_SCROBBLE_BATCH_SIZE}`,
@@ -612,9 +629,7 @@ export class LastfmClient {
       ...(imageUrl ? { imageUrl } : {}),
       listeners: Number(track.listeners),
       playCount: Number(track.playcount),
-      ...(track.userplaycount !== undefined
-        ? { userPlayCount: Number(track.userplaycount) }
-        : {}),
+      ...(track.userplaycount !== undefined ? { userPlayCount: Number(track.userplaycount) } : {}),
       loved: track.userloved === "1",
       url: track.url,
     };

@@ -1,17 +1,11 @@
 import { LastfmApiError } from "../lastfm-api/lastfm-error.js";
 import type { LastfmSession } from "../lastfm-api/types.js";
+import { AuthTimeoutError } from "./auth-timeout-error.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 3000;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 /** Last.fm error code for "This token has not been authorized [yet]". */
 const TOKEN_NOT_AUTHORIZED_CODE = 14;
-
-export class AuthTimeoutError extends Error {
-  constructor() {
-    super("Timed out waiting for the user to authorize this application on Last.fm");
-    this.name = "AuthTimeoutError";
-  }
-}
 
 /** The subset of `LastfmClient` the auth flow needs — kept narrow for easy testing. */
 export interface AuthFlowClient {

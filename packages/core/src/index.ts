@@ -20,11 +20,9 @@ export type {
 export { ScrobbleQueue } from "./queue/scrobble-queue.js";
 export { LastfmClient } from "./lastfm-api/client.js";
 export type { LastfmClientOptions } from "./lastfm-api/client.js";
-export {
-  LastfmApiError,
-  isRetryableApiErrorCode,
-  isRetryableScrobbleIgnoreCode,
-} from "./lastfm-api/lastfm-error.js";
+export { isRetryableApiErrorCode } from "./lastfm-api/is-retryable-api-error-code.js";
+export { isRetryableScrobbleIgnoreCode } from "./lastfm-api/is-retryable-scrobble-ignore-code.js";
+export { LastfmApiError } from "./lastfm-api/lastfm-error.js";
 export { signRequest } from "./lastfm-api/sign-request.js";
 export type {
   ArtistInfo,
@@ -56,8 +54,9 @@ export type { ScrobblingClient } from "./scrobbling-client.js";
 export { ListenBrainzClient } from "./listenbrainz-api/client.js";
 export type { ListenBrainzClientOptions } from "./listenbrainz-api/client.js";
 export { ListenBrainzApiError } from "./listenbrainz-api/listenbrainz-error.js";
-export { AuthFlow, AuthTimeoutError } from "./auth/auth-flow.js";
+export { AuthFlow } from "./auth/auth-flow.js";
 export type { AuthFlowClient, AuthFlowOptions } from "./auth/auth-flow.js";
+export { AuthTimeoutError } from "./auth/auth-timeout-error.js";
 export { compileFilter, FilterSyntaxError } from "./filters/filter-expression.js";
 export type { CompiledFilter, FilterableTrack } from "./filters/filter-expression.js";
 export { Tracker } from "./tracker/tracker.js";

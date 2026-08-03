@@ -1,8 +1,8 @@
 import { evaluate } from "./evaluate.js";
+import type { FilterableTrack } from "./filterable-track.js";
 import { parse } from "./parser.js";
-import type { FilterableTrack } from "./fields.js";
 
-export type { FilterableTrack } from "./fields.js";
+export type { FilterableTrack } from "./filterable-track.js";
 export { FilterSyntaxError } from "./filter-syntax-error.js";
 
 export interface CompiledFilter {

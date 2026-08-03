@@ -1,7 +1,10 @@
-import { NUMERIC_FIELD_ACCESSORS, STRING_FIELD_ACCESSORS } from "./fields.js";
-import type { FilterableTrack } from "./fields.js";
+import type { FilterableTrack } from "./filterable-track.js";
+import { NUMERIC_FIELD_ACCESSORS } from "./numeric-field-accessors.js";
 import type { AstNode, ComparisonNode } from "./parser.js";
+import { STRING_FIELD_ACCESSORS } from "./string-field-accessors.js";
 
+/** Recursively evaluates a parsed filter expression AST (see `parse`) against one
+ * track, applying `and`/`or`/`not` combinators over leaf field comparisons. */
 export function evaluate(node: AstNode, track: FilterableTrack): boolean {
   switch (node.type) {
     case "and":

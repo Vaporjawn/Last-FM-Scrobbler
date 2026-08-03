@@ -1,5 +1,5 @@
 import type { CompiledFilter } from "./filter-expression.js";
-import type { FilterableTrack } from "./fields.js";
+import type { FilterableTrack } from "./filterable-track.js";
 
 /**
  * Combines multiple `CompiledFilter`s (e.g. a user-written expression from Settings →

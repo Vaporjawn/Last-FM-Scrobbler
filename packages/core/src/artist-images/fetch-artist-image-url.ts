@@ -34,6 +34,13 @@ interface DeezerSearchResponse {
   readonly data?: readonly DeezerArtistJson[];
 }
 
+/** The largest available picture for `artist`, or `undefined` if it's missing or is
+ * Deezer's own "no photo" placeholder (see `DEEZER_NO_PHOTO_HASH`). */
+function pickRealPhotoUrl(artist: DeezerArtistJson): string | undefined {
+  const imageUrl = artist.picture_xl ?? artist.picture_big ?? artist.picture_medium;
+  return imageUrl && !imageUrl.includes(DEEZER_NO_PHOTO_HASH) ? imageUrl : undefined;
+}
+
 /**
  * Real per-artist photos — sourced from Deezer's public artist search, not Last.fm.
  * Last.fm's own `artist.getInfo`/`user.getTopArtists` only ever return a shared
@@ -49,13 +56,6 @@ interface DeezerSearchResponse {
  * found nothing" from "never tried" should look at whether they called this at all,
  * not at this function's return type.
  */
-/** The largest available picture for `artist`, or `undefined` if it's missing or is
- * Deezer's own "no photo" placeholder (see `DEEZER_NO_PHOTO_HASH`). */
-function pickRealPhotoUrl(artist: DeezerArtistJson): string | undefined {
-  const imageUrl = artist.picture_xl ?? artist.picture_big ?? artist.picture_medium;
-  return imageUrl && !imageUrl.includes(DEEZER_NO_PHOTO_HASH) ? imageUrl : undefined;
-}
-
 export async function fetchArtistImageUrl(
   artistName: string,
   fetchImpl: typeof fetch = fetch,

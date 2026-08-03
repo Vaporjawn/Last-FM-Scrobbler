@@ -121,6 +121,29 @@ describe("Tracker", () => {
     expect(onScrobbleEligible).toHaveBeenCalledTimes(1);
   });
 
+  it("does not drop already-accumulated time on a redundant 'playing' event", () => {
+    // Regression test: nothing in the PlaybackSource contract guarantees a source
+    // only emits onPlaybackStateChanged on a genuine transition — a redundant
+    // "playing" event fired while already playing used to reset the accumulation
+    // baseline without first accumulating, silently discarding elapsed played time.
+    const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+    let nowSec = 1_700_000_000;
+    const onScrobbleEligible = vi.fn();
+    const tracker = new Tracker({ source, events: { onScrobbleEligible }, now: () => nowSec });
+    tracker.start();
+
+    emitPlaybackStateChanged("playing");
+    emitTrackChanged(track({ durationSec: 300 }));
+
+    nowSec += 5;
+    tracker.tick(); // 5s played so far
+    emitPlaybackStateChanged("playing"); // redundant — no real pause happened
+    nowSec += 145; // 5 + 145 = 150s played total, exactly at the 50% threshold
+    tracker.tick();
+
+    expect(onScrobbleEligible).toHaveBeenCalledTimes(1);
+  });
+
   it("resets accumulation and re-arms eligibility when a genuinely new track starts", () => {
     const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
     let nowSec = 1_700_000_000;

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { AuthFlow, AuthTimeoutError } from "../../src/auth/auth-flow.js";
+import { AuthFlow } from "../../src/auth/auth-flow.js";
+import { AuthTimeoutError } from "../../src/auth/auth-timeout-error.js";
 import { LastfmApiError } from "../../src/lastfm-api/lastfm-error.js";
 import type { LastfmSession } from "../../src/lastfm-api/types.js";
 

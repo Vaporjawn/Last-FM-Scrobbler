@@ -194,6 +194,18 @@ describe("LastfmClient", () => {
       await expect(client.scrobble(tooMany)).rejects.toThrow(/50/);
       expect(fetchMock).not.toHaveBeenCalled();
     });
+
+    it("returns a clean empty result for an empty batch without making a request", async () => {
+      // Regression test: Last.fm's real response shape for a zero-item scrobble
+      // omits the `scrobble` field entirely (not present, not an empty array), so
+      // reading `result.scrobbles.scrobble` used to throw a raw TypeError instead of
+      // ever reaching a clean return — mirrors ListenBrainzClient.scrobble's existing
+      // empty-batch guard.
+      const result = await client.scrobble([]);
+
+      expect(result).toEqual({ accepted: 0, ignored: 0, results: [] });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
   });
 
   describe("track.love / track.unlove / track.addTags", () => {

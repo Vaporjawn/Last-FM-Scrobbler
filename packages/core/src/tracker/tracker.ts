@@ -112,7 +112,14 @@ export class Tracker {
   }
 
   private handlePlaybackStateChanged(state: PlaybackState): void {
-    if (this.playbackState === "playing" && state !== "playing") {
+    if (this.playbackState === "playing") {
+      // Covers both a real transition out of "playing" (pause/stop) *and* a
+      // redundant "playing" event fired while already playing. Nothing in the
+      // `PlaybackSource` contract guarantees an adapter only emits a state change on
+      // a genuine transition — accumulating unconditionally here (rather than only
+      // when `state !== "playing"`) means a redundant event can never silently
+      // discard the time played since the last accumulation point by resetting
+      // `lastAccumulatedAt` without ever having added it to `playedSec` first.
       this.accumulate();
     } else if (state === "playing") {
       this.lastAccumulatedAt = this.now();

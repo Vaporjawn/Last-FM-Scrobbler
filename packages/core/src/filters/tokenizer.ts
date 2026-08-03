@@ -15,6 +15,10 @@ const IDENT_START = /[A-Za-z_]/;
 const IDENT_CHAR = /[A-Za-z0-9_]/;
 const DIGIT = /[0-9]/;
 
+/** Lexes a raw filter expression string into a flat `Token[]` (identifiers, string/
+ * regex/number literals, operators, parens), terminated by an `eof` token — the input
+ * `parse` consumes to build the AST `evaluate` walks. Throws `FilterSyntaxError` on any
+ * character sequence it doesn't recognize. */
 export function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
@@ -66,10 +70,24 @@ export function tokenize(input: string): Token[] {
 
     if (DIGIT.test(ch)) {
       let j = i;
+      let dotCount = 0;
       while (j < input.length && /[0-9.]/.test(input[j] ?? "")) {
+        if (input[j] === ".") {
+          dotCount += 1;
+        }
         j += 1;
       }
-      tokens.push({ type: "number", value: input.slice(i, j) });
+      const value = input.slice(i, j);
+      // A second `.` means this isn't a valid decimal (e.g. "1.2.3") — without this
+      // check the token was accepted as-is and `Number(value)` silently produced `NaN`
+      // downstream in `parser.ts`'s `parseValue`, and `NaN !== x`/`NaN == x` are always
+      // `true`/`false` respectively regardless of the field's real value, so a typo'd
+      // numeric literal silently matched (or excluded) every track instead of raising a
+      // syntax error the user could notice and fix.
+      if (dotCount > 1) {
+        throw new FilterSyntaxError(`invalid number literal "${value}"`);
+      }
+      tokens.push({ type: "number", value });
       i = j;
       continue;
     }
@@ -106,6 +124,12 @@ export function tokenize(input: string): Token[] {
   return tokens;
 }
 
+/** Reads a delimiter-terminated literal body starting at `start` (just past the opening
+ * delimiter), supporting `\<delimiter>` and `\\` as escapes so the literal can contain
+ * its own delimiter (e.g. a regex matching a URL needs a literal `/`: `/^https:\/\//`)
+ * or a literal backslash. Any other backslash sequence (e.g. `\d`, `\s` inside a regex
+ * body) is left completely untouched — it's not this lexer's escape to interpret, it's
+ * regex syntax that `parser.ts` passes straight into `new RegExp(...)`. */
 function readDelimited(
   input: string,
   start: number,
@@ -115,6 +139,13 @@ function readDelimited(
   let text = "";
   let char = input[j];
   while (char !== undefined && char !== delimiter) {
+    const next = input[j + 1];
+    if (char === "\\" && (next === delimiter || next === "\\")) {
+      text += next;
+      j += 2;
+      char = input[j];
+      continue;
+    }
     text += char;
     j += 1;
     char = input[j];
