@@ -114,6 +114,7 @@ function installFakeAppInfoApi(version = "1.2.3"): void {
 function installFakeLibrefmApi(overrides: Partial<LibrefmApi> = {}): LibrefmApi {
   const api: LibrefmApi = {
     isConfigured: vi.fn().mockResolvedValue(false),
+    credentialsSource: vi.fn().mockResolvedValue("none"),
     setCredentials: vi.fn().mockResolvedValue(undefined),
     clearCredentials: vi.fn().mockResolvedValue(undefined),
     login: vi.fn().mockResolvedValue({ username: "alice" }),
