@@ -17,4 +17,8 @@ describe("resolveAspectRatioValue", () => {
   it("returns 1 (square) for '1:1'", () => {
     expect(resolveAspectRatioValue("1:1")).toBe(1);
   });
+
+  it("returns 9/16 for '9:16'", () => {
+    expect(resolveAspectRatioValue("9:16")).toBeCloseTo(9 / 16, 10);
+  });
 });

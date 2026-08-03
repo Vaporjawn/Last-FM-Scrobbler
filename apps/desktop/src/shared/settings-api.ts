@@ -11,10 +11,15 @@ export interface WindowBounds {
 /**
  * A user-selectable resize constraint for the main window — `"free"` (the default) is
  * unconstrained resizing, same as before this setting existed; the others lock the
- * window to that width:height ratio. See `main/window/resolve-aspect-ratio.ts` for how
- * this becomes the numeric ratio `BrowserWindow.setAspectRatio()` expects.
+ * window to that width:height ratio. `"9:16"` is the only portrait option (width <
+ * height) — the other three are all landscape or square — which is why the immediate
+ * resize this triggers derives a new *width* from the current height instead of a new
+ * height from the current width; see `main/window/compute-resized-width.ts` and
+ * `main/index.ts`'s `onAspectRatioChange` for that branch. See
+ * `main/window/resolve-aspect-ratio.ts` for how any of these becomes the numeric ratio
+ * `BrowserWindow.setAspectRatio()` expects.
  */
-export type AspectRatioOption = "free" | "16:9" | "4:3" | "1:1";
+export type AspectRatioOption = "free" | "16:9" | "4:3" | "1:1" | "9:16";
 
 /**
  * The app's color scheme — `"dark"` (the default, and this app's original and only

@@ -1114,6 +1114,7 @@ describe("SettingsPage", () => {
       expect(screen.getByRole("radio", { name: /16:9/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /4:3/i })).not.toBeChecked();
       expect(screen.getByRole("radio", { name: /1:1/i })).not.toBeChecked();
+      expect(screen.getByRole("radio", { name: /9:16/i })).not.toBeChecked();
     });
 
     it("selecting a different aspect ratio calls window.settings.set and updates the selection", async () => {
@@ -1138,6 +1139,24 @@ describe("SettingsPage", () => {
       });
       expect(await screen.findByRole("radio", { name: /16:9/i })).toBeChecked();
       expect(screen.getByRole("radio", { name: /free/i })).not.toBeChecked();
+    });
+
+    it("selecting the vertical (9:16) aspect ratio calls window.settings.set", async () => {
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeAuthApi();
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const verticalRadio = await screen.findByRole("radio", { name: /9:16/i });
+
+      act(() => {
+        fireEvent.click(verticalRadio);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ aspectRatio: "9:16" });
+      });
+      expect(await screen.findByRole("radio", { name: /9:16/i })).toBeChecked();
     });
 
     it("reflects a previously-saved aspect ratio on load", async () => {

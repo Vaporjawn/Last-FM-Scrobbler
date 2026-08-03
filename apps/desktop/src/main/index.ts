@@ -16,6 +16,7 @@ import { applyDockIconVisibility } from "./dock/apply-dock-icon-visibility.js";
 import {
   createMainWindow,
   MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
   type CreateMainWindowOptions,
 } from "./create-main-window.js";
 import { createPlatformPlaybackSource } from "./playback/create-platform-playback-source.js";
@@ -44,6 +45,7 @@ import { createUpdaterClient } from "./updates/create-updater-client.js";
 import { showRestartPrompt } from "./updates/show-restart-prompt.js";
 import { wireUpdates } from "./updates/wire-updates.js";
 import { bringAppToForeground } from "./window/bring-app-to-foreground.js";
+import { computePortraitWindowSize } from "./window/compute-portrait-window-size.js";
 import { computeResizedHeight } from "./window/compute-resized-height.js";
 import { persistWindowBounds } from "./window/persist-window-bounds.js";
 import { resolveAspectRatioValue } from "./window/resolve-aspect-ratio.js";
@@ -550,21 +552,37 @@ void app.whenReady().then(async () => {
       mainWindow.setAspectRatio(aspectRatioValue);
       // setAspectRatio() alone only *constrains future manual resizing* — it doesn't
       // itself resize the window (Electron's own docs: "This will not resize the
-      // window"), which without this next line would make picking a ratio visually
-      // do nothing until the user happened to drag an edge, reading as broken even
-      // though it already applied. Snaps to the new ratio right now instead, keeping
-      // the current width fixed and deriving height from it (see
-      // computeResizedHeight's docstring) — a no-op when `aspectRatioValue` is 0
-      // ("free"), which correctly leaves the current size alone.
+      // window"), which without the branches below would make picking a ratio
+      // visually do nothing until the user happened to drag an edge, reading as
+      // broken even though it already applied. Snaps to the new ratio right now
+      // instead — a no-op for both branches when `aspectRatioValue` is 0 ("free"),
+      // which correctly leaves the current size alone.
       const bounds = mainWindow.getBounds();
-      const resizedHeight = computeResizedHeight(
-        bounds.width,
-        bounds.height,
-        aspectRatioValue,
-        MIN_WINDOW_HEIGHT,
-      );
-      if (resizedHeight !== bounds.height) {
-        mainWindow.setSize(bounds.width, resizedHeight);
+      if (aspectRatioValue > 0 && aspectRatioValue < 1) {
+        // Portrait (currently only "9:16" — see AppSettings.aspectRatio's docstring):
+        // computePortraitWindowSize anchors differently than the landscape/square
+        // branch below, see its own docstring for why.
+        const { width, height } = computePortraitWindowSize(
+          bounds.width,
+          bounds.height,
+          aspectRatioValue,
+          MIN_WINDOW_WIDTH,
+        );
+        if (width !== bounds.width || height !== bounds.height) {
+          mainWindow.setSize(width, height);
+        }
+      } else {
+        // Landscape or square — keeps the current width fixed and derives height from
+        // it (see computeResizedHeight's docstring).
+        const resizedHeight = computeResizedHeight(
+          bounds.width,
+          bounds.height,
+          aspectRatioValue,
+          MIN_WINDOW_HEIGHT,
+        );
+        if (resizedHeight !== bounds.height) {
+          mainWindow.setSize(bounds.width, resizedHeight);
+        }
       }
     },
     // Keeps the OS login-item registration in sync the moment the setting changes,

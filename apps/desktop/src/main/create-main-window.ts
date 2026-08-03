@@ -19,6 +19,12 @@ const dirname = fileURLToPath(new URL(".", import.meta.url));
  * number and risking the two drifting apart. */
 export const MIN_WINDOW_HEIGHT = 480;
 
+/** This window's real minimum width (see the `minWidth` usage below for why 680
+ * specifically). Exported for the same reason as `MIN_WINDOW_HEIGHT` — `main/index.ts`'s
+ * aspect-ratio change handler needs it to clamp a portrait ratio's (e.g. `"9:16"`)
+ * derived width, the same way it already clamps a landscape ratio's derived height. */
+export const MIN_WINDOW_WIDTH = 680;
+
 export interface CreateMainWindowOptions {
   /** `undefined` on platforms without a working adapter yet — see
    * `playback/create-platform-playback-source.ts`. */
@@ -97,7 +103,7 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
     // official Last.fm client this project's UI is modeled on) handle it — the
     // existing sidebar-collapse control already covers reclaiming space below that
     // for users who want it.
-    minWidth: 680,
+    minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
     ...(iconPath ? { icon: iconPath } : {}),
     // Don't paint the window until the renderer has produced its first frame —

@@ -47,6 +47,7 @@ const ASPECT_RATIO_OPTIONS: readonly {
   { value: "16:9", label: "16:9 (widescreen)" },
   { value: "4:3", label: "4:3 (standard)" },
   { value: "1:1", label: "1:1 (square)" },
+  { value: "9:16", label: "9:16 (vertical)" },
 ];
 
 /**
