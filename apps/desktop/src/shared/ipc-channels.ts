@@ -76,6 +76,11 @@ export const IPC_CHANNELS = {
   settingsGet: "settings:get",
   /** Merges a partial `AppSettings` patch and returns the full updated settings. */
   settingsSet: "settings:set",
+  /** Replaces all persisted settings with `DEFAULT_APP_SETTINGS` and returns them —
+   * Settings → "Reset to defaults" uses this rather than `settingsSet` so optional
+   * fields (like `windowBounds`) actually clear instead of surviving a merge patch.
+   * See `SettingsStore.reset()`'s docstring. */
+  settingsReset: "settings:reset",
 
   /** Pushed whenever the auto-updater's state changes (checking/available/
    * downloading/downloaded/error) — see `shared/update-status.ts`. */

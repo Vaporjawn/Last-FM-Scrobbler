@@ -44,6 +44,17 @@ export interface CreateMainWindowOptions {
    * resizing, Electron's own default. See `main/window/resolve-aspect-ratio.ts` for
    * how a Settings selection becomes this number. */
   readonly initialAspectRatio?: number;
+  /** When `true`, the window is created without ever showing itself automatically —
+   * used for `AppSettings.startMinimized`'s "a login-triggered launch shouldn't pop a
+   * window in the user's face" behavior (see `main/index.ts`). The window still loads
+   * and runs completely normally in the background (IPC, playback tracking, and
+   * scrobbling all keep working exactly as when visible — the same "hidden but fully
+   * alive" state `main/tray/wire-close-to-tray.ts` already puts the window in when the
+   * user closes-to-tray); it's shown later via the tray icon/menu bar, same as
+   * returning from that. Omit (or `false`), this app's original and default behavior,
+   * to show the window as soon as its first frame is ready, same as before this option
+   * existed. */
+  readonly startHidden?: boolean;
 }
 
 /**
@@ -52,8 +63,15 @@ export interface CreateMainWindowOptions {
  * option controls.
  */
 export function createMainWindow(options: CreateMainWindowOptions): Electron.BrowserWindow {
-  const { playbackSource, onScrobbleEligible, onTrackChanged, iconPath, initialBounds, initialAspectRatio } =
-    options;
+  const {
+    playbackSource,
+    onScrobbleEligible,
+    onTrackChanged,
+    iconPath,
+    initialBounds,
+    initialAspectRatio,
+    startHidden,
+  } = options;
 
   const mainWindow = new BrowserWindow({
     // `initialBounds` (a prior session's real size/position) takes precedence over
@@ -114,7 +132,9 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
   }
 
   mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
+    if (!startHidden) {
+      mainWindow.show();
+    }
   });
 
   // Any `<a target="_blank">`/`window.open()` in the renderer (the "Get your Last.fm

@@ -12,6 +12,7 @@ const NO_PROVIDER_SETTINGS: UseSettingsResult = {
   loading: false,
   error: undefined,
   updateSettings: () => Promise.resolve(fail(NOT_AVAILABLE)),
+  resetSettings: () => Promise.resolve(fail(NOT_AVAILABLE)),
 };
 
 /**

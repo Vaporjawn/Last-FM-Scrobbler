@@ -161,6 +161,9 @@ const settingsApi: SettingsApi = {
   set(patch) {
     return ipcRenderer.invoke(IPC_CHANNELS.settingsSet, patch) as Promise<AppSettings>;
   },
+  reset() {
+    return ipcRenderer.invoke(IPC_CHANNELS.settingsReset) as Promise<AppSettings>;
+  },
 };
 
 const updatesApi: UpdatesApi = {

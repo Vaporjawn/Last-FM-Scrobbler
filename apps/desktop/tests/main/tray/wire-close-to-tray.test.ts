@@ -24,6 +24,10 @@ function fakeSettingsStore(closeToTray: boolean) {
       hasShownTrayHint: false,
       aspectRatio: "free" as const,
       themeMode: "dark" as const,
+      notifyOnScrobble: true,
+      notifyOnScrobbleFailure: true,
+      launchAtLogin: false,
+      startMinimized: false,
     }),
   };
 }

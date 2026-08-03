@@ -73,6 +73,54 @@ export interface AppSettings {
    * `renderer/src/theme/index.ts`'s `createAppTheme`.
    */
   readonly themeMode: ThemeMode;
+  /**
+   * When `true` (the default — an opt-out, not an opt-in, so nobody already relying on
+   * this notification silently loses it), a native "Scrobbled: …" notification fires
+   * every time a batch of scrobbles is accepted by Last.fm — see
+   * `main/scrobbling/wire-scrobbling.ts`'s `onScrobbled` and `main/index.ts`'s use of
+   * it. Read fresh from the settings store on every notification (not captured once at
+   * startup), so toggling this takes effect immediately, no restart needed.
+   */
+  readonly notifyOnScrobble: boolean;
+  /**
+   * When `true` (the default, same opt-out reasoning as `notifyOnScrobble`), a native
+   * notification fires once submission has failed `FAILURE_NOTIFICATION_THRESHOLD`
+   * consecutive drain cycles in a row — see `main/scrobbling/wire-scrobbling.ts`'s
+   * `onScrobbleFailed`. Also read fresh on every notification, same as
+   * `notifyOnScrobble`.
+   */
+  readonly notifyOnScrobbleFailure: boolean;
+  /**
+   * When `true` (default `false` — an opt-in, since this app never touched OS login
+   * items before this setting existed, so nobody sees new behavior unless they turn it
+   * on), the app registers itself as a login item via
+   * `app.setLoginItemSettings({ openAtLogin: true })` once at startup, and live-updates
+   * the registration whenever this setting changes — see `main/index.ts` and
+   * `main/settings/wire-settings.ts`'s `onLaunchAtLoginChange`. **Electron has no Linux
+   * support for `setLoginItemSettings` at all** (verified against
+   * https://www.electronjs.org/docs/latest/api/app: the API is documented as
+   * macOS/Windows/MAS only) — calling it on Linux is simply a no-op, so Settings →
+   * General hides this row on Linux rather than presenting a control that can't do
+   * anything.
+   */
+  readonly launchAtLogin: boolean;
+  /**
+   * When `true` (default `false`, same opt-in reasoning as `launchAtLogin`, and only
+   * meaningful once `launchAtLogin` is also on), a login-triggered launch leaves the
+   * main window hidden instead of showing it immediately — see
+   * `main/window/create-main-window.ts`'s `startHidden` option and `main/index.ts`.
+   * **Deliberately does not rely on `setLoginItemSettings`'s `openAsHidden` option**:
+   * verified against Electron's own current docs that `openAsHidden` is (a)
+   * macOS-only, (b) explicitly marked Deprecated, and (c) "does not work on macOS 13
+   * and up" — so it can't be trusted on any modern Mac, and was never supported on
+   * Windows/Linux to begin with. This setting is implemented instead as plain
+   * `BrowserWindow` show/hide logic this app already fully controls, which behaves
+   * identically on all three platforms. Live-verified from this (macOS) sandbox only —
+   * the Windows/Linux paths use the same documented, platform-uniform
+   * `BrowserWindow`/`ready-to-show` APIs but are unverified here; see this project's
+   * CLAUDE.md on that sandbox limitation.
+   */
+  readonly startMinimized: boolean;
 }
 
 /** `closeToTray`/`autoUpdateEnabled` on by default: this app is meant to run in the
@@ -84,19 +132,34 @@ export interface AppSettings {
  * `aspectRatio` starts `"free"` — preserves this app's original unconstrained-resize
  * behavior for anyone who never visits the new setting. `themeMode` starts `"dark"` —
  * this app's original and only look before this setting existed, so anyone who never
- * visits Settings sees no visual change. */
+ * visits Settings sees no visual change. `notifyOnScrobble`/`notifyOnScrobbleFailure`
+ * start `true` — this app always fired both notifications unconditionally before these
+ * settings existed, so anyone who never visits the new toggles sees no behavior
+ * change. `launchAtLogin`/`startMinimized` start `false` — this app never registered
+ * itself as a login item before these settings existed, so anyone who never visits the
+ * new toggles sees no behavior change. */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   closeToTray: true,
   autoUpdateEnabled: true,
   hasShownTrayHint: false,
   aspectRatio: "free",
   themeMode: "dark",
+  notifyOnScrobble: true,
+  notifyOnScrobbleFailure: true,
+  launchAtLogin: false,
+  startMinimized: false,
 };
 
-/** Renderer-facing settings API — see `preload/index.ts` for the real implementation
- * and `renderer/src/hooks/use-settings.ts` for the consuming hook. */
+/** Renderer-facing settings API — see `preload/index.ts` for the real implementation,
+ * `renderer/src/hooks/use-settings-state.ts` for the state-holding hook, and
+ * `renderer/src/contexts/settings-context.ts` for the shared hook most components
+ * should actually call. */
 export interface SettingsApi {
   get(): Promise<AppSettings>;
   /** Merges `patch` into the persisted settings and returns the full updated settings. */
   set(patch: Partial<AppSettings>): Promise<AppSettings>;
+  /** Replaces all persisted settings with their defaults and returns them — see
+   * `SettingsStore.reset()`'s docstring for why this is a distinct operation from
+   * `set()` rather than `set(DEFAULT_APP_SETTINGS)`. */
+  reset(): Promise<AppSettings>;
 }

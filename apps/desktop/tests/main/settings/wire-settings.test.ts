@@ -30,6 +30,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   hasShownTrayHint: false,
   aspectRatio: "free",
   themeMode: "dark",
+  notifyOnScrobble: true,
+  notifyOnScrobbleFailure: true,
+  launchAtLogin: false,
+  startMinimized: false,
 };
 
 function fakeStore(initial = DEFAULT_SETTINGS) {
@@ -38,6 +42,10 @@ function fakeStore(initial = DEFAULT_SETTINGS) {
     get: vi.fn(() => settings),
     set: vi.fn((patch: Partial<typeof initial>) => {
       settings = { ...settings, ...patch };
+      return settings;
+    }),
+    reset: vi.fn(() => {
+      settings = { ...DEFAULT_SETTINGS };
       return settings;
     }),
   };
@@ -90,13 +98,95 @@ describe("wireSettings", () => {
     expect(result).toMatchObject({ aspectRatio: "4:3" });
   });
 
+  it("calls onLaunchAtLoginChange with the new value when a set() patch changes launchAtLogin", async () => {
+    const store = fakeStore(DEFAULT_SETTINGS);
+    const onLaunchAtLoginChange = vi.fn();
+    wireSettings({ store, onLaunchAtLoginChange });
+
+    await invoke(IPC_CHANNELS.settingsSet, { launchAtLogin: true });
+
+    expect(onLaunchAtLoginChange).toHaveBeenCalledWith(true);
+  });
+
+  it("does not call onLaunchAtLoginChange when a set() patch changes only startMinimized", async () => {
+    // startMinimized has no live effect — it only matters at the next login-triggered
+    // launch (main/create-main-window.ts's startHidden option), so there's nothing to
+    // apply immediately the way launchAtLogin's OS login-item registration needs.
+    const store = fakeStore({ ...DEFAULT_SETTINGS, launchAtLogin: true });
+    const onLaunchAtLoginChange = vi.fn();
+    wireSettings({ store, onLaunchAtLoginChange });
+
+    await invoke(IPC_CHANNELS.settingsSet, { startMinimized: true });
+
+    expect(onLaunchAtLoginChange).not.toHaveBeenCalled();
+  });
+
+  it("does not call onLaunchAtLoginChange when a set() patch touches neither launchAtLogin nor startMinimized", async () => {
+    const store = fakeStore(DEFAULT_SETTINGS);
+    const onLaunchAtLoginChange = vi.fn();
+    wireSettings({ store, onLaunchAtLoginChange });
+
+    await invoke(IPC_CHANNELS.settingsSet, { closeToTray: false });
+
+    expect(onLaunchAtLoginChange).not.toHaveBeenCalled();
+  });
+
+  it("doesn't throw when onLaunchAtLoginChange is omitted and a patch changes launchAtLogin", async () => {
+    const store = fakeStore(DEFAULT_SETTINGS);
+    wireSettings({ store });
+
+    const result = await invoke(IPC_CHANNELS.settingsSet, { launchAtLogin: true });
+
+    expect(result).toMatchObject({ launchAtLogin: true });
+  });
+
+  it("reset calls the store's reset() and returns the defaults", async () => {
+    const store = fakeStore({ ...DEFAULT_SETTINGS, closeToTray: false });
+    wireSettings({ store });
+
+    const result = await invoke(IPC_CHANNELS.settingsReset);
+
+    expect(store.reset).toHaveBeenCalledOnce();
+    expect(result).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it("reset persists — a subsequent get reflects the defaults, not the pre-reset settings", async () => {
+    const store = fakeStore({ ...DEFAULT_SETTINGS, closeToTray: false, themeMode: "light" });
+    wireSettings({ store });
+
+    await invoke(IPC_CHANNELS.settingsReset);
+
+    await expect(invoke(IPC_CHANNELS.settingsGet)).resolves.toEqual(DEFAULT_SETTINGS);
+  });
+
+  it("reset fires onAspectRatioChange and onLaunchAtLoginChange with the reset values", async () => {
+    const store = fakeStore({ ...DEFAULT_SETTINGS, aspectRatio: "16:9", launchAtLogin: true });
+    const onAspectRatioChange = vi.fn();
+    const onLaunchAtLoginChange = vi.fn();
+    wireSettings({ store, onAspectRatioChange, onLaunchAtLoginChange });
+
+    await invoke(IPC_CHANNELS.settingsReset);
+
+    expect(onAspectRatioChange).toHaveBeenCalledWith("free");
+    expect(onLaunchAtLoginChange).toHaveBeenCalledWith(false);
+  });
+
+  it("doesn't throw when reset is invoked with both live-update callbacks omitted", async () => {
+    const store = fakeStore();
+    wireSettings({ store });
+
+    await expect(invoke(IPC_CHANNELS.settingsReset)).resolves.toEqual(DEFAULT_SETTINGS);
+  });
+
   it("removes all handlers when the returned cleanup function is called", () => {
     const stop = wireSettings({ store: fakeStore() });
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsGet)).toBe(true);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.settingsReset)).toBe(true);
 
     stop();
 
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsGet)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsSet)).toBe(false);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.settingsReset)).toBe(false);
   });
 });

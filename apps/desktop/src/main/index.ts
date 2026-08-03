@@ -17,6 +17,7 @@ import { wireTrackActions } from "./lastfm/wire-track-actions.js";
 import { wireArtistImage } from "./artist-images/wire-artist-image.js";
 import { createAccountStore } from "./auth/create-account-store.js";
 import { wireAuth } from "./auth/wire-auth.js";
+import { applyLoginItemSettings } from "./login-items/apply-login-item-settings.js";
 import { wireScrobbling } from "./scrobbling/wire-scrobbling.js";
 import { wireBugReport } from "./bug-report/wire-bug-report.js";
 import { createSettingsStore } from "./settings/settings-store.js";
@@ -35,6 +36,7 @@ import { bringAppToForeground } from "./window/bring-app-to-foreground.js";
 import { computeResizedHeight } from "./window/compute-resized-height.js";
 import { persistWindowBounds } from "./window/persist-window-bounds.js";
 import { resolveAspectRatioValue } from "./window/resolve-aspect-ratio.js";
+import { resolveStartHidden } from "./window/resolve-start-hidden.js";
 
 // Electron's main-process module is CJS with a non-standard export shape that Node's
 // static ESM/CJS interop can't always detect named exports from (some properties are
@@ -135,6 +137,13 @@ void app.whenReady().then(async () => {
   const notificationIconOption = appIconPath ? { icon: appIconPath } : {};
 
   const settingsStore = createSettingsStore({ filePath: join(userDataDir, "settings.json") });
+
+  // Registers (or unregisters) this app as an OS login item to match the persisted
+  // setting — see AppSettings.launchAtLogin's docstring for the macOS/Windows-only,
+  // Linux-is-a-no-op platform reality this call encodes. Applied once here at startup;
+  // wireSettings's onLaunchAtLoginChange below keeps it live-updated after that without
+  // needing a restart.
+  applyLoginItemSettings(app, settingsStore.get().launchAtLogin);
 
   const accountStore = createAccountStore({
     filePath: join(userDataDir, "secrets.json"),
@@ -326,7 +335,14 @@ void app.whenReady().then(async () => {
   // bounds persistence) — used both for the very first window below and for a
   // replacement one in the `activate` handler further down (macOS re-opens the app via
   // the dock after every window has been closed with closeToTray disabled).
-  function createAndWireMainWindow(): Electron.BrowserWindow {
+  // `startHidden` is only ever passed for the very first window below (resolved from
+  // `AppSettings.startMinimized` *and* whether this process launch was actually
+  // triggered by the OS login item — see `resolveStartHidden`'s docstring for why a
+  // manual launch must never start hidden even with the setting on). The `activate`
+  // handler further down calls this with no argument, correctly defaulting to
+  // `false` — a dock-icon click while the app has no windows is always a manual,
+  // explicit request to see it, never something that should stay hidden.
+  function createAndWireMainWindow(windowOptions?: { startHidden?: boolean }): Electron.BrowserWindow {
     const { windowBounds, aspectRatio } = settingsStore.get();
     const window = createMainWindow({
       playbackSource,
@@ -335,6 +351,7 @@ void app.whenReady().then(async () => {
       ...(appIconPath ? { iconPath: appIconPath } : {}),
       ...(windowBounds ? { initialBounds: windowBounds } : {}),
       initialAspectRatio: resolveAspectRatioValue(aspectRatio),
+      ...(windowOptions?.startHidden ? { startHidden: true } : {}),
     });
     wireCloseToTray({
       window,
@@ -362,7 +379,12 @@ void app.whenReady().then(async () => {
     return window;
   }
 
-  let mainWindow = createAndWireMainWindow();
+  let mainWindow = createAndWireMainWindow({
+    startHidden: resolveStartHidden(
+      settingsStore.get().startMinimized,
+      app.getLoginItemSettings().wasOpenedAtLogin,
+    ),
+  });
 
   wireAppInfo({
     getVersion: () => app.getVersion(),
@@ -402,6 +424,12 @@ void app.whenReady().then(async () => {
       if (resizedHeight !== bounds.height) {
         mainWindow.setSize(bounds.width, resizedHeight);
       }
+    },
+    // Keeps the OS login-item registration in sync the moment the setting changes,
+    // rather than only applying it on the next launch — same live-update reasoning as
+    // onAspectRatioChange above.
+    onLaunchAtLoginChange: (launchAtLogin) => {
+      applyLoginItemSettings(app, launchAtLogin);
     },
   });
 

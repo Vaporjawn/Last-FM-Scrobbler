@@ -68,6 +68,48 @@ describe("createSettingsStore", () => {
     expect(JSON.parse(readFileSync(nestedPath, "utf8"))).toMatchObject({ closeToTray: false });
   });
 
+  it("reset() restores the full defaults and returns them", () => {
+    const store = createSettingsStore({ filePath });
+    store.set({ closeToTray: false, themeMode: "light" });
+
+    const result = store.reset();
+
+    expect(result).toEqual(DEFAULT_APP_SETTINGS);
+    expect(store.get()).toEqual(DEFAULT_APP_SETTINGS);
+  });
+
+  it("reset() actually clears optional fields set() would leave behind, unlike set(DEFAULT_APP_SETTINGS)", () => {
+    // The whole reason reset() exists as its own method rather than
+    // `store.set(DEFAULT_APP_SETTINGS)`: set()'s merge semantics
+    // (`{ ...current, ...patch }`) only ever overwrite keys the patch actually
+    // contains. DEFAULT_APP_SETTINGS has no windowBounds/filterExpression key at all
+    // (they're optional, correctly omitted), so spreading it as a patch would leave a
+    // previously-saved value for either sitting untouched — reset() must instead
+    // write the defaults directly, replacing the file's entire contents.
+    writeFileSync(
+      filePath,
+      JSON.stringify({ windowBounds: { width: 900, height: 600, x: 0, y: 0 } }),
+      "utf8",
+    );
+    const store = createSettingsStore({ filePath });
+    expect(store.get()).toMatchObject({ windowBounds: { width: 900, height: 600, x: 0, y: 0 } });
+
+    const result = store.reset();
+
+    expect(result.windowBounds).toBeUndefined();
+    expect(JSON.parse(readFileSync(filePath, "utf8"))).toEqual(DEFAULT_APP_SETTINGS);
+  });
+
+  it("reset() persists across separate createSettingsStore calls against the same file", () => {
+    const first = createSettingsStore({ filePath });
+    first.set({ closeToTray: false });
+    first.reset();
+
+    const second = createSettingsStore({ filePath });
+
+    expect(second.get()).toEqual(DEFAULT_APP_SETTINGS);
+  });
+
   // Mode bits aren't meaningful on Windows the way they are on POSIX systems — skip
   // there, matching the same platform-specific skip used for this exact assertion in
   // tests/main/secret-storage/electron-secret-storage.test.ts.

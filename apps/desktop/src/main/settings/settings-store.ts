@@ -12,6 +12,16 @@ export interface SettingsStore {
   /** Merges `patch` into the persisted settings, writes it to disk, and returns the
    * full updated settings. */
   set(patch: Partial<AppSettings>): AppSettings;
+  /** Replaces the persisted settings with `DEFAULT_APP_SETTINGS` entirely and returns
+   * them. Deliberately **not** implemented as `set(DEFAULT_APP_SETTINGS)`: `set()`'s
+   * merge semantics (`{ ...current, ...patch }`) only overwrite keys the patch
+   * actually contains, and `DEFAULT_APP_SETTINGS` has no key at all for optional
+   * fields like `windowBounds`/`filterExpression` (they're correctly omitted, not set
+   * to `undefined`) — spreading it as a patch would silently leave a previously-saved
+   * value for either sitting untouched instead of actually resetting it. This writes
+   * the defaults directly as the file's entire new contents instead, so optional
+   * fields genuinely go back to "unset". */
+  reset(): AppSettings;
 }
 
 /**
@@ -56,6 +66,11 @@ export function createSettingsStore(options: SettingsStoreOptions): SettingsStor
       const updated = { ...readSettings(), ...patch };
       writeSettings(updated);
       return updated;
+    },
+    reset() {
+      const defaults = { ...DEFAULT_APP_SETTINGS };
+      writeSettings(defaults);
+      return defaults;
     },
   };
 }

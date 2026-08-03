@@ -14,6 +14,11 @@ export interface UseSettingsResult {
    * change back and reports the failure (via `error` and the returned `ActionResult`)
    * rather than leaving the UI showing a value that was never actually saved. */
   readonly updateSettings: (patch: Partial<AppSettings>) => Promise<ActionResult>;
+  /** Replaces every persisted setting with its default — same optimistic-then-
+   * reconcile-or-rollback treatment as `updateSettings`, see `SettingsStore.reset()`'s
+   * docstring for why this is a distinct operation rather than
+   * `updateSettings(DEFAULT_APP_SETTINGS)`. */
+  readonly resetSettings: () => Promise<ActionResult>;
 }
 
 const NOT_AVAILABLE = "Not available right now.";
@@ -82,5 +87,29 @@ export function useSettingsState(): UseSettingsResult {
     }
   }, []);
 
-  return { settings, loading, error, updateSettings };
+  const resetSettings = useCallback(async (): Promise<ActionResult> => {
+    let previous: AppSettings | undefined;
+    setSettings((current) => {
+      previous = current;
+      return DEFAULT_APP_SETTINGS;
+    });
+    if (!window.settings) {
+      return fail(NOT_AVAILABLE);
+    }
+    try {
+      const reset = await window.settings.reset();
+      setSettings(reset);
+      setError(undefined);
+      return ok();
+    } catch (resetError) {
+      if (previous) {
+        setSettings(previous);
+      }
+      const result = fail(resetError);
+      setError(result.error);
+      return result;
+    }
+  }, []);
+
+  return { settings, loading, error, updateSettings, resetSettings };
 }

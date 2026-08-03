@@ -71,6 +71,10 @@ function installFakeSettingsApi(overrides: Partial<SettingsApi> = {}): SettingsA
       current = { ...current, ...patch };
       return Promise.resolve(current);
     }),
+    reset: vi.fn(() => {
+      current = { ...DEFAULT_APP_SETTINGS };
+      return Promise.resolve(current);
+    }),
     ...overrides,
   };
   Object.defineProperty(window, "settings", { value: api, configurable: true });
