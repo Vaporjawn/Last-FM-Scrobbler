@@ -40,4 +40,14 @@ describe("TopArtistTile", () => {
 
     expect(await screen.findByText("R")).toBeInTheDocument();
   });
+
+  it("renders the real photo as an <img>, not the initial fallback, once found", async () => {
+    const imageUrl = "https://e-cdn-images.dzcdn.net/images/artist/radiohead.jpg";
+    installFakeArtistImageApi(vi.fn().mockResolvedValue(imageUrl));
+
+    render(<TopArtistTile artist={ARTIST} />);
+
+    expect(await screen.findByRole("img", { name: "Radiohead" })).toHaveAttribute("src", imageUrl);
+    expect(screen.queryByText("R")).not.toBeInTheDocument();
+  });
 });

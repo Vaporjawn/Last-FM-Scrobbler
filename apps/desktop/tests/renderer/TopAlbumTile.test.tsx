@@ -29,14 +29,10 @@ describe("TopAlbumTile", () => {
     expect(screen.getByText("1 play")).toBeInTheDocument();
   });
 
-  it("doesn't show the fallback album icon when real art is present", () => {
+  it("renders the real artwork as an <img>, not the fallback icon, when art is present", () => {
     render(<TopAlbumTile album={ALBUM} />);
 
-    // `sx`-driven background-image styling isn't inspectable via jsdom's computed
-    // `style` (MUI/emotion generates a class, not an inline style) — the fallback
-    // icon's absence is the reliable, DOM-visible signal that the real-art branch
-    // rendered instead of the fallback one, same convention `TopArtistTile`'s own
-    // tests use for its equivalent branch.
+    expect(screen.getByRole("img", { name: "In Rainbows" })).toHaveAttribute("src", ALBUM.imageUrl);
     expect(screen.queryByTestId("AlbumIcon")).not.toBeInTheDocument();
   });
 
