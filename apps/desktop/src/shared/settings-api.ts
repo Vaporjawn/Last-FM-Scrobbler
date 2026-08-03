@@ -140,6 +140,33 @@ export interface AppSettings {
    * entirely would leave the old value untouched instead.
    */
   readonly filterExpression?: string | undefined;
+  /**
+   * When `true` (the default), the app's Dock icon is visible on macOS — turning this
+   * off calls `app.dock.hide()` (see `main/dock/apply-dock-icon-visibility.ts`), the
+   * same "run from the tray/menu bar only" pattern the reference Last.fm desktop
+   * client itself offers. A no-op on Windows/Linux, which have no Dock concept at all
+   * (`app.dock` is `undefined` there) — Settings → General hides this row outside
+   * macOS rather than presenting a control that can't do anything. Live-updates the
+   * already-running app immediately, no restart needed — unlike `showTrayIcon` below,
+   * showing/hiding the Dock icon has no lifecycle to manage (no window/menu tied to
+   * it), so there's nothing a live update could get wrong.
+   */
+  readonly showDockIcon: boolean;
+  /**
+   * When `true` (the default), the tray/menu-bar icon (see `main/tray/create-tray.ts`)
+   * is created at startup — turning this off skips creating it. **Applied once at
+   * startup only, not live-updated**: unlike `showDockIcon` above, the tray icon owns
+   * real lifecycle (its context menu, the mini-player popover it toggles, being the
+   * thing `AppSettings.closeToTray` relies on to reopen a hidden window) that a live
+   * destroy/recreate would need to coordinate correctly with everything else already
+   * holding a reference to it; Settings → General says so explicitly ("restart to take
+   * effect") rather than silently doing nothing until the next launch. Turning this off
+   * while `closeToTray` is also on means closing the window leaves the app reachable
+   * only via the Dock icon (macOS) or by relaunching it — a combination this app
+   * allows (it's the user's own explicit choice across two settings) rather than
+   * blocking.
+   */
+  readonly showTrayIcon: boolean;
 }
 
 /** `closeToTray`/`autoUpdateEnabled` on by default: this app is meant to run in the
@@ -156,7 +183,9 @@ export interface AppSettings {
  * settings existed, so anyone who never visits the new toggles sees no behavior
  * change. `launchAtLogin`/`startMinimized` start `false` — this app never registered
  * itself as a login item before these settings existed, so anyone who never visits the
- * new toggles sees no behavior change. */
+ * new toggles sees no behavior change. `showDockIcon`/`showTrayIcon` start `true` —
+ * this app always showed both before these settings existed, so anyone who never
+ * visits the new toggles sees no visual change. */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   closeToTray: true,
   autoUpdateEnabled: true,
@@ -167,6 +196,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notifyOnScrobbleFailure: true,
   launchAtLogin: false,
   startMinimized: false,
+  showDockIcon: true,
+  showTrayIcon: true,
 };
 
 /** Renderer-facing settings API — see `preload/index.ts` for the real implementation,

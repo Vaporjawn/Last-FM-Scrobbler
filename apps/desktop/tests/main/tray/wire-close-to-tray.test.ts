@@ -28,6 +28,8 @@ function fakeSettingsStore(closeToTray: boolean) {
       notifyOnScrobbleFailure: true,
       launchAtLogin: false,
       startMinimized: false,
+      showDockIcon: true,
+      showTrayIcon: true,
     }),
   };
 }

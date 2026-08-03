@@ -338,6 +338,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     "appearance",
     "theme",
     trayLabel,
+    `show application icon in the ${isMac ? "menu bar" : "tray"}`,
+    "menu bar icon",
+    "tray icon",
+    "show dock icon",
+    "dock icon",
     "automatically check for updates",
     "check for updates",
     updateStatusText,
@@ -484,6 +489,37 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   />
                 }
               />
+              <SettingsRow
+                label={`Show application icon in the ${isMac ? "menu bar" : "tray"}`}
+                description="Restart the app for this to take effect"
+                control={
+                  <Switch
+                    checked={settings.showTrayIcon}
+                    onChange={(event) => {
+                      handleUpdateSetting({ showTrayIcon: event.target.checked });
+                    }}
+                    slotProps={{
+                      input: { "aria-label": `Show application icon in the ${isMac ? "menu bar" : "tray"}` },
+                    }}
+                  />
+                }
+              />
+              {/* macOS-only — there's no Dock (or equivalent) on Windows/Linux, see
+                  AppSettings.showDockIcon's docstring. */}
+              {isMac ? (
+                <SettingsRow
+                  label="Show dock icon"
+                  control={
+                    <Switch
+                      checked={settings.showDockIcon}
+                      onChange={(event) => {
+                        handleUpdateSetting({ showDockIcon: event.target.checked });
+                      }}
+                      slotProps={{ input: { "aria-label": "Show dock icon" } }}
+                    />
+                  }
+                />
+              ) : null}
               {/* Electron's `setLoginItemSettings` has no Linux support at all
                   (verified against Electron's own current docs — see
                   `AppSettings.launchAtLogin`'s docstring) — hiding this row there

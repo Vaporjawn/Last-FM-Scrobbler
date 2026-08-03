@@ -597,6 +597,108 @@ describe("SettingsPage", () => {
     });
   });
 
+  describe("tray and dock icons", () => {
+    it("shows the tray/menu-bar icon toggle on by default", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      const trayIconSwitch = await screen.findByRole("switch", {
+        name: /show application icon in the (menu bar|tray)/i,
+      });
+      expect(trayIconSwitch).toBeChecked();
+    });
+
+    it("switching the tray/menu-bar icon off calls window.settings.set with showTrayIcon false", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const trayIconSwitch = await screen.findByRole("switch", {
+        name: /show application icon in the (menu bar|tray)/i,
+      });
+
+      act(() => {
+        fireEvent.click(trayIconSwitch);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ showTrayIcon: false });
+      });
+    });
+
+    it("uses 'tray' phrasing (not 'menu bar') outside macOS", async () => {
+      Object.defineProperty(window, "platform", { value: "win32", configurable: true });
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByText(/show application icon in the tray/i)).toBeInTheDocument();
+    });
+
+    it("shows 'Show dock icon' on macOS, on by default", async () => {
+      Object.defineProperty(window, "platform", { value: "darwin", configurable: true });
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      const dockIconSwitch = await screen.findByRole("switch", { name: /show dock icon/i });
+      expect(dockIconSwitch).toBeChecked();
+    });
+
+    it("hides 'Show dock icon' entirely outside macOS", async () => {
+      Object.defineProperty(window, "platform", { value: "win32", configurable: true });
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      await screen.findByRole("switch", { name: /dark mode/i });
+      expect(screen.queryByRole("switch", { name: /show dock icon/i })).not.toBeInTheDocument();
+    });
+
+    it("switching the dock icon off on macOS calls window.settings.set with showDockIcon false", async () => {
+      Object.defineProperty(window, "platform", { value: "darwin", configurable: true });
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const dockIconSwitch = await screen.findByRole("switch", { name: /show dock icon/i });
+
+      act(() => {
+        fireEvent.click(dockIconSwitch);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ showDockIcon: false });
+      });
+    });
+
+    it("reflects a previously-saved showDockIcon/showTrayIcon setting", async () => {
+      Object.defineProperty(window, "platform", { value: "darwin", configurable: true });
+      installFakeAuthApi();
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({
+          ...DEFAULT_APP_SETTINGS,
+          showDockIcon: false,
+          showTrayIcon: false,
+        }),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByRole("switch", { name: /show dock icon/i })).not.toBeChecked();
+      expect(
+        await screen.findByRole("switch", { name: /show application icon in the menu bar/i }),
+      ).not.toBeChecked();
+    });
+  });
+
   describe("reset to defaults", () => {
     it("does not call window.settings.reset until the confirmation dialog is confirmed", async () => {
       installFakeAuthApi();

@@ -24,11 +24,18 @@ export interface WireSettingsOptions {
    * `create-main-window.ts`'s `startHidden` option). Optional, same reasoning as
    * `onAspectRatioChange`. */
   readonly onLaunchAtLoginChange?: (launchAtLogin: boolean) => void;
+  /** Called immediately whenever a `set()` patch changes `showDockIcon` — lets the
+   * caller live-update the Dock icon (`main/dock/apply-dock-icon-visibility.ts`)
+   * without waiting for a restart, same reasoning as `onAspectRatioChange`. Note
+   * there's no `onShowTrayIconChange` counterpart: see `AppSettings.showTrayIcon`'s
+   * docstring for why that one is deliberately applied once at startup only. Optional,
+   * same reasoning as `onAspectRatioChange`. */
+  readonly onShowDockIconChange?: (showDockIcon: boolean) => void;
 }
 
 /** Wires the settings IPC surface (see `shared/settings-api.ts`) to a real `SettingsStore`. */
 export function wireSettings(options: WireSettingsOptions): () => void {
-  const { store, onAspectRatioChange, onLaunchAtLoginChange } = options;
+  const { store, onAspectRatioChange, onLaunchAtLoginChange, onShowDockIconChange } = options;
 
   ipcMain.handle(IPC_CHANNELS.settingsGet, (): AppSettings => store.get());
 
@@ -41,17 +48,21 @@ export function wireSettings(options: WireSettingsOptions): () => void {
     if (typedPatch.launchAtLogin !== undefined) {
       onLaunchAtLoginChange?.(updated.launchAtLogin);
     }
+    if (typedPatch.showDockIcon !== undefined) {
+      onShowDockIconChange?.(updated.showDockIcon);
+    }
     return updated;
   });
 
   ipcMain.handle(IPC_CHANNELS.settingsReset, (): AppSettings => {
     const defaults = store.reset();
-    // Unconditional, unlike settingsSet's guards above: reset() always changes both
-    // fields back to their defaults (or leaves them unchanged if already default,
-    // which re-applying is a harmless no-op for both), so there's no "did this
-    // actually change" check needed the way a partial patch requires one.
+    // Unconditional, unlike settingsSet's guards above: reset() always changes every
+    // field back to its default (or leaves it unchanged if already default, which
+    // re-applying is a harmless no-op), so there's no "did this actually change"
+    // check needed the way a partial patch requires one.
     onAspectRatioChange?.(defaults.aspectRatio);
     onLaunchAtLoginChange?.(defaults.launchAtLogin);
+    onShowDockIconChange?.(defaults.showDockIcon);
     return defaults;
   });
 

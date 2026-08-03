@@ -11,6 +11,7 @@ import {
   type CompiledFilter,
 } from "@lastfm-scrobbler/core";
 import { wireAppInfo } from "./app-info/wire-app-info.js";
+import { applyDockIconVisibility } from "./dock/apply-dock-icon-visibility.js";
 import {
   createMainWindow,
   MIN_WINDOW_HEIGHT,
@@ -173,6 +174,9 @@ void app.whenReady().then(async () => {
   // wireSettings's onLaunchAtLoginChange below keeps it live-updated after that without
   // needing a restart.
   applyLoginItemSettings(app, settingsStore.get().launchAtLogin);
+  // Same "applied once at startup, then kept live" split as launchAtLogin above — see
+  // AppSettings.showDockIcon's docstring.
+  applyDockIconVisibility(app, settingsStore.get().showDockIcon);
 
   const accountStore = createAccountStore({
     filePath: join(userDataDir, "secrets.json"),
@@ -482,6 +486,12 @@ void app.whenReady().then(async () => {
     onLaunchAtLoginChange: (launchAtLogin) => {
       applyLoginItemSettings(app, launchAtLogin);
     },
+    // Same live-update reasoning as onAspectRatioChange/onLaunchAtLoginChange above —
+    // see AppSettings.showDockIcon's docstring for why this one (unlike
+    // showTrayIcon) is safe to apply immediately with no restart needed.
+    onShowDockIconChange: (showDockIcon) => {
+      applyDockIconVisibility(app, showDockIcon);
+    },
   });
 
   // Wired once for the app's whole lifetime (not re-wired in "activate" below, unlike
@@ -511,25 +521,32 @@ void app.whenReady().then(async () => {
     },
   });
 
-  // Created hidden, up front — see create-tray-popover-window.ts. Not tied to
-  // mainWindow's own lifecycle (recreated in the "activate" handler below); the
-  // popover is cheap to leave alive for the whole app session and doesn't need to be
-  // recreated just because the main window was.
-  const trayPopover = createTrayPopoverWindow();
+  // Both skipped entirely when Settings → General's "Show application icon in the
+  // tray/menu bar" is off — see AppSettings.showTrayIcon's docstring for why this is
+  // applied once here at startup only, not live-toggled the way showDockIcon is.
+  // `trayPopover` has no purpose other than being the tray's own popover, so there's
+  // nothing to create at all once the tray icon itself isn't going to exist.
+  if (settingsStore.get().showTrayIcon) {
+    // Created hidden, up front — see create-tray-popover-window.ts. Not tied to
+    // mainWindow's own lifecycle (recreated in the "activate" handler below); the
+    // popover is cheap to leave alive for the whole app session and doesn't need to be
+    // recreated just because the main window was.
+    const trayPopover = createTrayPopoverWindow();
 
-  tray = createTray({
-    iconPath: resolveTrayIconPath(resourcePathOptions),
-    popover: trayPopover,
-    resolvePopoverScreenBounds,
-    onShow: () => {
-      mainWindow.show();
-      mainWindow.focus();
-    },
-    onQuit: () => {
-      isQuitting = true;
-      app.quit();
-    },
-  });
+    tray = createTray({
+      iconPath: resolveTrayIconPath(resourcePathOptions),
+      popover: trayPopover,
+      resolvePopoverScreenBounds,
+      onShow: () => {
+        mainWindow.show();
+        mainWindow.focus();
+      },
+      onQuit: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    });
+  }
 
   app.on("before-quit", () => {
     isQuitting = true;

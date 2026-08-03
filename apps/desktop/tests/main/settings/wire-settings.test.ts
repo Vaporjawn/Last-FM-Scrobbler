@@ -34,6 +34,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifyOnScrobbleFailure: true,
   launchAtLogin: false,
   startMinimized: false,
+  showDockIcon: true,
+  showTrayIcon: true,
 };
 
 function fakeStore(initial = DEFAULT_SETTINGS) {
@@ -140,6 +142,35 @@ describe("wireSettings", () => {
     expect(result).toMatchObject({ launchAtLogin: true });
   });
 
+  it("calls onShowDockIconChange with the new value when a set() patch changes showDockIcon", async () => {
+    const store = fakeStore(DEFAULT_SETTINGS);
+    const onShowDockIconChange = vi.fn();
+    wireSettings({ store, onShowDockIconChange });
+
+    await invoke(IPC_CHANNELS.settingsSet, { showDockIcon: false });
+
+    expect(onShowDockIconChange).toHaveBeenCalledWith(false);
+  });
+
+  it("does not call onShowDockIconChange when a set() patch doesn't touch showDockIcon", async () => {
+    const store = fakeStore(DEFAULT_SETTINGS);
+    const onShowDockIconChange = vi.fn();
+    wireSettings({ store, onShowDockIconChange });
+
+    await invoke(IPC_CHANNELS.settingsSet, { closeToTray: false });
+
+    expect(onShowDockIconChange).not.toHaveBeenCalled();
+  });
+
+  it("doesn't throw when onShowDockIconChange is omitted and a patch changes showDockIcon", async () => {
+    const store = fakeStore(DEFAULT_SETTINGS);
+    wireSettings({ store });
+
+    const result = await invoke(IPC_CHANNELS.settingsSet, { showDockIcon: false });
+
+    expect(result).toMatchObject({ showDockIcon: false });
+  });
+
   it("reset calls the store's reset() and returns the defaults", async () => {
     const store = fakeStore({ ...DEFAULT_SETTINGS, closeToTray: false });
     wireSettings({ store });
@@ -159,16 +190,23 @@ describe("wireSettings", () => {
     await expect(invoke(IPC_CHANNELS.settingsGet)).resolves.toEqual(DEFAULT_SETTINGS);
   });
 
-  it("reset fires onAspectRatioChange and onLaunchAtLoginChange with the reset values", async () => {
-    const store = fakeStore({ ...DEFAULT_SETTINGS, aspectRatio: "16:9", launchAtLogin: true });
+  it("reset fires onAspectRatioChange, onLaunchAtLoginChange, and onShowDockIconChange with the reset values", async () => {
+    const store = fakeStore({
+      ...DEFAULT_SETTINGS,
+      aspectRatio: "16:9",
+      launchAtLogin: true,
+      showDockIcon: false,
+    });
     const onAspectRatioChange = vi.fn();
     const onLaunchAtLoginChange = vi.fn();
-    wireSettings({ store, onAspectRatioChange, onLaunchAtLoginChange });
+    const onShowDockIconChange = vi.fn();
+    wireSettings({ store, onAspectRatioChange, onLaunchAtLoginChange, onShowDockIconChange });
 
     await invoke(IPC_CHANNELS.settingsReset);
 
     expect(onAspectRatioChange).toHaveBeenCalledWith("free");
     expect(onLaunchAtLoginChange).toHaveBeenCalledWith(false);
+    expect(onShowDockIconChange).toHaveBeenCalledWith(true);
   });
 
   it("doesn't throw when reset is invoked with both live-update callbacks omitted", async () => {
