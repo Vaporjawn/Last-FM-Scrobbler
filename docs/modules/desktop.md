@@ -605,6 +605,127 @@ console check before being considered actually verified — passing tests and a 
 first-glance console log are not sufficient proof that CSP allows it, because nothing
 in this stack enforces CSP anywhere except a real Chromium renderer.
 
+## IPC and renderer security model
+
+Defense-in-depth around the main ↔ renderer boundary, layered on top of Electron's own
+process-isolation primitives:
+
+- **`webPreferences`** (`create-main-window.ts`): `contextIsolation: true`,
+  `nodeIntegration: false` — the two settings that actually keep the renderer's web
+  content isolated from Node.js. `sandbox: false` is a deliberate, documented exception
+  to Electron's default (see "A real gotcha found via live verification: sandboxed
+  preload can't load an ESM preload script" above) that affects only what the
+  first-party preload script itself can access, not the renderer's isolation from Node.
+- **Preload surface** (`preload/index.ts`): every API the renderer can call goes
+  through `contextBridge.exposeInMainWorld` — nothing leaks a raw Node/Electron object
+  into the renderer's `window`, and every event-subscription API returns a working
+  unsubscribe function rather than leaking a listener that outlives its caller.
+- **`assertTrustedSender`** (`main/validate-ipc-sender.ts`) — a guard every
+  `ipcMain.handle` in the three highest-privilege handler modules
+  (`auth/wire-auth.ts`, `auth/wire-secondary-auth.ts`, `lastfm/wire-track-actions.ts`)
+  calls first, before doing anything else: throws unless the IPC call's `senderFrame`
+  genuinely matches this app's own renderer. Not currently protecting against anything
+  exploitable today — `contextIsolation` is on, `nodeIntegration` is off, and
+  `create-main-window.ts`'s `setWindowOpenHandler` denies every attempt to open a new
+  window/navigate elsewhere (see "external links" above), so untrusted content should
+  never end up sharing this window's IPC surface in normal operation. Electron's own
+  security checklist still lists sender validation as standard practice specifically
+  for the regressions this guards against instead (a dependency accidentally loading
+  remote content, a future feature adding an iframe). Deliberately **not** applied to
+  read-only public Last.fm data (`wire-lastfm-data.ts`), settings, filter validation,
+  or bug reporting — none of those handlers can mutate a signed-in user's account or
+  exfiltrate a credential, and the bug-report relay is explicitly designed to be
+  publicly reachable anyway (its own abuse protection lives in the relay itself — see
+  `docs/modules/bug-report-relay.md`'s length limits and rate limiting).
+
+  The one subtlety worth knowing if you touch this: every `file:` URL serializes to
+  the literal origin string `"null"` per RFC 6454 (verified directly:
+  `new URL("file:///a").origin === new URL("file:///b").origin === "null"`), so a naive
+  `senderUrl.origin === expectedOrigin` compare would accept a call from *any* local
+  file in a packaged build, not just this app's own `renderer/index.html` — silently
+  defeating the whole point of the check. `resolve-expected-renderer-origin.ts`
+  resolves a real `file:` URL (not the string `"null"`) as the expected origin
+  specifically so `assertTrustedSender` can fall back to a full pathname compare for
+  that case instead.
+- **`openExternalIfSafe`** (`main/index.ts`) — `wireAuth`'s and `wireSecondaryAuth`'s
+  `openUrl` callbacks (used to open the Last.fm/Libre.fm "authorize this app" page) are
+  gated through `isSafeExternalUrl` before reaching `shell.openExternal`, matching
+  every other `shell.openExternal` call site in this app (`create-main-window.ts`'s
+  `setWindowOpenHandler` already gated the rest — see "external links" above). The
+  auth-flow URL itself was traced and confirmed non-exploitable regardless (always a
+  fixed, hardcoded Last.fm/Libre.fm host plus this build's own baked-in `api_key` plus
+  an opaque token value the API just returned — never attacker- or renderer-influenced
+  data), so this is regression-proofing against a *future* change to either call site,
+  the same "defense-in-depth, not a response to a live vulnerability" framing
+  `assertTrustedSender` itself uses.
+- **Secrets on disk**: `ElectronSecretStorage` (Electron's `safeStorage`, OS
+  keychain-backed — see "Login UX" above) treats a corrupt or unreadable secrets file
+  (an interrupted write during a crash, disk corruption, manual tampering) as "nothing
+  stored" rather than throwing out of every `get()`/`set()`/`delete()`/`list()` call
+  from then on — the same fallback shape `main/settings/settings-store.ts` already used
+  for a corrupt `settings.json`.
+- **No `eval`/`new Function`/`child_process.exec`** anywhere in the main process. No
+  `dangerouslySetInnerHTML`/`innerHTML` anywhere in the renderer. No credential value
+  (`sessionKey`/`apiSecret`/`apiKey`/a ListenBrainz token) is ever passed to a
+  `logger.*` call — verified by grep across every call site, not assumed.
+
+## Responsive layout and window sizing
+
+The window has a hard floor of `MIN_WINDOW_WIDTH = 680` / a matching minimum height
+(`create-main-window.ts`), reconciled against whatever aspect ratio is currently
+selected (`AppSettings.aspectRatio`: `"free" | "16:9" | "4:3" | "1:1" | "9:16" |
+"9:14"` — the last two are portrait, width < height, see
+`shared/settings-api.ts`'s `isPortraitAspectRatio`). Below that floor, individual UI
+elements have to actively cooperate to avoid overflowing rather than shrinking, which
+surfaced as widespread breakage the first time every view was checked systematically
+at narrow widths:
+
+- **Root cause**: `App.tsx`'s top-level `<Box component="main">` was missing
+  `minWidth: 0`. CSS flexbox gives every flex item an implicit `min-width: auto`
+  default, meaning a flex item never shrinks below its own content's intrinsic
+  width — `overflow: "auto"` on its own does nothing about this, since overflow only
+  controls what happens to content that doesn't fit, not whether the item itself is
+  allowed to become narrower than that content in the first place. Because this was
+  the single flex item wrapping the *entire* active page, any one unshrinkable element
+  anywhere in the currently-rendered page's tree could force the whole app wider than
+  the actual window — explaining why the symptom looked scattered across unrelated
+  pages before the actual root cause was found. Fixed by adding `minWidth: 0` there;
+  the same fix was independently needed on `PageHeader.tsx`'s title `Box` (next to its
+  `action` slot) and `ProfilePage.tsx`'s username `Box` (next to the fixed-size
+  account avatar).
+- **The equivalent CSS Grid gotcha**: `FriendsPage.tsx`'s activity grid used
+  `gridTemplateColumns: "${FRIEND_COLUMN_WIDTH}px 1fr"` — a bare `1fr` track is
+  shorthand for `minmax(auto, 1fr)`, which has the identical "won't shrink below
+  content" problem flexbox's default does. Fixed by spelling it out as
+  `minmax(0, 1fr)`.
+- **`flexWrap: "wrap"` over a second guessed breakpoint**: `SettingsRow.tsx`'s label +
+  control row and the Libre.fm login row in `SettingsPage.tsx` both wrap onto a second
+  line at narrow widths (`flexWrap: "wrap"`, `rowGap`) rather than switching layout at
+  a hardcoded breakpoint — deliberately, to avoid the same "the breakpoint doesn't
+  match the real available width" bug class a fixed `sm`/`md` cutoff can reintroduce
+  later (an actual, previously-hit instance of that exact bug class in this codebase).
+- **Last-resort clipping**: `FriendListItem.tsx`'s artist + timestamp-chip row has
+  `overflow: "hidden"` as a genuine last resort for the true worst case (a long artist
+  name plus a full-length timestamp chip at exactly the 680px floor) — everything above
+  is a real shrink-to-fit fix; this one just guarantees a graceful clip rather than a
+  layout break on the one combination none of the above alone can fully save.
+
+**Sidebar auto-collapse in portrait mode** (`NavigationSidebar.tsx`): the sidebar
+starts collapsed whenever the current aspect ratio is portrait (`"9:16"`/`"9:14"`) —
+there's little enough horizontal room in that orientation that an expanded sidebar
+competes directly with the content it's next to. Implemented with a
+`hasSyncedInitialLoadRef` to distinguish two situations that need different behavior:
+`useSettingsState` always renders with a synchronous, hardcoded-default `AppSettings`
+first and only replaces it with the real persisted settings once an async
+`window.settings.get()` resolves, so the *first* time real settings become available,
+`collapsed` is synced to match the real aspect ratio in **either** direction (portrait
+→ collapse, landscape/square → expand, correcting whatever the hardcoded default
+guessed). After that initial sync, entering portrait later (a live Settings change)
+still auto-collapses, but leaving portrait later never force-expands — a user who
+manually re-opened the sidebar while in portrait keeps it open when they switch back to
+landscape, respecting their explicit choice rather than overriding it every time the
+aspect ratio changes.
+
 ## Now Playing: artist panel, love/tag
 
 Now Playing shows a "Scrobbling from {app}" header (a small friendly-name lookup over
