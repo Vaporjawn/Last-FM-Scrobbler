@@ -21,4 +21,22 @@ describe("PageHeader", () => {
     // Only the title's own text node should be present — nothing else rendered.
     expect(container.textContent).toBe("Scrobbles");
   });
+
+  it("renders the subtitle on the same line as the title when inlineSubtitle is set", () => {
+    render(<PageHeader title="Friends" subtitle="50 friends" inlineSubtitle />);
+
+    const heading = screen.getByRole("heading", { name: "Friends" });
+    const subtitle = screen.getByText("50 friends");
+    // Siblings under the same row container, not title-then-subtitle stacked in
+    // separate blocks — the concrete signal for that here is that they share a
+    // parent element rather than the subtitle being nested under/after a
+    // title-only wrapper.
+    expect(heading.parentElement).toBe(subtitle.parentElement);
+  });
+
+  it("ignores inlineSubtitle when there's no subtitle to show", () => {
+    const { container } = render(<PageHeader title="Friends" inlineSubtitle />);
+
+    expect(container.textContent).toBe("Friends");
+  });
 });

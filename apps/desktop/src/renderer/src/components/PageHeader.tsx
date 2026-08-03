@@ -1,14 +1,23 @@
 import type { JSX, ReactNode } from "react";
 import Box from "@mui/material/Box";
+import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
 export interface PageHeaderProps {
   readonly title: string;
-  /** Optional context line under the title — e.g. "Showing recent activity for
-   * {username}" or a count once one is known. Omitted entirely (not rendered as an
-   * empty line) when there's nothing meaningful to say yet, rather than reserving
-   * space for it up front. */
+  /** Optional context line — e.g. "Showing recent activity for {username}" or a
+   * count once one is known. Omitted entirely (not rendered as an empty line) when
+   * there's nothing meaningful to say yet, rather than reserving space for it up
+   * front. Stacked under the title by default; pass `inlineSubtitle` for a short,
+   * label-like value (a count, a status word) that reads better sitting right next
+   * to the title than on its own line — see that prop's docstring. */
   readonly subtitle?: ReactNode;
+  /** Renders `subtitle` on the same line as `title` instead of on its own line
+   * below it — for a short value (e.g. FriendsPage's "50 friends") where a whole
+   * extra line is more vertical space than the content needs. Leave unset (the
+   * default, stacked layout) for a full sentence — inline reads badly once the
+   * subtitle is long enough to wrap or crowd the title. */
+  readonly inlineSubtitle?: boolean;
 }
 
 /**
@@ -20,7 +29,20 @@ export interface PageHeaderProps {
  * that stays on each page's own outer `Box`, since this is a title-block component,
  * not a page-layout one.
  */
-export function PageHeader({ title, subtitle }: PageHeaderProps): JSX.Element {
+export function PageHeader({ title, subtitle, inlineSubtitle }: PageHeaderProps): JSX.Element {
+  if (subtitle && inlineSubtitle) {
+    return (
+      <Box sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
+          <Typography variant="h5">{title}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {subtitle}
+          </Typography>
+        </Stack>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ mb: 3 }}>
       <Typography variant="h5" gutterBottom={Boolean(subtitle)}>

@@ -98,41 +98,44 @@ export function FriendListItem({
   const secondaryLine = formatRealNameAndLocation(friend);
 
   return (
-    <ListItem divider sx={{ py: 1 }}>
+    // `display: contents` makes this `<li>`'s own box (and the padding/divider it
+    // used to carry directly) disappear from layout entirely — its child (the
+    // `Paper` below) becomes a *direct* grid item of `FriendsPage`'s outer `List`
+    // grid, which is what lets that `Paper` use `gridTemplateColumns: "subgrid"` at
+    // all (subgrid can only inherit tracks from the grid it's a direct child of; an
+    // intervening non-grid `ListItem` box would block that). Row spacing moves to
+    // the outer grid's `rowGap` instead of this element's own `py`/`divider` — see
+    // `FriendsPage.tsx`.
+    <ListItem sx={{ display: "contents" }}>
       {/* One shared card for both halves, each the same avatar-plus-two-line-text
-          shape — see this component's own docstring for why. A real two-column CSS
-          Grid, not a flex row with a fixed-`width` child: grid column tracks are
-          authoritative regardless of a child's content, so the track-art column is
-          guaranteed to start at the same x position on every row. A flex row with
-          `width: 190` on the friend half almost gets there, but a flex item's
-          rendered size can still be pushed wider than its declared `width` by content
-          deep in its subtree unless *every* level between it and that content is
-          `minWidth: 0`-guarded — miss one, and that row's avatar/track-art column
-          visibly drifts left/right depending on whoever's username happened to be on
-          it (exactly the "uneven cards" bug this replaced). Grid doesn't have that
-          failure mode: the template's column boundary holds even if a child overflows
-          it, so `minWidth: 0` on the friend column below is a defensive habit, not
-          something the alignment itself depends on.
+          shape — see this component's own docstring for why. A real CSS Grid
+          *subgrid*, not each row independently declaring its own `190px 1fr`: every
+          row's two columns are the *same* two column tracks, computed once by
+          `FriendsPage`'s outer grid, not N separately-computed grids that merely
+          intend to agree on `FRIEND_COLUMN_WIDTH`. That distinction is exactly what
+          closes the gap independent per-row grids left open — matching declared
+          widths is still an agreement between N independent layout computations, and
+          in practice that agreement visibly drifted row to row; a shared track can't
+          drift from itself. `minWidth: 0` on the friend column below is still a
+          defensive habit worth keeping (content overflowing its cell is a separate
+          failure mode subgrid doesn't prevent on its own), just no longer what the
+          cross-row alignment itself depends on.
 
-          The two columns are a *constant* `${FRIEND_COLUMN_WIDTH}px 1fr` — not
-          conditional on whether this particular friend has a `track` to show, the way
-          an earlier version had it (full-width single column when there's no
-          activity). That reads fine for any one row in isolation, but across a whole
-          Friends list (`FriendsPage` renders one of these per friend, up to 50), some
-          friends inevitably have no recent scrobble at all — their row's friend
-          column would then be a completely different width than every neighboring
-          row's, which is exactly the kind of "cards don't line up" unevenness this is
-          trying to eliminate, just moved from *within* a row to *across* rows instead
-          of actually fixed. Reserving the same two columns unconditionally means the
-          friend column's left edge, width, and the track column's start position are
-          identical on every single row, whether or not that particular friend has
+          The two columns are reserved unconditionally — not conditional on whether
+          this particular friend has a `track` to show, the way an earlier version had
+          it (full-width single column when there's no activity). That reads fine for
+          any one row in isolation, but across a whole Friends list (`FriendsPage`
+          renders one of these per friend, up to 50), some friends inevitably have no
+          recent scrobble at all; reserving the same two columns unconditionally means
+          the friend column's left edge, width, and the track column's start position
+          are identical on every single row, whether or not that particular friend has
           anything to show on the right. */}
       <Paper
         variant="outlined"
         sx={{
-          width: "100%",
+          gridColumn: "1 / -1",
           display: "grid",
-          gridTemplateColumns: `${FRIEND_COLUMN_WIDTH}px 1fr`,
+          gridTemplateColumns: "subgrid",
           alignItems: "center",
           gap: 1.75,
           p: 1.25,

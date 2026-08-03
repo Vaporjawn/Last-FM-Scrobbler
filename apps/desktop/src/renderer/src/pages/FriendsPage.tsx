@@ -12,7 +12,7 @@ import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
 import type { Friend } from "@lastfm-scrobbler/core";
 import { AsyncState } from "../components/AsyncState.js";
-import { FriendListItem } from "../components/FriendListItem.js";
+import { FriendListItem, FRIEND_COLUMN_WIDTH } from "../components/FriendListItem.js";
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { useAuth } from "../hooks/use-auth.js";
@@ -69,6 +69,7 @@ export function FriendsPage({
             ? `${friends.length} friend${friends.length === 1 ? "" : "s"}`
             : undefined
         }
+        inlineSubtitle
       />
 
       {!activeAccount ? (
@@ -126,7 +127,24 @@ export function FriendsPage({
             />
           ) : (
             <Paper variant="outlined" sx={{ maxWidth: 480 }}>
-              <List disablePadding>
+              {/* The grid container every FriendListItem row's own Paper subgrids
+                  into — see that component's docstring for why this (one shared set
+                  of column tracks) is what actually guarantees every row's columns
+                  line up, rather than each row's Paper independently computing its
+                  own `190px 1fr` and merely intending to agree with its neighbors.
+                  `rowGap`/`py` replace the vertical spacing each `ListItem` used to
+                  contribute itself via `py: 1` before it became `display: contents`
+                  (a transparent pass-through to its own Paper child, required for
+                  that Paper to be a *direct* grid item here, which subgrid needs). */}
+              <List
+                disablePadding
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: `${FRIEND_COLUMN_WIDTH}px 1fr`,
+                  rowGap: 2,
+                  py: 1,
+                }}
+              >
                 {visibleFriends.map((friend) => (
                   <FriendListItem
                     key={friend.username}
