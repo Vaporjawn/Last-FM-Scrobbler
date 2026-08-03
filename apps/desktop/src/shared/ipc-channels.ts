@@ -87,6 +87,8 @@ export const IPC_CHANNELS = {
   lastfmGetFriends: "lastfm:get-friends",
   /** `user.getInfo` for a given username — real name + avatar photo. */
   lastfmGetUserInfo: "lastfm:get-user-info",
+  /** `user.getLovedTracks` for a given username — just its total count. */
+  lastfmGetLovedTracksCount: "lastfm:get-loved-tracks-count",
   /** `artist.getInfo` — bio summary + global listener/play stats for an artist. */
   lastfmGetArtistInfo: "lastfm:get-artist-info",
   /** `artist.getSimilar` for an artist. */

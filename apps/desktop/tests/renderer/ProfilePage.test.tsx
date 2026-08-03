@@ -10,6 +10,7 @@ function installFakeApis(options: {
   topTracks?: LastfmDataApi["getTopTracks"];
   topAlbums?: LastfmDataApi["getTopAlbums"];
   userInfo?: LastfmDataApi["getUserInfo"];
+  lovedTracksCount?: LastfmDataApi["getLovedTracksCount"];
 }): void {
   const auth: AuthApi = {
     isConfigured: vi.fn().mockResolvedValue(true),
@@ -32,6 +33,7 @@ function installFakeApis(options: {
     getUserInfo:
       options.userInfo ??
       vi.fn().mockResolvedValue(options.activeAccount ? { username: options.activeAccount } : undefined),
+    getLovedTracksCount: options.lovedTracksCount ?? vi.fn().mockResolvedValue(0),
     getArtistInfo: vi.fn(),
     getSimilarArtists: vi.fn(),
     getTopTags: vi.fn(),
@@ -166,7 +168,7 @@ describe("ProfilePage", () => {
   });
 
   describe("account stats", () => {
-    it("shows total scrobbles and a member-since date when Last.fm has both on file", async () => {
+    it("shows total scrobbles, loved tracks, and a member-since date when Last.fm has all three on file", async () => {
       installFakeApis({
         activeAccount: "alice",
         userInfo: vi.fn().mockResolvedValue({
@@ -175,24 +177,29 @@ describe("ProfilePage", () => {
           // 1037793040 unix seconds = November 20, 2002
           registeredAt: 1_037_793_040,
         }),
+        lovedTracksCount: vi.fn().mockResolvedValue(1_381),
       });
 
       render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
       expect(await screen.findByText("151,481")).toBeInTheDocument();
       expect(screen.getByText("Scrobbles")).toBeInTheDocument();
+      expect(screen.getByText("1,381")).toBeInTheDocument();
+      expect(screen.getByText("Loved tracks")).toBeInTheDocument();
       expect(screen.getByText("Member since November 2002")).toBeInTheDocument();
     });
 
-    it("shows only whichever of the two stats Last.fm actually has on file", async () => {
+    it("shows only whichever stats Last.fm actually has on file", async () => {
       installFakeApis({
         activeAccount: "alice",
         userInfo: vi.fn().mockResolvedValue({ username: "alice", totalScrobbles: 42 }),
+        lovedTracksCount: vi.fn().mockResolvedValue(undefined),
       });
 
       render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
       expect(await screen.findByText("42")).toBeInTheDocument();
+      expect(screen.queryByText("Loved tracks")).not.toBeInTheDocument();
       expect(screen.queryByText(/member since/i)).not.toBeInTheDocument();
     });
 
@@ -200,13 +207,67 @@ describe("ProfilePage", () => {
       installFakeApis({
         activeAccount: "alice",
         userInfo: vi.fn().mockResolvedValue({ username: "alice" }),
+        lovedTracksCount: vi.fn().mockResolvedValue(undefined),
       });
 
       render(<ProfilePage onNavigateToSettings={vi.fn()} />);
 
       await screen.findByText("alice");
       expect(screen.queryByText("Scrobbles")).not.toBeInTheDocument();
+      expect(screen.queryByText("Loved tracks")).not.toBeInTheDocument();
       expect(screen.queryByText(/member since/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("real name, location, and subscriber badge", () => {
+    it("shows real name and location on the account card when Last.fm has both on file", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({
+          username: "alice",
+          realName: "Victor Williams",
+          location: "United States",
+        }),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByText("Victor Williams · United States")).toBeInTheDocument();
+      expect(screen.queryByText("Last.fm account")).not.toBeInTheDocument();
+    });
+
+    it("falls back to 'Last.fm account' when the profile has neither a real name nor a location", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice" }),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByText("Last.fm account")).toBeInTheDocument();
+    });
+
+    it("shows a subscriber badge on the avatar for a Last.fm Pro subscriber", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice", isSubscriber: true }),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByTitle("Last.fm Pro subscriber")).toBeInTheDocument();
+    });
+
+    it("doesn't show a subscriber badge for a non-subscriber account", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice", isSubscriber: false }),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      await screen.findByText("alice");
+      expect(screen.queryByTitle("Last.fm Pro subscriber")).not.toBeInTheDocument();
     });
   });
 

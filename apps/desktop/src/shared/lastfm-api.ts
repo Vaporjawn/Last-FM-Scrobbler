@@ -18,9 +18,9 @@ import type {
  * `contextBridge.exposeInMainWorld("lastfm", ...)`.
  *
  * `getRecentTracks`/`getTopArtists`/`getTopTracks`/`getTopAlbums`/`getFriends`/
- * `getUserInfo`/`getArtistInfo`/`getSimilarArtists`/`getTopTags`/`getTrackInfo` are all
- * public, unsigned Last.fm endpoints (no session key involved) — see
- * `main/lastfm/wire-lastfm-data.ts`.
+ * `getUserInfo`/`getLovedTracksCount`/`getArtistInfo`/`getSimilarArtists`/`getTopTags`/
+ * `getTrackInfo` are all public, unsigned Last.fm endpoints (no session key involved) —
+ * see `main/lastfm/wire-lastfm-data.ts`.
  * `loveTrack`/`unloveTrack`/`addTags` are signed as whichever account is currently
  * active — there's no "which user" parameter, since that's implicit (see
  * `main/lastfm/wire-track-actions.ts`); they reject if no account is logged in.
@@ -66,6 +66,11 @@ export interface LastfmDataApi {
   ): Promise<readonly TopAlbum[]>;
   getFriends(user: string): Promise<readonly Friend[]>;
   getUserInfo(user: string): Promise<UserProfile>;
+  /** Total number of tracks a user has "loved" on Last.fm — see
+   * `LastfmClient.getLovedTracksCount`. Kept separate from `getUserInfo`: `user.getInfo`
+   * doesn't include this count at all, so it's always a second, independent request
+   * either way — call sites that don't need it don't pay for it. */
+  getLovedTracksCount(user: string): Promise<number>;
   getArtistInfo(artist: string, username?: string): Promise<ArtistInfo>;
   getSimilarArtists(artist: string, limit?: number): Promise<readonly SimilarArtist[]>;
   /** Popular community tags for an artist — see `LastfmClient.getTopTags`. */

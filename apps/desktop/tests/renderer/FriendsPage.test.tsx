@@ -36,6 +36,7 @@ function installFakeApis(options: {
     getTopAlbums: vi.fn().mockResolvedValue([]),
     getFriends: options.friends ?? vi.fn().mockResolvedValue([]),
     getUserInfo: vi.fn().mockResolvedValue({ username: "someuser" }),
+    getLovedTracksCount: vi.fn().mockResolvedValue(0),
     getArtistInfo: vi.fn(),
     getSimilarArtists: vi.fn(),
     getTopTags: vi.fn(),
@@ -123,7 +124,7 @@ describe("FriendsPage", () => {
     expect(screen.getByText("B")).toBeInTheDocument();
   });
 
-  it("shows a 'Scrobbling now' chip with the track when a friend is currently playing something", async () => {
+  it("shows a live 'Scrobbling now' indicator with the track when a friend is currently playing something", async () => {
     installFakeApis({
       activeAccount: "alice",
       friends: vi.fn().mockResolvedValue([{ username: "bob" }]),
@@ -134,12 +135,12 @@ describe("FriendsPage", () => {
 
     render(<FriendsPage onNavigateToSettings={vi.fn()} />);
 
-    expect(await screen.findByText("Scrobbling now")).toBeInTheDocument();
+    expect(await screen.findByRole("status", { name: /scrobbling now/i })).toBeInTheDocument();
     expect(screen.getByText("Idioteque")).toBeInTheDocument();
     expect(screen.getByText(/Radiohead/)).toBeInTheDocument();
   });
 
-  it("shows the last-played track (no chip) when a friend isn't currently playing anything", async () => {
+  it("shows the last-played track (no live indicator) when a friend isn't currently playing anything", async () => {
     installFakeApis({
       activeAccount: "alice",
       friends: vi.fn().mockResolvedValue([{ username: "bob" }]),
@@ -159,7 +160,7 @@ describe("FriendsPage", () => {
     render(<FriendsPage onNavigateToSettings={vi.fn()} />);
 
     expect(await screen.findByText("Roygbiv")).toBeInTheDocument();
-    expect(screen.queryByText("Scrobbling now")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: /scrobbling now/i })).not.toBeInTheDocument();
   });
 
   describe("subscriber badge", () => {
@@ -241,7 +242,7 @@ describe("FriendsPage", () => {
     render(<FriendsPage onNavigateToSettings={vi.fn()} />);
 
     await screen.findByText("bob");
-    expect(screen.queryByText("Scrobbling now")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: /scrobbling now/i })).not.toBeInTheDocument();
   });
 
   describe("search", () => {
@@ -357,7 +358,7 @@ describe("FriendsPage", () => {
       });
 
       render(<FriendsPage onNavigateToSettings={vi.fn()} />);
-      await screen.findByText("Scrobbling now");
+      await screen.findByRole("status", { name: /scrobbling now/i });
 
       const rowText = screen.getAllByRole("listitem").map((item) => item.textContent);
       const bobIndex = rowText.findIndex((text) => text.includes("bob"));

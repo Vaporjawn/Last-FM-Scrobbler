@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { useState } from "react";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import StarIcon from "@mui/icons-material/Star";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -16,10 +17,12 @@ import { TopAlbumsSection, type TopAlbumsViewMode } from "../components/TopAlbum
 import { TopArtistsSection, type TopArtistsViewMode } from "../components/TopArtistsSection.js";
 import { TopTracksSection } from "../components/TopTracksSection.js";
 import { useAuth } from "../hooks/use-auth.js";
+import { useLovedTracksCount } from "../hooks/use-loved-tracks-count.js";
 import { useTopAlbums } from "../hooks/use-top-albums.js";
 import { useTopArtists } from "../hooks/use-top-artists.js";
 import { useTopTracks } from "../hooks/use-top-tracks.js";
 import { useUserProfile } from "../hooks/use-user-profile.js";
+import { formatRealNameAndLocation } from "../utils/format-real-name-and-location.js";
 import type { PageProps } from "./page-props.js";
 
 /** Matches the reference Last.fm client's own "This Week" row count — 10 for the
@@ -102,6 +105,9 @@ export function ProfilePage({
   // MUI's `Avatar` falls back to the letter children automatically whenever `src` is
   // `undefined` (and self-heals to that fallback if a real `src` fails to load).
   const { profile } = useUserProfile(targetUsername);
+  // Separate call from `useUserProfile` above — see `getLovedTracksCount`'s own
+  // docstring for why `user.getInfo` can't provide this count itself.
+  const { count: lovedTracksCount } = useLovedTracksCount(targetUsername);
   // Session-only, not persisted to AppSettings — a lighter-weight version of the
   // reference Last.fm client's own "Chart style" preference (which also configures a
   // default timeframe and artist count via a whole settings panel); this app just
@@ -151,30 +157,63 @@ export function ProfilePage({
 
       <Card variant="outlined" sx={{ p: 2.5, mb: 3, maxWidth: 480 }}>
         <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
-          <Avatar
-            src={profile?.avatarUrl}
-            alt={targetUsername}
-            sx={{ width: 80, height: 80, fontSize: 32, bgcolor: "primary.main" }}
-          >
-            {targetUsername.slice(0, 1).toUpperCase()}
-          </Avatar>
+          {/* `position: relative` + an absolutely-positioned badge, same treatment as
+              `FriendListItem`'s avatar — keeps subscriber styling consistent between
+              the one place a whole list of accounts shows it and the one place a
+              single account's own profile does. */}
+          <Box sx={{ position: "relative", flexShrink: 0 }}>
+            <Avatar
+              src={profile?.avatarUrl}
+              alt={targetUsername}
+              sx={{ width: 80, height: 80, fontSize: 32, bgcolor: "primary.main" }}
+            >
+              {targetUsername.slice(0, 1).toUpperCase()}
+            </Avatar>
+            {profile?.isSubscriber ? (
+              <StarIcon
+                titleAccess="Last.fm Pro subscriber"
+                sx={{
+                  position: "absolute",
+                  bottom: -2,
+                  right: -2,
+                  fontSize: 22,
+                  color: "warning.main",
+                  bgcolor: "background.paper",
+                  borderRadius: "50%",
+                  p: "2px",
+                }}
+              />
+            ) : null}
+          </Box>
           <Box>
             <Typography variant="h6">{targetUsername}</Typography>
             <Typography variant="body2" color="text.secondary">
-              Last.fm account
+              {profile ? (formatRealNameAndLocation(profile) ?? "Last.fm account") : "Last.fm account"}
             </Typography>
           </Box>
         </Stack>
-        {profile?.totalScrobbles !== undefined || profile?.registeredAt !== undefined ? (
+        {profile?.totalScrobbles !== undefined ||
+        lovedTracksCount !== undefined ||
+        profile?.registeredAt !== undefined ? (
           <Box sx={{ mt: 2 }}>
-            {profile.totalScrobbles !== undefined ? (
-              <StatBox value={profile.totalScrobbles.toLocaleString()} label="Scrobbles" />
+            {profile?.totalScrobbles !== undefined || lovedTracksCount !== undefined ? (
+              <Stack direction="row" spacing={3}>
+                {profile?.totalScrobbles !== undefined ? (
+                  <StatBox value={profile.totalScrobbles.toLocaleString()} label="Scrobbles" />
+                ) : null}
+                {lovedTracksCount !== undefined ? (
+                  <StatBox value={lovedTracksCount.toLocaleString()} label="Loved tracks" />
+                ) : null}
+              </Stack>
             ) : null}
-            {profile.registeredAt !== undefined ? (
+            {profile?.registeredAt !== undefined ? (
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{ display: "block", mt: profile.totalScrobbles !== undefined ? 1 : 0 }}
+                sx={{
+                  display: "block",
+                  mt: profile.totalScrobbles !== undefined || lovedTracksCount !== undefined ? 1 : 0,
+                }}
               >
                 Member since {formatMemberSince(profile.registeredAt)}
               </Typography>

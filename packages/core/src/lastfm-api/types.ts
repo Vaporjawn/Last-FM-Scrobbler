@@ -107,6 +107,13 @@ export type TopAlbumsPeriod = TopArtistsPeriod;
 export interface UserProfile {
   readonly username: string;
   readonly realName?: string;
+  /** The user's self-reported location — verified live against the real API
+   * (`user.getInfo`, `format=json`): the response includes a top-level `"country"`
+   * field directly (e.g. `"United Kingdom"` for the `RJ` test account), same raw field
+   * Last.fm uses on `user.getFriends` (see `Friend.location`'s docstring — renamed
+   * here for the same reason: freeform text a user typed, not necessarily an ISO
+   * country name/code). `undefined` when the account hasn't set one. */
+  readonly location?: string;
   /** Largest avatar image Last.fm has on file for this user, if any — `undefined`
    * when the account has no photo set (Last.fm returns an empty `#text` for every
    * size in that case). Unlike artist images (see `ArtistInfo` below — Last.fm's
@@ -115,6 +122,12 @@ export interface UserProfile {
    * own API, not something fixable client-side), user avatars are real, user-uploaded
    * photos and do come through correctly. */
   readonly avatarUrl?: string;
+  /** Whether this account has an active Last.fm Pro subscription — verified live
+   * against the real API (`user.getInfo`, `format=json`): the response includes a
+   * top-level `"subscriber": "0"/"1"` field directly, same as `Friend.isSubscriber`.
+   * Defaults to `false` for the (in practice, never observed) case where a response
+   * omits the field. */
+  readonly isSubscriber: boolean;
   /** Total scrobbles this account has ever submitted, Last.fm-wide (not just via this
    * app) — verified live against the real API (`user.getInfo`, `format=json`): the
    * response includes a top-level `"playcount"` string field, populated for every

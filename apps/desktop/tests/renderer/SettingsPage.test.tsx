@@ -52,6 +52,7 @@ function installFakeLastfmApi(overrides: Partial<LastfmDataApi> = {}): LastfmDat
     getTopAlbums: vi.fn().mockResolvedValue([]),
     getFriends: vi.fn().mockResolvedValue([]),
     getUserInfo: vi.fn().mockResolvedValue({ username: "someuser" }),
+    getLovedTracksCount: vi.fn().mockResolvedValue(0),
     getArtistInfo: vi.fn(),
     getSimilarArtists: vi.fn(),
     getTopTags: vi.fn(),

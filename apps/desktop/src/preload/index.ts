@@ -176,6 +176,9 @@ const lastfmApi: LastfmDataApi = {
   getUserInfo(user) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetUserInfo, user) as Promise<UserProfile>;
   },
+  getLovedTracksCount(user) {
+    return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetLovedTracksCount, user) as Promise<number>;
+  },
   getArtistInfo(artist, username) {
     return ipcRenderer.invoke(IPC_CHANNELS.lastfmGetArtistInfo, artist, username) as Promise<ArtistInfo>;
   },

@@ -519,6 +519,7 @@ describe("LastfmClient", () => {
         username: "someuser",
         realName: "Some User",
         avatarUrl: "https://example.com/300x300.png",
+        isSubscriber: false,
       });
     });
 
@@ -537,13 +538,13 @@ describe("LastfmClient", () => {
         }),
       );
       const result = await client.getUserInfo({ user: "someuser" });
-      expect(result).toEqual({ username: "someuser" });
+      expect(result).toEqual({ username: "someuser", isSubscriber: false });
     });
 
     it("user.getInfo omits avatarUrl when the image array is missing entirely", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ user: { name: "someuser" } }));
       const result = await client.getUserInfo({ user: "someuser" });
-      expect(result).toEqual({ username: "someuser" });
+      expect(result).toEqual({ username: "someuser", isSubscriber: false });
     });
 
     it("user.getInfo parses totalScrobbles and registeredAt from a realistic response", async () => {
@@ -566,13 +567,14 @@ describe("LastfmClient", () => {
         realName: "Richard Jones ",
         totalScrobbles: 151481,
         registeredAt: 1037793040,
+        isSubscriber: false,
       });
     });
 
     it("user.getInfo omits totalScrobbles/registeredAt when both fields are absent", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ user: { name: "someuser" } }));
       const result = await client.getUserInfo({ user: "someuser" });
-      expect(result).toEqual({ username: "someuser" });
+      expect(result).toEqual({ username: "someuser", isSubscriber: false });
       expect(result.totalScrobbles).toBeUndefined();
       expect(result.registeredAt).toBeUndefined();
     });
@@ -584,7 +586,64 @@ describe("LastfmClient", () => {
         }),
       );
       const result = await client.getUserInfo({ user: "someuser" });
-      expect(result).toEqual({ username: "someuser" });
+      expect(result).toEqual({ username: "someuser", isSubscriber: false });
+    });
+
+    it("user.getInfo parses country and subscriber from a realistic response", async () => {
+      // Shape verified live against the real API (curl user.getinfo against Last.fm's
+      // RJ test account): the response includes top-level "country" and
+      // "subscriber": "0"/"1" fields directly, same as user.getFriends.
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          user: { name: "RJ", country: "United Kingdom", subscriber: "1" },
+        }),
+      );
+      const result = await client.getUserInfo({ user: "RJ" });
+      expect(result).toEqual({
+        username: "RJ",
+        location: "United Kingdom",
+        isSubscriber: true,
+      });
+    });
+
+    it("user.getInfo omits location and defaults isSubscriber to false when both are absent", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ user: { name: "someuser" } }));
+      const result = await client.getUserInfo({ user: "someuser" });
+      expect(result.location).toBeUndefined();
+      expect(result.isSubscriber).toBe(false);
+    });
+
+    it("parses user.getLovedTracks's total count", async () => {
+      // Shape verified live against the real API (curl user.getlovedtracks against
+      // Last.fm's RJ test account, limit=1): lovedtracks["@attr"].total is a real,
+      // populated field alongside the (here, irrelevant) track list itself.
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          lovedtracks: {
+            track: [],
+            "@attr": { user: "RJ", totalPages: "700", page: "1", perPage: "1", total: "700" },
+          },
+        }),
+      );
+
+      const result = await client.getLovedTracksCount({ user: "RJ" });
+
+      expect(result).toBe(700);
+      const [url] = fetchMock.mock.calls[0] as [string];
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get("method")).toBe("user.getLovedTracks");
+      expect(parsed.searchParams.get("user")).toBe("RJ");
+      expect(parsed.searchParams.get("limit")).toBe("1");
+    });
+
+    it("returns 0 when user.getLovedTracks's total is missing or non-numeric", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ lovedtracks: { track: [], "@attr": { total: "not-a-number" } } }),
+      );
+
+      const result = await client.getLovedTracksCount({ user: "someuser" });
+
+      expect(result).toBe(0);
     });
 
     it("parses artist.getInfo", async () => {

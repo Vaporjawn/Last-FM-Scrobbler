@@ -424,6 +424,8 @@ export class LastfmClient {
       user: {
         name: string;
         realname?: string;
+        country?: string;
+        subscriber?: string;
         image?: readonly LastfmImageJson[];
         playcount?: string;
         registered?: { unixtime?: string };
@@ -440,7 +442,9 @@ export class LastfmClient {
     return {
       username: result.user.name,
       ...(result.user.realname ? { realName: result.user.realname } : {}),
+      ...(result.user.country ? { location: result.user.country } : {}),
       ...(avatarUrl ? { avatarUrl } : {}),
+      isSubscriber: result.user.subscriber === "1",
       ...(result.user.playcount !== undefined && !Number.isNaN(totalScrobbles)
         ? { totalScrobbles }
         : {}),
@@ -448,6 +452,32 @@ export class LastfmClient {
         ? { registeredAt }
         : {}),
     };
+  }
+
+  /**
+   * Total number of tracks this user has "loved" on Last.fm — verified live against
+   * the real API (`user.getLovedTracks`, `format=json`, `limit=1`): the response
+   * includes a `lovedtracks["@attr"].total` field alongside the (here, unused) track
+   * list itself, e.g. `"700"` for the `RJ` test account. `limit: 1` keeps this call
+   * cheap — this method only needs the count, not the actual loved-track list (see
+   * `TrackDetail.loved`/`RecentTrack.loved` for per-track loved status elsewhere in
+   * this client). Kept as its own call rather than folded into `getUserInfo`:
+   * `user.getInfo` doesn't include a loved-tracks count at all (confirmed against its
+   * real response shape), so showing it needs a second, independent request either
+   * way — call sites that don't need it (most of this client's other consumers) don't
+   * pay for it.
+   */
+  async getLovedTracksCount(options: { readonly user: string }): Promise<number> {
+    const result = await this.request<{
+      lovedtracks: { "@attr": { total?: string } };
+    }>(
+      "user.getLovedTracks",
+      { user: options.user, limit: "1" },
+      { httpMethod: "GET", signed: false },
+    );
+
+    const total = Number(result.lovedtracks["@attr"].total);
+    return Number.isNaN(total) ? 0 : total;
   }
 
   /**

@@ -28,6 +28,7 @@ export interface LastfmDataClient {
   getTopAlbums: LastfmClient["getTopAlbums"];
   getFriends: LastfmClient["getFriends"];
   getUserInfo: LastfmClient["getUserInfo"];
+  getLovedTracksCount: LastfmClient["getLovedTracksCount"];
   getArtistInfo: LastfmClient["getArtistInfo"];
   getSimilarArtists: LastfmClient["getSimilarArtists"];
   getTopTags: LastfmClient["getTopTags"];
@@ -150,6 +151,16 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.lastfmGetLovedTracksCount,
+    (_event, user: unknown): Promise<number> => {
+      if (!client) {
+        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+      }
+      return client.getLovedTracksCount({ user: String(user) });
+    },
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.lastfmGetArtistInfo,
     (_event, artist: unknown, username: unknown): Promise<ArtistInfo> => {
       if (!client) {
@@ -214,6 +225,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopAlbums);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetFriends);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetUserInfo);
+    ipcMain.removeHandler(IPC_CHANNELS.lastfmGetLovedTracksCount);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetArtistInfo);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetSimilarArtists);
     ipcMain.removeHandler(IPC_CHANNELS.lastfmGetTopTags);

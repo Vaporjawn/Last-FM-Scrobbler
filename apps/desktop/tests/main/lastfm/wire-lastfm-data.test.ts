@@ -33,6 +33,7 @@ function fakeClient() {
     getTopAlbums: vi.fn().mockResolvedValue([{ name: "Al", artist: "A", playCount: 5 }]),
     getFriends: vi.fn().mockResolvedValue([{ username: "bob" }]),
     getUserInfo: vi.fn().mockResolvedValue({ username: "alice", avatarUrl: "https://example.com/a.png" }),
+    getLovedTracksCount: vi.fn().mockResolvedValue(42),
     getArtistInfo: vi.fn().mockResolvedValue({ name: "A", listeners: 100, playCount: 500 }),
     getSimilarArtists: vi.fn().mockResolvedValue([{ name: "B", match: 0.9 }]),
     getTopTags: vi.fn().mockResolvedValue(["psychedelic"]),
@@ -180,6 +181,16 @@ describe("wireLastfmData", () => {
     expect(result).toEqual({ username: "alice", avatarUrl: "https://example.com/a.png" });
   });
 
+  it("getLovedTracksCount forwards the username and returns the client's result", async () => {
+    const client = fakeClient();
+    wireLastfmData({ client });
+
+    const result = await invoke(IPC_CHANNELS.lastfmGetLovedTracksCount, "alice");
+
+    expect(client.getLovedTracksCount).toHaveBeenCalledWith({ user: "alice" });
+    expect(result).toBe(42);
+  });
+
   it("getArtistInfo forwards the artist name and returns the client's result", async () => {
     const client = fakeClient();
     wireLastfmData({ client });
@@ -263,6 +274,9 @@ describe("wireLastfmData", () => {
     await expect(invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetFriends, "alice")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetUserInfo, "alice")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetLovedTracksCount, "alice")).rejects.toThrow(
+      /not configured/i,
+    );
     await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "A")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "A")).rejects.toThrow(/not configured/i);
     await expect(invoke(IPC_CHANNELS.lastfmGetTopTags, "A")).rejects.toThrow(/not configured/i);
@@ -284,6 +298,7 @@ describe("wireLastfmData", () => {
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopAlbums)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetFriends)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetUserInfo)).toBe(false);
+    expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetLovedTracksCount)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetArtistInfo)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetSimilarArtists)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopTags)).toBe(false);

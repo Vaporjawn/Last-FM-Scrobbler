@@ -9,6 +9,7 @@ import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { Friend, RecentTrack } from "@lastfm-scrobbler/core";
 import type { FriendActivityState } from "../hooks/use-friends-activity.js";
+import { formatRealNameAndLocation } from "../utils/format-real-name-and-location.js";
 import { ScrobblingIndicator } from "./ScrobblingIndicator.js";
 import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
 
@@ -20,13 +21,17 @@ import { TrackArtworkAvatar } from "./shared/TrackArtworkAvatar.js";
  * together. */
 const AVATAR_SIZE = 48;
 
-/** Fixed pixel width of the friend avatar+text column, applied unconditionally on
- * every row (whether or not that friend has a track to show), so the track-art column
- * starts at the exact same x position on every row regardless of username/real-name/
- * location length *or* whether the row next to it happens to have any activity — see
- * the `gridTemplateColumns` comment below for why this is a CSS Grid column now, not a
- * flex item's `width`, and why it's unconditional. */
-const FRIEND_COLUMN_WIDTH = 190;
+/** Fixed pixel width of the friend avatar+text column — the first of the two column
+ * tracks `FriendsPage` declares on its outer `List` grid (see that file), which every
+ * row's `Paper` below shares via `gridTemplateColumns: "subgrid"` rather than each
+ * independently redeclaring its own `190px 1fr`. `subgrid` (not just matching
+ * declared widths per row) is what actually guarantees the track-art column starts at
+ * the identical x position on every row, regardless of username/real-name/location
+ * length *or* whether the row next to it happens to have any activity — a shared
+ * track is authoritative in a way N independent grids that merely intend to agree
+ * can't quite promise. Exported so `FriendsPage` and this file can't drift out of
+ * sync on the value. */
+export const FRIEND_COLUMN_WIDTH = 190;
 
 function formatTimestamp(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
@@ -66,7 +71,7 @@ export interface FriendListItemProps {
  * (`friend.avatarUrl` — comes directly from `user.getFriends`, no separate lookup
  * needed; `Avatar` falls back to a letter automatically when it's absent, same as
  * `ProfilePage`'s account card) plus their username and real name/location (see
- * `formatSecondaryLine`) on the left; their most recent activity — passed in via
+ * `formatRealNameAndLocation`) on the left; their most recent activity — passed in via
  * `activity`, see that prop's docstring for why this component doesn't fetch it
  * itself — on the right, when there is any: real album art (`track.imageUrl`, the same
  * real-image field `ScrobbleListItem` already renders for scrobble history, falling
@@ -82,16 +87,6 @@ export interface FriendListItemProps {
  * lead to different destinations; either or both can be omitted to leave that half
  * non-interactive.
  */
-/** Combines `realName` and `location` onto ListItemText's one `secondary` line
- * ("Real Name · Location"), rather than adding a third text row for a single extra
- * field — falls back to whichever one is actually present, and to `undefined` (no
- * secondary line at all, matching this component's existing behavior) when neither
- * is. */
-function formatSecondaryLine(friend: Friend): string | undefined {
-  const parts = [friend.realName, friend.location].filter((part): part is string => Boolean(part));
-  return parts.length > 0 ? parts.join(" · ") : undefined;
-}
-
 export function FriendListItem({
   friend,
   activity,
@@ -100,7 +95,7 @@ export function FriendListItem({
 }: FriendListItemProps): JSX.Element {
   const { track } = activity;
 
-  const secondaryLine = formatSecondaryLine(friend);
+  const secondaryLine = formatRealNameAndLocation(friend);
 
   return (
     <ListItem divider sx={{ py: 1 }}>
