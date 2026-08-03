@@ -20,6 +20,16 @@ a background app by default — see "Background app (tray / menu bar)" below.
   **The "bake into the build pipeline" half is currently aspirational, not actually
   true for a packaged build** — see "Bug reporting" below for why (a real, distinct
   bug, found and only partially fixed while verifying `BUG_REPORT_RELAY_URL`).
+- `LIBREFM_API_KEY` / `LIBREFM_API_SECRET` — the same idea as `LASTFM_API_KEY`/
+  `LASTFM_API_SECRET` above, but for Libre.fm (an additional, optional scrobbling
+  destination connected *alongside* Last.fm, not instead of it — see "Additional
+  services" below). **Not currently configured for this repo** — nothing in this repo
+  has ever registered a real Libre.fm API key, so this pair is unset by default and
+  Settings → Accounts falls back to its own "bring your own key" form for Libre.fm
+  until someone supplies one. Set these two locally/in a build pipeline exactly like
+  the Last.fm pair once you have a real Libre.fm-issued key, and Libre.fm's own
+  Settings → Accounts UI collapses to a single "Log in with Libre.fm" button, same as
+  Last.fm's.
 - `BUG_REPORT_RELAY_URL` — the deployed URL of `services/bug-report-relay` (e.g.
   `https://lastfm-scrobbler-bug-report-relay.<your-subdomain>.workers.dev/report`),
   set once that Worker is deployed with its own `GITHUB_PAT` secret (see
@@ -34,6 +44,8 @@ a background app by default — see "Background app (tray / menu bar)" below.
 ```
 LASTFM_API_KEY=
 LASTFM_API_SECRET=
+LIBREFM_API_KEY=
+LIBREFM_API_SECRET=
 BUG_REPORT_RELAY_URL=
 ```
 
@@ -188,6 +200,45 @@ can be changed or removed from Settings ("Remove saved API key"); an
 environment-baked one can't (it was a deliberate choice by whoever built/launched this
 instance, so Settings doesn't offer to edit or clear it — see
 `window.auth.credentialsSource()`).
+
+### Additional services (Libre.fm / ListenBrainz)
+
+Settings → Accounts also offers Libre.fm and ListenBrainz — connected *alongside*
+Last.fm, not switched between: every scrobble and now-playing update goes to every
+currently-connected service at once (see `main/scrobbling/wire-scrobbling.ts`'s
+docstring). Each has its own connect/disconnect state, entirely independent of
+Last.fm's.
+
+**Libre.fm** reuses `LastfmClient` itself, pointed at Libre.fm's own API/auth-page
+URLs (protocol-identical to Last.fm — see `LastfmClientOptions.baseUrl`/`authUrl`) —
+and follows the *exact same* `LIBREFM_API_KEY`/`LIBREFM_API_SECRET`-then-bring-your-
+own-key precedence Last.fm uses (see `resolve-librefm-credentials.ts`), so once a real
+key is baked in, Settings collapses to a single "Log in with Libre.fm" button, same as
+Last.fm. One thing this differs from Last.fm on deliberately: a saved Libre.fm key
+takes effect *immediately*, no relaunch needed (`resolveLibrefmCredentials` is
+re-checked on every login attempt, not resolved once at startup) — there's no
+"environment vs. user-supplied, fixed for the process lifetime" split to preserve the
+way Last.fm's `credentialsSource` has, since nothing else in this app depends on
+Libre.fm's client being constructed only once. **Two things about Libre.fm were not
+independently live-verified this session** (see `wire-secondary-auth.ts`'s docstrings
+for the full caveat): the exact authorization-page URL (guessed by analogy with
+Last.fm's own `www.last.fm`-vs-`ws.audioscrobbler.com` split), and whether Libre.fm's
+signed endpoints (`auth.getSession`, `track.scrobble`) actually require a *real*,
+Libre.fm-registered key/secret pair, or tolerate an arbitrary one the way
+`auth.getToken` was confirmed to. If login fails once a real attempt is made, checking
+those two things first is the fastest path to a fix.
+
+**ListenBrainz** has no browser-authorization flow to offer at all — confirmed against
+its own official docs and source (`docs/users/api/index.rst` in
+`metabrainz/listenbrainz-server`): third-party listen submission is authenticated with
+a per-account token the user copies from their own settings page, full stop. (The
+wider MetaBrainz ecosystem does have an OAuth2 system as of mid-2026 — see
+https://blog.metabrainz.org/2026/06/25/upcoming-changes-to-user-accounts-and-authentication/
+— but it isn't wired up to grant a ListenBrainz listen-submission token, so it doesn't
+help here.) Settings → Accounts can't turn this into a "log in" button the way
+Last.fm/Libre.fm's flows work; the best available UX is a direct link to
+https://listenbrainz.org/settings/ next to the token field, so there's at least
+nothing to hunt for.
 
 ## Background app (tray / menu bar)
 
