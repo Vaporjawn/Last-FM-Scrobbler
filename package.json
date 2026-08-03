@@ -51,12 +51,23 @@
   },
   "scripts": {
     "start": "node scripts/run-workspaces.mjs dev --package @lastfm-scrobbler/desktop",
+    "dev": "node scripts/run-workspaces.mjs dev --package @lastfm-scrobbler/desktop",
     "build": "node scripts/run-workspaces.mjs build",
     "test": "node scripts/run-workspaces.mjs test",
+    "test:watch": "node scripts/run-workspaces.mjs test:watch --package @lastfm-scrobbler/desktop",
+    "test:coverage": "node scripts/run-workspaces.mjs test:coverage",
+    "test:e2e": "node scripts/run-workspaces.mjs test:e2e --package @lastfm-scrobbler/desktop",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "typecheck": "node scripts/run-workspaces.mjs typecheck",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "package": "node scripts/run-workspaces.mjs package --package @lastfm-scrobbler/desktop",
+    "package:dir": "node scripts/run-workspaces.mjs package:dir --package @lastfm-scrobbler/desktop",
+    "package:mac": "node scripts/run-workspaces.mjs package:mac --package @lastfm-scrobbler/desktop",
+    "package:win": "node scripts/run-workspaces.mjs package:win --package @lastfm-scrobbler/desktop",
+    "package:linux": "node scripts/run-workspaces.mjs package:linux --package @lastfm-scrobbler/desktop",
+    "deploy:bug-report-relay": "node scripts/run-workspaces.mjs deploy --package @lastfm-scrobbler/bug-report-relay"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
