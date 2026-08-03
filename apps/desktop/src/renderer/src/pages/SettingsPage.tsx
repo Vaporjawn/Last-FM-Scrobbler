@@ -907,6 +907,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                                   />
                                   <Button
                                     size="small"
+                                    variant="outlined"
                                     color="inherit"
                                     onClick={() => {
                                       handleLogout(username);
@@ -947,6 +948,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                       {credentialsSource === "user-supplied" ? (
                         <Button
                           size="small"
+                          variant="outlined"
                           color="inherit"
                           sx={{ mt: 1, display: "block" }}
                           onClick={handleClearAppCredentials}
@@ -986,7 +988,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   label="Libre.fm"
                   description={`Connected as ${librefmActiveAccount}`}
                   control={
-                    <Button size="small" color="inherit" onClick={handleLibrefmLogout}>
+                    <Button size="small" variant="outlined" color="inherit" onClick={handleLibrefmLogout}>
                       Disconnect
                     </Button>
                   }
@@ -1006,7 +1008,12 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                       {librefmIsLoggingIn ? "Waiting for approval on Libre.fm…" : "Log in with Libre.fm"}
                     </Button>
                     {librefmCredentialsSource === "user-supplied" ? (
-                      <Button size="small" color="inherit" onClick={handleLibrefmClearCredentials}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="inherit"
+                        onClick={handleLibrefmClearCredentials}
+                      >
                         Remove saved key
                       </Button>
                     ) : null}
@@ -1079,7 +1086,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   label="ListenBrainz"
                   description={`Connected as ${listenBrainzActiveAccount}`}
                   control={
-                    <Button size="small" color="inherit" onClick={handleListenBrainzDisconnect}>
+                    <Button size="small" variant="outlined" color="inherit" onClick={handleListenBrainzDisconnect}>
                       Disconnect
                     </Button>
                   }
