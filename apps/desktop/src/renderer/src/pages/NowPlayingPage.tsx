@@ -154,7 +154,19 @@ export function NowPlayingPage(): JSX.Element {
           title="Now Playing"
           action={<RefreshButton onRefresh={refetchAll} refreshing={refreshing} label="Refresh track info" />}
         />
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={4} sx={{ alignItems: { sm: "flex-start" } }}>
+        {/* `md` rather than MUI's usual `sm` here on purpose — same fix as
+            ScrobbleDetailPage's own hero `Stack` (see that file's comment for the
+            fuller rationale): this breakpoint reacts to the *window's* width, not
+            this `Box`'s actual available width, and the sidebar (200px expanded)
+            eats into that. It matters most right here, since this app's own
+            default window is a *portrait* 9:14 window pinned at exactly 680px wide
+            (see `compute-portrait-window-size.ts`) — `sm` (600px) already fired a
+            row layout there, leaving only ~480px of real content width for a
+            200px avatar plus a full text column squeezed into what was left. `md`
+            (900px) keeps this stacked in one generous column until the window is
+            genuinely wide enough for a row to look intentional rather than
+            cramped. */}
+        <Stack direction={{ xs: "column", md: "row" }} spacing={4} sx={{ alignItems: { md: "flex-start" } }}>
           <NowPlayingArtwork imageUrl={trackDetail?.imageUrl} title={track.title} />
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>

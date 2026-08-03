@@ -47,7 +47,15 @@ export function ArtistInfoPanel({
   const bioSummary = info?.bioSummary ? stripHtml(info.bioSummary) : undefined;
 
   return (
-    <Stack direction="row" spacing={3} sx={{ alignItems: "flex-start" }}>
+    // Responsive for the same reason as NowPlayingPage's own hero `Stack` right
+    // above this panel on that page (see its comment): this used to be an
+    // unconditional row regardless of width, which — on this app's narrow
+    // portrait-default window — crowded the bio/stats/tags column into a sliver
+    // of space next to the avatar. `md` keeps the avatar stacked above the text
+    // column (both callers, ScrobbleDetailPage included, already go single-column
+    // below that width for their own hero sections) until there's genuinely
+    // enough room for them side by side.
+    <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ alignItems: "flex-start" }}>
       <ArtistAvatar name={artistName} />
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography variant="h6" gutterBottom>
