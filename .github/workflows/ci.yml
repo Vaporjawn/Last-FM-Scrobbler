@@ -21,7 +21,7 @@ jobs:
         pm: [pnpm, npm, bun]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # adapter-linux's MPRIS2 smoke test spawns its own throwaway D-Bus session bus
       # and skips itself if dbus-daemon isn't found — this just makes sure it's found,

@@ -35,7 +35,7 @@ jobs:
             script: package:linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # See ci.yml's own comment on this same version bump — several deps across this
       # workspace (pnpm itself, jsdom, better-sqlite3, electron) require Node >=22.
