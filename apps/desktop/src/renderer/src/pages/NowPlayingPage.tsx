@@ -223,6 +223,12 @@ export function NowPlayingPage(): JSX.Element {
               <Box sx={{ mb: 1.5 }}>
                 <LinearProgress
                   variant="determinate"
+                  // Named so it's distinguishable from the other `role="progressbar"`
+                  // elements this page can render at the same time (ArtistInfoPanel's
+                  // "Loading artist info…" spinner) — for screen readers, and so tests
+                  // can target the playback bar specifically rather than whichever
+                  // progressbar happens to be mounted first.
+                  aria-label="Playback progress"
                   // Clamped defensively — every current PlaybackSource adapter
                   // already clamps its own reported position to the track's
                   // duration (see e.g. adapter-macos's getPosition), but a progress

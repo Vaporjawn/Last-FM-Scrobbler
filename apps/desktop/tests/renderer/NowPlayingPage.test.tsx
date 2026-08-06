@@ -33,6 +33,29 @@ const TRACK: TrackInfo = {
 // property — omitting the key entirely is the valid way to express "no duration".
 const { durationSec: _durationSec, ...TRACK_WITHOUT_DURATION } = TRACK;
 
+/** The playback `LinearProgress` carries this accessible name specifically so these
+ * assertions can't match ArtistInfoPanel's "Loading artist info…" `CircularProgress`,
+ * which shares `role="progressbar"` and can legitimately still be mounted while the
+ * artist-info request is in flight. A bare `role: "progressbar"` query is ambiguous
+ * (or, for the negative assertions, matches the spinner and fails) on any machine slow
+ * enough that the request hasn't resolved yet — which is how this went red on CI's
+ * Linux runner while passing locally. */
+const PLAYBACK_PROGRESS = { name: "Playback progress" };
+
+/** A `getArtistInfo` that never settles, pinning ArtistInfoPanel in its loading state so
+ * that spinner is *guaranteed* to be in the document. The negative progress-bar
+ * assertions below only prove anything while it is — otherwise they pass trivially on a
+ * machine fast enough to have resolved the request, which is why they went green locally
+ * and red on CI. */
+function artistInfoStillLoading(): Partial<LastfmDataApi> {
+  // A promise with no settle path at all — deliberately never resolved or rejected, so
+  // the panel stays in its loading state for the whole test.
+  return { getArtistInfo: vi.fn(() => new Promise<never>(() => undefined)) };
+}
+
+/** ArtistInfoPanel's loading spinner — the other `role="progressbar"` on this page. */
+const ARTIST_INFO_SPINNER = { name: "Loading artist info…" };
+
 /** Fake `window.nowPlaying` whose emit* helpers drive real subscribed callbacks.
  * `positionSec` on `initial` is optional (defaulting to 0) so every existing call
  * site that doesn't care about playback position doesn't need to specify one. */
@@ -387,7 +410,7 @@ describe("NowPlayingPage", () => {
       render(<NowPlayingPage />);
 
       // 170s elapsed of a 340s track is exactly the midpoint.
-      const progressBar = await screen.findByRole("progressbar");
+      const progressBar = await screen.findByRole("progressbar", PLAYBACK_PROGRESS);
       expect(progressBar).toHaveAttribute("aria-valuenow", "50");
       expect(screen.getByText("2:50")).toBeInTheDocument();
       expect(screen.getByText("5:40")).toBeInTheDocument();
@@ -409,7 +432,10 @@ describe("NowPlayingPage", () => {
       });
 
       // 85s of 340s = 25%.
-      expect(await screen.findByRole("progressbar")).toHaveAttribute("aria-valuenow", "25");
+      expect(await screen.findByRole("progressbar", PLAYBACK_PROGRESS)).toHaveAttribute(
+        "aria-valuenow",
+        "25",
+      );
       expect(screen.getByText("1:25")).toBeInTheDocument();
     });
 
@@ -430,7 +456,10 @@ describe("NowPlayingPage", () => {
 
       expect(await screen.findByText("Cool Blue")).toBeInTheDocument();
       expect(screen.getByText("0:00")).toBeInTheDocument();
-      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+      expect(screen.getByRole("progressbar", PLAYBACK_PROGRESS)).toHaveAttribute(
+        "aria-valuenow",
+        "0",
+      );
 
       // Confirms this really is the reset-on-track-change path, not a coincidental
       // leftover render: a later position push for the new track still applies.
@@ -457,7 +486,10 @@ describe("NowPlayingPage", () => {
         emitPositionChanged(345);
       });
 
-      expect(await screen.findByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+      expect(await screen.findByRole("progressbar", PLAYBACK_PROGRESS)).toHaveAttribute(
+        "aria-valuenow",
+        "100",
+      );
       // "5:40" appears twice once clamped — the elapsed-time label and the
       // already-existing total-duration label read identically.
       expect(screen.getAllByText("5:40")).toHaveLength(2);
@@ -465,12 +497,15 @@ describe("NowPlayingPage", () => {
 
     it("doesn't render a progress bar when the track has no known duration", async () => {
       installFakeNowPlayingApi({ track: TRACK_WITHOUT_DURATION, state: "playing" });
-      installFakeLastfmApi();
+      installFakeLastfmApi(artistInfoStillLoading());
 
       render(<NowPlayingPage />);
 
       await screen.findByText("Weights");
-      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+      // Asserted, not assumed: without a *different* progressbar on the page, the
+      // assertion below would pass no matter what the playback bar did.
+      expect(await screen.findByRole("progressbar", ARTIST_INFO_SPINNER)).toBeInTheDocument();
+      expect(screen.queryByRole("progressbar", PLAYBACK_PROGRESS)).not.toBeInTheDocument();
     });
 
     it("doesn't render a progress bar (or divide by zero) for a reported durationSec of exactly 0", async () => {
@@ -479,23 +514,18 @@ describe("NowPlayingPage", () => {
       // contract rules out a source reporting `durationSec: 0` for a track with
       // genuinely unknown duration (rather than omitting the field entirely), which
       // divided by zero into a NaN progress-bar value.
-      //
-      // Checked via the MUI LinearProgress-specific class, not a bare
-      // `role: "progressbar"` query — ArtistInfoPanel's own "Loading artist info…"
-      // CircularProgress spinner shares that same role and can still legitimately be
-      // in the document at this point, which would make a bare role query ambiguous/
-      // flaky rather than actually testing the playback progress bar this is about.
       installFakeNowPlayingApi({
         track: { ...TRACK, durationSec: 0 },
         state: "playing",
         positionSec: 0,
       });
-      installFakeLastfmApi();
+      installFakeLastfmApi(artistInfoStillLoading());
 
       render(<NowPlayingPage />);
 
       await screen.findByText("Weights");
-      expect(document.querySelector(".MuiLinearProgress-root")).not.toBeInTheDocument();
+      expect(await screen.findByRole("progressbar", ARTIST_INFO_SPINNER)).toBeInTheDocument();
+      expect(screen.queryByRole("progressbar", PLAYBACK_PROGRESS)).not.toBeInTheDocument();
     });
   });
 
