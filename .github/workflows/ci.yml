@@ -38,7 +38,7 @@ jobs:
       # treats it as an ambiguous conflict and hard-errors ("Multiple versions of pnpm
       # specified") rather than picking one, which is what actually broke CI here.
       - if: matrix.pm == 'pnpm'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       # pnpm@11.18.0 (this repo's pinned packageManager) hard-requires Node >=22.13 —
       # it reads its own local package store via the built-in `node:sqlite` module,
