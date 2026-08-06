@@ -15,6 +15,26 @@ updates:
       production-dependencies:
         dependency-type: "production"
         update-types: ["minor", "patch"]
+    ignore:
+      # Both of these are held back by one thing: electron-vite. Its latest stable
+      # (5.0.0) peer-requires vite "^5.0.0 || ^6.0.0 || ^7.0.0", and it is also what
+      # pulls the hoisted second copy of Vite into the tree — apps/desktop is the only
+      # workspace that declares vite directly.
+      #
+      # Moving apps/desktop to Vite 8 therefore doesn't move the tree to Vite 8, it
+      # splits it: `vitest.config.ts` hands a vite@8 Plugin to a defineConfig typed
+      # against vite@7 and fails TS2769 under exactOptionalPropertyTypes (seen live on
+      # the bun legs of #2). @vitejs/plugin-react@6 is the same story one step earlier
+      # — it peer-requires vite ^8 outright, so `npm install` won't even resolve
+      # (ERESOLVE) while Vite stays on 7.
+      #
+      # electron-vite 6.0.0-beta.1 already accepts "^6.0.0 || ^7.0.0 || ^8.0.0", so
+      # both of these unblock together the moment it leaves beta. Delete this whole
+      # `ignore:` block then rather than bumping the versions listed here.
+      - dependency-name: "vite"
+        versions: ["8.x"]
+      - dependency-name: "@vitejs/plugin-react"
+        versions: ["6.x"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
