@@ -736,16 +736,36 @@ string (`Date.prototype.toLocaleString()`, e.g. `"8/3/2026, 2:45:30 PM"`) and le
 `Chip`'s own default `text-overflow: ellipsis` silently cut it mid-character whenever
 the row didn't have room — the "Last-resort clipping" bullet above used to be the
 *primary* mechanism for this chip, not the true last resort it's meant to be. It's now
-`TimestampLabel`, which steps down through `format-timestamp-candidates.ts`'s four
-progressively shorter but always fully-formed strings (full → drop seconds → drop the
-year → time only) via `useShrinkToFitIndex`, picking the widest one that actually fits
-— genuine CSS ellipsis truncation only ever engages now if even the shortest candidate
-(a bare time) still doesn't fit.
+`TimestampLabel`, which steps down through `format-timestamp-candidates.ts`'s
+progressively shorter but always fully-formed candidates via `useShrinkToFitIndex`,
+picking the widest one that actually fits — genuine CSS ellipsis truncation only ever
+engages now if even the shortest candidate still doesn't fit (and even then, see "A
+standard minimum width, not just a shrinking ladder" below for why that's no longer
+reachable in practice for anything this app's real row layouts throw at it).
 
-**Two real bugs, both found only by live-resizing an actual chip in a real browser —
-neither is catchable by this project's own jsdom-based component tests, which is worth
-understanding in some depth given how confidently the original implementation passed
-every test it had before either was found:**
+Two entirely different candidate sets depending on how long ago the timestamp was:
+
+- **Within the last 24 hours**: relative "time ago" phrasing, standardized on one
+  consistent shape — `"6h ago"`/`"5m ago"` — rather than a shrinking ladder of
+  differently-worded lengths (`"6 hours ago"` → `"6 hr ago"` → `"6h ago"`, an earlier
+  design this project moved away from once it became clear the abbreviated form was
+  already about as short as it can usefully get while still reading as a sentence).
+  Bare `"6h"`/`"5m"` (no "ago") is the one genuinely shorter terse fallback below it,
+  same shape as `"Just now"` → `"Now"`. This tier is also what actually fixed the
+  original production bug that motivated shrink-to-fit in the first place: the
+  absolute-only system below bottomed out at a fixed-width clock time (`"12:22 PM"`)
+  with no shorter fallback — a double-digit hour is exactly one character longer than
+  a single-digit one, and in a chip sized with essentially zero slack, that one extra
+  character was enough to overflow into ellipsis truncation on *every*
+  double-digit-hour scrobble.
+- **A day or older**: the original four-tier absolute date/time breakdown — full
+  date+time with seconds, then without seconds, then without the year, then time only.
+
+**Two real bugs in the shrink-to-fit mechanics itself, both found only by
+live-resizing an actual chip in a real browser — neither is catchable by this
+project's own jsdom-based component tests, which is worth understanding in some depth
+given how confidently the original implementation passed every test it had before
+either was found:**
 
 1. **Shrinking from an already-fitting state did nothing.** The original design called
    `setIndex(0)` directly from the `ResizeObserver` callback on every detected resize.
@@ -796,6 +816,61 @@ implements — and `tests/renderer/use-shrink-to-fit-index.test.tsx` has a dedic
 for exactly that path; the `ResizeObserver`-specific paths there use a hand-written
 fake instead, with manually-stubbed `scrollWidth`/`clientWidth` getters standing in for
 real layout.
+
+### A standard minimum width, not just a shrinking ladder
+
+Shrink-to-fit alone still had a real gap: it only *reacts* to overflow after
+`ResizeObserver` reports it, and this app's actual row layouts
+(`ScrobbleListItem`/`FriendListItem`) deliberately give the column/row holding the chip
+an explicit `minWidth: 0` (so the *artist/track text* absorbs a tight row instead of
+fighting the chip for space — see those files' own docstrings), which meant the chip
+itself had no guaranteed floor either, and a sufficiently tight row could squeeze it
+below even its shortest candidate before shrink-to-fit had a chance to catch up — a
+real, briefly-visible mid-character CSS `text-overflow: ellipsis` cut, not just a
+lag. Fixed by giving the `Chip` an explicit `minWidth` (`TIMESTAMP_CHIP_MIN_WIDTH_CHARS`
+in `format-timestamp-candidates.ts`, `9ch` — one character of headroom above the widest
+terse candidate this project has measured on its own `en-US` development locale, `8`)
+reserving room for the *terse* (last-resort) candidate up front via ordinary CSS,
+instead of starting at zero width and only reacting after the fact. An explicit
+`min-width` on a flex item always wins over the automatic (`auto`) one during
+flexbox's shrink resolution, so this floor holds regardless of what any ancestor sets
+— the chip can still grow past it whenever a row has more room, and can still shrink
+down to the terse candidate under genuine pressure, but can never be squeezed narrower
+than that candidate needs.
+
+**A real gotcha found only by live-testing this in Chromium, not by reasoning about
+the CSS in the abstract**: the first attempt set this `minWidth` on `TimestampLabel`'s
+own inner `<span>` (the element `useShrinkToFitIndex` actually measures) rather than on
+the `Chip` itself, on the theory that a child's explicit `min-width` should propagate
+back up through its ancestors' own automatic min-content sizing. Reproducing both
+rows' real layout in a scratch Playwright harness at increasingly tight widths (down
+to 140px) showed that theory was wrong in practice: once an ancestor several levels up
+(`ScrobbleListItem`/`FriendListItem`'s wrapping `Stack`) opts out of the browser's
+automatic content-based minimum via its own `minWidth: 0`, a `min-width` set three
+levels further down doesn't reliably protect anything in between — each intermediate
+flex container's own available cross-axis space can still get clamped by an
+even-further-out ancestor's flex-shrink resolution, independent of what a deeply
+nested child asks for. Measured directly: with the floor only on the inner span, that
+span's own `scrollWidth`/`clientWidth` matched each other (it wasn't overflowing
+*itself*), but MUI's own `.MuiChip-label` wrapper — which has `overflow: hidden` as
+part of its base styles — was being rendered narrower than the inner span needed and
+silently clipping it, exactly the "6 hr a…"-style cut this fix exists to prevent. The
+fix that actually held up under the same live test: the explicit `min-width` has to
+live on the `Chip` itself, since that's the one flex item genuinely sitting inside the
+`minWidth: 0` column — the one level where flexbox's "explicit min-width always wins"
+guarantee actually applies. `TimestampLabel`'s inner span keeps its own `minWidth` too
+(a redundant, harmless second guarantee at the most specific level, and the value
+`useShrinkToFitIndex`'s measurements are keyed off), but the `Chip`-level one is what's
+load-bearing.
+
+`format-timestamp-candidates.test.ts` sweeps every relative-tier value across a full
+24-hour window (every minute) and every absolute-tier terse candidate across a full
+day's hours, asserting each one's length stays within
+`TIMESTAMP_CHIP_MIN_WIDTH_CHARS` — the same kind of jsdom-provable, string-length-only
+coverage `useShrinkToFitIndex`'s own tests rely on (see above for why jsdom can't
+verify the pixel/layout side of this at all), specifically so a future change to
+either the candidate formats or the reserved width can't silently drift out of sync
+with each other.
 
 ## Now Playing: artist panel, love/tag
 

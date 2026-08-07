@@ -1,7 +1,10 @@
 import { useMemo, type JSX } from "react";
 import Box from "@mui/material/Box";
 import { useShrinkToFitIndex } from "../../hooks/use-shrink-to-fit-index.js";
-import { formatTimestampCandidates } from "./format-timestamp-candidates.js";
+import {
+  formatTimestampCandidates,
+  TIMESTAMP_CHIP_MIN_WIDTH_CHARS,
+} from "./format-timestamp-candidates.js";
 
 export interface TimestampLabelProps {
   /** Unix seconds. */
@@ -19,9 +22,16 @@ export interface TimestampLabelProps {
  * Renders the widest of `formatTimestampCandidates`'s progressively-shorter strings
  * that still fits the space available — see `useShrinkToFitIndex`'s own docstring for
  * how, and for the real jsdom-can't-prove-this-part limitation.
- * `overflow`/`textOverflow: "ellipsis"` here is a last-resort safety net, not the
- * primary mechanism: it only ever engages if even the shortest candidate (currently
- * just a bare time, e.g. "2:45 PM") still doesn't fit.
+ *
+ * `minWidth: TIMESTAMP_CHIP_MIN_WIDTH_CHARS` reserves room for the *terse* candidate
+ * up front via ordinary CSS, rather than starting at zero width and only reacting
+ * after the fact once `useShrinkToFitIndex`'s `ResizeObserver` detects real overflow —
+ * a redundant, harmless second guarantee at the most specific level (this is the exact
+ * element `useShrinkToFitIndex` measures), not the load-bearing one. The floor that
+ * actually holds up under real layout pressure lives one level up, on
+ * `PlaybackStatusChip`'s own `Chip` — see that component's docstring for why setting
+ * it *only* here isn't enough (confirmed live, not assumed) and what the real fix is.
+ * `overflow`/`textOverflow: "ellipsis"` here remains a true last resort.
  */
 export function TimestampLabel({ timestamp }: TimestampLabelProps): JSX.Element {
   const candidates = useMemo(() => formatTimestampCandidates(timestamp), [timestamp]);
@@ -38,7 +48,18 @@ export function TimestampLabel({ timestamp }: TimestampLabelProps): JSX.Element 
     <Box
       component="span"
       ref={containerRef}
-      sx={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      sx={{
+        display: "block",
+        minWidth: `${TIMESTAMP_CHIP_MIN_WIDTH_CHARS}ch`,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        // Centered, not left-aligned (the block default): a short candidate like "Now"
+        // or "5m" rendered inside this reserved minimum width would otherwise hug the
+        // left edge with visibly empty space to its right — centering reads as one
+        // consistently-sized pill rather than a wide box with stray blank space.
+        textAlign: "center",
+      }}
     >
       {label}
     </Box>
