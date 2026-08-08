@@ -18,10 +18,14 @@ export interface TopArtistTileProps {
  * `ImageListItemBar` rather than a hand-rolled gradient). Falls back to a plain
  * initial-letter tile (no photo, no scrim needed) when no real photo is found, same
  * "never fails, just shows less" contract every other real-photo spot in this app
- * follows.
+ * follows. The whole tile links out to the artist's own Last.fm page (see
+ * `ArtworkTile.href`'s docstring).
  */
 export function TopArtistTile({ artist }: TopArtistTileProps): JSX.Element {
   const imageUrl = useArtistImage(artist.name);
+  // Same guessed-URL approach as `ArtistInfoPanel`'s own `artistLastfmUrl` (see
+  // there) — `TopArtist` carries no real Last.fm URL of its own to prefer.
+  const artistLastfmUrl = `https://www.last.fm/music/${encodeURIComponent(artist.name)}`;
 
   return (
     <ArtworkTile
@@ -33,6 +37,8 @@ export function TopArtistTile({ artist }: TopArtistTileProps): JSX.Element {
           {artist.name.slice(0, 1).toUpperCase()}
         </Typography>
       }
+      href={artistLastfmUrl}
+      ariaLabel={`View ${artist.name} on Last.fm`}
     />
   );
 }

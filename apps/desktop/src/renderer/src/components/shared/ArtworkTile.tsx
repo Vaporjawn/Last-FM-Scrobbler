@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from "react";
 import { useState } from "react";
 import Box from "@mui/material/Box";
+import ButtonBase from "@mui/material/ButtonBase";
 import ImageListItem from "@mui/material/ImageListItem";
 import ImageListItemBar from "@mui/material/ImageListItemBar";
 
@@ -16,6 +17,20 @@ export interface ArtworkTileProps {
    * `AlbumIcon` for `TopAlbumTile`. Each caller supplies its own, since what a
    * "no artwork" placeholder should look like differs by what's being tiled. */
   readonly fallback: ReactNode;
+  /** When given, the whole tile becomes a real, keyboard-accessible link — opened in
+   * the OS browser via `target="_blank"` (routed there by `create-main-window.ts`'s
+   * `setWindowOpenHandler`, no IPC needed). Wrapped in a `ButtonBase` around the tile
+   * (which renders as a real `<a>` once `href` is supplied — see its own docs) rather
+   * than swapping `ImageListItem`'s own root: that keeps `ImageListItem` on its
+   * already-correct `component="div"` and avoids `Link`'s default underline CSS
+   * inheriting into the overlaid `ImageListItemBar` title/subtitle text. Omitted
+   * entirely (tile stays non-interactive) by any caller with nowhere to link — same
+   * "omit to stay inert" convention `ScrobbleListItem.onSelect` uses. */
+  readonly href?: string;
+  /** Required alongside `href` — the link's accessible name. A bare `<a>` wrapping
+   * only an image and caption text has no other text content assistive technology
+   * would otherwise read as its name. */
+  readonly ariaLabel?: string;
 }
 
 /**
@@ -35,7 +50,14 @@ export interface ArtworkTileProps {
  * tiles out in a plain CSS-grid `Box`, so `<li>` there would be invalid markup (an
  * `<li>` with no `<ul>`/`<ol>` parent) even though it would render visually fine.
  */
-export function ArtworkTile({ imageUrl, title, subtitle, fallback }: ArtworkTileProps): JSX.Element {
+export function ArtworkTile({
+  imageUrl,
+  title,
+  subtitle,
+  fallback,
+  href,
+  ariaLabel,
+}: ArtworkTileProps): JSX.Element {
   // Tracks the specific URL that failed to load (not just a bare boolean) so that if
   // `imageUrl` later changes to a genuinely different URL, the new one gets a fresh
   // chance to load instead of being permanently stuck showing the fallback. Without
@@ -48,7 +70,7 @@ export function ArtworkTile({ imageUrl, title, subtitle, fallback }: ArtworkTile
   const [failedUrl, setFailedUrl] = useState<string | undefined>(undefined);
   const showFallback = !imageUrl || imageUrl === failedUrl;
 
-  return (
+  const tile = (
     <ImageListItem
       component="div"
       sx={{ aspectRatio: "1", borderRadius: 2, overflow: "hidden", bgcolor: "action.selected" }}
@@ -72,5 +94,21 @@ export function ArtworkTile({ imageUrl, title, subtitle, fallback }: ArtworkTile
       )}
       <ImageListItemBar title={title} subtitle={subtitle} />
     </ImageListItem>
+  );
+
+  if (!href) {
+    return tile;
+  }
+
+  return (
+    <ButtonBase
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={ariaLabel}
+      sx={{ display: "block", width: "100%", borderRadius: 2 }}
+    >
+      {tile}
+    </ButtonBase>
   );
 }

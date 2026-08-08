@@ -65,4 +65,15 @@ describe("TopArtistTile", () => {
     expect(screen.queryByRole("img", { name: "Radiohead" })).not.toBeInTheDocument();
     expect(screen.getByText("R")).toBeInTheDocument();
   });
+
+  it("links to the artist's Last.fm page", () => {
+    installFakeArtistImageApi(vi.fn().mockResolvedValue(undefined));
+
+    render(<TopArtistTile artist={ARTIST} />);
+
+    const link = screen.getByRole("link", { name: "View Radiohead on Last.fm" });
+    expect(link).toHaveAttribute("href", "https://www.last.fm/music/Radiohead");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+  });
 });
