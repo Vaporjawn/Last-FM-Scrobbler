@@ -46,4 +46,19 @@ describe("TopArtistListItem", () => {
 
     expect(screen.getByText("4")).toBeInTheDocument();
   });
+
+  it("links to the artist's Last.fm page", () => {
+    installFakeArtistImageApi();
+
+    render(
+      <List>
+        <TopArtistListItem artist={ARTIST} rank={1} maxPlayCount={100} />
+      </List>,
+    );
+
+    const link = screen.getByRole("link", { name: "View Boards of Canada on Last.fm" });
+    expect(link).toHaveAttribute("href", "https://www.last.fm/music/Boards%20of%20Canada");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+  });
 });
