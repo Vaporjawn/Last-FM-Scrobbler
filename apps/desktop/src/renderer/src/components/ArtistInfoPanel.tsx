@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import Box from "@mui/material/Box";
+import ButtonBase from "@mui/material/ButtonBase";
 import Chip from "@mui/material/Chip";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import Link from "@mui/material/Link";
@@ -112,16 +113,35 @@ export function ArtistInfoPanel({
                 </Typography>
                 <Stack direction="row" spacing={2.5} sx={{ flexWrap: "wrap" }}>
                   {similarArtists.map((similarArtist) => (
-                    <Stack
+                    // Each thumbnail is a real, keyboard-accessible link to that
+                    // artist's own Last.fm page. Wrapped in `ButtonBase` around the
+                    // avatar+name `Stack` (same "wrap, don't swap the root" approach
+                    // `ArtworkTile.href` uses — see its docstring for why) rather than
+                    // `Stack component={ButtonBase}`: `Stack`'s polymorphic typing
+                    // doesn't merge in an arbitrary `component`'s own props (`href`/
+                    // `target`/`rel` aren't valid on a plain `<div>`), so that version
+                    // fails to typecheck even though `FriendListItem`'s superficially
+                    // similar `component={ButtonBase}` usage compiles fine there —
+                    // it only ever passes `onClick`/`aria-label`, both valid on any
+                    // element regardless of polymorphic prop merging.
+                    <ButtonBase
                       key={similarArtist.name}
-                      spacing={0.5}
-                      sx={{ alignItems: "center", width: SIMILAR_ARTIST_AVATAR_SIZE + 24 }}
+                      href={`https://www.last.fm/music/${encodeURIComponent(similarArtist.name)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`View ${similarArtist.name} on Last.fm`}
+                      sx={{ display: "block", borderRadius: 1 }}
                     >
-                      <ArtistAvatar name={similarArtist.name} size={SIMILAR_ARTIST_AVATAR_SIZE} />
-                      <Typography variant="caption" align="center" sx={{ wordBreak: "break-word" }}>
-                        {similarArtist.name}
-                      </Typography>
-                    </Stack>
+                      <Stack
+                        spacing={0.5}
+                        sx={{ alignItems: "center", width: SIMILAR_ARTIST_AVATAR_SIZE + 24 }}
+                      >
+                        <ArtistAvatar name={similarArtist.name} size={SIMILAR_ARTIST_AVATAR_SIZE} />
+                        <Typography variant="caption" align="center" sx={{ wordBreak: "break-word" }}>
+                          {similarArtist.name}
+                        </Typography>
+                      </Stack>
+                    </ButtonBase>
                   ))}
                 </Stack>
               </Box>
