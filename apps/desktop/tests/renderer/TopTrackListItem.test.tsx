@@ -59,4 +59,22 @@ describe("TopTrackListItem", () => {
 
     expect(screen.getByText("2")).toBeInTheDocument();
   });
+
+  it("links to the track's Last.fm page", () => {
+    installFakeArtistImageApi();
+
+    render(
+      <List>
+        <TopTrackListItem track={TRACK} rank={1} maxPlayCount={100} />
+      </List>,
+    );
+
+    const link = screen.getByRole("link", { name: "View Windowlicker on Last.fm" });
+    expect(link).toHaveAttribute(
+      "href",
+      "https://www.last.fm/music/Aphex%20Twin/_/Windowlicker",
+    );
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+  });
 });

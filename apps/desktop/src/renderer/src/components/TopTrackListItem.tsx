@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import Box from "@mui/material/Box";
 import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -30,50 +31,64 @@ export interface TopTrackListItemProps {
  * establishes), track title (primary) with artist name and play count (secondary),
  * and a bar showing that count relative to the list's highest — same layout as
  * `TopArtistListItem`, adapted for a track having an artist of its own to show
- * alongside its play count.
+ * alongside its play count. The whole row is a real, keyboard-accessible link to the
+ * track's own Last.fm page (see `TopArtistListItem`'s identical treatment) — the
+ * `/music/{artist}/_/{track}` URL shape, matching `NowPlayingPage`'s and
+ * `ScrobbleDetailPage`'s own `guessedTrackUrl`.
  */
 export function TopTrackListItem({ track, rank, maxPlayCount }: TopTrackListItemProps): JSX.Element {
+  const trackLastfmUrl = `https://www.last.fm/music/${encodeURIComponent(track.artist)}/_/${encodeURIComponent(track.name)}`;
+
   return (
-    <ListItem divider sx={{ display: "block", px: 0, py: 1.5 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ width: 20, flexShrink: 0, textAlign: "right" }}
-        >
-          {rank}
-        </Typography>
-        <ArtistAvatar name={track.artist} size={AVATAR_SIZE} />
-        {/* `minWidth: 0` — a flex item's default min-width is `auto` (its content's
-            own intrinsic minimum), not 0, so without this the text refuses to shrink
-            below that and overflows the row instead of the `noWrap`/ellipsis
-            treatment below actually taking effect — same fix, same root cause, as
-            `ScrobbleListItem`'s equivalent `ListItemText`. */}
-        <ListItemText
-          primary={track.name}
-          secondary={`${track.artist} — ${track.playCount} play${track.playCount === 1 ? "" : "s"}`}
-          sx={{ my: 0, minWidth: 0 }}
-          slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
-        />
-      </Stack>
-      <Box
-        sx={{
-          height: 4,
-          mt: 1,
-          ml: `${BAR_INDENT_PX}px`,
-          borderRadius: 2,
-          bgcolor: "action.hover",
-          overflow: "hidden",
-        }}
+    <ListItem divider disablePadding>
+      <ListItemButton
+        component="a"
+        href={trackLastfmUrl}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`View ${track.name} on Last.fm`}
+        sx={{ display: "block", px: 0, py: 1.5 }}
       >
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ width: 20, flexShrink: 0, textAlign: "right" }}
+          >
+            {rank}
+          </Typography>
+          <ArtistAvatar name={track.artist} size={AVATAR_SIZE} />
+          {/* `minWidth: 0` — a flex item's default min-width is `auto` (its content's
+              own intrinsic minimum), not 0, so without this the text refuses to shrink
+              below that and overflows the row instead of the `noWrap`/ellipsis
+              treatment below actually taking effect — same fix, same root cause, as
+              `ScrobbleListItem`'s equivalent `ListItemText`. */}
+          <ListItemText
+            primary={track.name}
+            secondary={`${track.artist} — ${track.playCount} play${track.playCount === 1 ? "" : "s"}`}
+            sx={{ my: 0, minWidth: 0 }}
+            slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
+          />
+        </Stack>
         <Box
           sx={{
-            height: "100%",
-            width: `${(track.playCount / maxPlayCount) * 100}%`,
-            bgcolor: "primary.main",
+            height: 4,
+            mt: 1,
+            ml: `${BAR_INDENT_PX}px`,
+            borderRadius: 2,
+            bgcolor: "action.hover",
+            overflow: "hidden",
           }}
-        />
-      </Box>
+        >
+          <Box
+            sx={{
+              height: "100%",
+              width: `${(track.playCount / maxPlayCount) * 100}%`,
+              bgcolor: "primary.main",
+            }}
+          />
+        </Box>
+      </ListItemButton>
     </ListItem>
   );
 }
