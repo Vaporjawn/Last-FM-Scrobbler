@@ -62,4 +62,17 @@ describe("TopAlbumListItem", () => {
 
     expect(screen.getByAltText("Kid A")).toHaveAttribute("src", ALBUM.imageUrl);
   });
+
+  it("links to the album's Last.fm page", () => {
+    render(
+      <List>
+        <TopAlbumListItem album={ALBUM} rank={1} maxPlayCount={100} />
+      </List>,
+    );
+
+    const link = screen.getByRole("link", { name: "View Kid A on Last.fm" });
+    expect(link).toHaveAttribute("href", "https://www.last.fm/music/Radiohead/Kid%20A");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+  });
 });

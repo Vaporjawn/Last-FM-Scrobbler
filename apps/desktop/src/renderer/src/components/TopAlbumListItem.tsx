@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import Box from "@mui/material/Box";
 import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
 import ListItemText from "@mui/material/ListItemText";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
@@ -27,56 +28,71 @@ export interface TopAlbumListItemProps {
  * `false` here since nothing about a top-albums ranking is "currently playing"), album
  * title (primary) with artist name and play count (secondary), and a relative-play bar
  * — same layout as `TopArtistListItem`/`TopTrackListItem`, adapted for real art instead
- * of a fetched photo.
+ * of a fetched photo. The whole row is a real, keyboard-accessible link to the album's
+ * own Last.fm page (see `TopArtistListItem`'s identical treatment).
  */
 export function TopAlbumListItem({ album, rank, maxPlayCount }: TopAlbumListItemProps): JSX.Element {
+  // Same guessed-URL shape as `TopAlbumTile`'s own (see there) —
+  // `/music/{artist}/{album}` — since `TopAlbum` carries no real Last.fm URL of its
+  // own to prefer.
+  const albumLastfmUrl = `https://www.last.fm/music/${encodeURIComponent(album.artist)}/${encodeURIComponent(album.name)}`;
+
   return (
-    <ListItem divider sx={{ display: "block", px: 0, py: 1.5 }}>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ width: 20, flexShrink: 0, textAlign: "right" }}
-        >
-          {rank}
-        </Typography>
-        <TrackArtworkAvatar
-          imageUrl={album.imageUrl}
-          title={album.name}
-          nowPlaying={false}
-          size={AVATAR_SIZE}
-          flexShrink
-        />
-        {/* `minWidth: 0` — a flex item's default min-width is `auto` (its content's
-            own intrinsic minimum), not 0, so without this the text refuses to shrink
-            below that and overflows the row instead of the `noWrap`/ellipsis
-            treatment below actually taking effect — same fix, same root cause, as
-            `ScrobbleListItem`'s equivalent `ListItemText`. */}
-        <ListItemText
-          primary={album.name}
-          secondary={`${album.artist} — ${album.playCount} play${album.playCount === 1 ? "" : "s"}`}
-          sx={{ my: 0, minWidth: 0 }}
-          slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
-        />
-      </Stack>
-      <Box
-        sx={{
-          height: 4,
-          mt: 1,
-          ml: `${BAR_INDENT_PX}px`,
-          borderRadius: 2,
-          bgcolor: "action.hover",
-          overflow: "hidden",
-        }}
+    <ListItem divider disablePadding>
+      <ListItemButton
+        component="a"
+        href={albumLastfmUrl}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`View ${album.name} on Last.fm`}
+        sx={{ display: "block", px: 0, py: 1.5 }}
       >
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ width: 20, flexShrink: 0, textAlign: "right" }}
+          >
+            {rank}
+          </Typography>
+          <TrackArtworkAvatar
+            imageUrl={album.imageUrl}
+            title={album.name}
+            nowPlaying={false}
+            size={AVATAR_SIZE}
+            flexShrink
+          />
+          {/* `minWidth: 0` — a flex item's default min-width is `auto` (its content's
+              own intrinsic minimum), not 0, so without this the text refuses to shrink
+              below that and overflows the row instead of the `noWrap`/ellipsis
+              treatment below actually taking effect — same fix, same root cause, as
+              `ScrobbleListItem`'s equivalent `ListItemText`. */}
+          <ListItemText
+            primary={album.name}
+            secondary={`${album.artist} — ${album.playCount} play${album.playCount === 1 ? "" : "s"}`}
+            sx={{ my: 0, minWidth: 0 }}
+            slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }}
+          />
+        </Stack>
         <Box
           sx={{
-            height: "100%",
-            width: `${(album.playCount / maxPlayCount) * 100}%`,
-            bgcolor: "primary.main",
+            height: 4,
+            mt: 1,
+            ml: `${BAR_INDENT_PX}px`,
+            borderRadius: 2,
+            bgcolor: "action.hover",
+            overflow: "hidden",
           }}
-        />
-      </Box>
+        >
+          <Box
+            sx={{
+              height: "100%",
+              width: `${(album.playCount / maxPlayCount) * 100}%`,
+              bgcolor: "primary.main",
+            }}
+          />
+        </Box>
+      </ListItemButton>
     </ListItem>
   );
 }
