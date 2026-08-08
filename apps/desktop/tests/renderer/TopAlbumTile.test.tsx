@@ -57,4 +57,13 @@ describe("TopAlbumTile", () => {
     expect(screen.queryByRole("img", { name: "In Rainbows" })).not.toBeInTheDocument();
     expect(screen.getByTestId("AlbumIcon")).toBeInTheDocument();
   });
+
+  it("links to the album's Last.fm page", () => {
+    render(<TopAlbumTile album={ALBUM} />);
+
+    const link = screen.getByRole("link", { name: "View In Rainbows on Last.fm" });
+    expect(link).toHaveAttribute("href", "https://www.last.fm/music/Radiohead/In%20Rainbows");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
+  });
 });
