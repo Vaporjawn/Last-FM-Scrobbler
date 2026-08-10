@@ -27,8 +27,8 @@
     "@lastfm-scrobbler/adapter-windows": "0.0.0",
     "@lastfm-scrobbler/core": "0.0.0",
     "@lastfm-scrobbler/shared-types": "0.0.0",
-    "@mui/icons-material": "^9.2.0",
-    "@mui/material": "^9.2.0",
+    "@mui/icons-material": "^9.3.1",
+    "@mui/material": "^9.3.1",
     "electron-updater": "^6.8.9",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
