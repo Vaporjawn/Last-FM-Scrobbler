@@ -38,7 +38,7 @@ jobs:
       # treats it as an ambiguous conflict and hard-errors ("Multiple versions of pnpm
       # specified") rather than picking one, which is what actually broke CI here.
       - if: matrix.pm == 'pnpm'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       # pnpm@11.18.0 (this repo's pinned packageManager) hard-requires Node >=22.13 —
       # it reads its own local package store via the built-in `node:sqlite` module,
@@ -48,7 +48,7 @@ jobs:
       # >=22 — this had been silently tolerated as an `EBADENGINE` warning rather than
       # a hard failure until pnpm's own startup check turned it into one.
       - if: matrix.pm != 'bun'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: ${{ matrix.pm == 'pnpm' && 'pnpm' || 'npm' }}
