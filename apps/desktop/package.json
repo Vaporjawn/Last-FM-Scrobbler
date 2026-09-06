@@ -36,9 +36,9 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^7.0.1",
-    "@testing-library/react": "^16.3.0",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
+    "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.11",
     "cross-env": "^10.1.0",
