@@ -55,7 +55,16 @@ export function createTrayPopoverWindow(): Electron.BrowserWindow {
   if (devServerUrl) {
     void popover.loadURL(`${devServerUrl}#tray-popover`);
   } else {
-    void popover.loadFile(join(dirname, "../../renderer/index.html"), { hash: "tray-popover" });
+    // One level up from this bundled file's own directory (`out/main/` -> `out/`),
+    // same as create-main-window.ts's identical computation - NOT two levels. Verified
+    // live: an extra `../` here resolved to `apps/desktop/renderer/index.html`
+    // (doesn't exist - the built renderer lives at `out/renderer/index.html`), so the
+    // popover loaded a Chromium `ERR_FILE_NOT_FOUND` error page instead of any real
+    // content in every context where `ELECTRON_RENDERER_URL` isn't set - i.e. a real
+    // packaged build, or any built-output-based test/launch. Silent in normal
+    // `electron-vite dev` usage only because that always takes the `devServerUrl`
+    // branch above instead.
+    void popover.loadFile(join(dirname, "../renderer/index.html"), { hash: "tray-popover" });
   }
 
   // Dismisses the popover the same way a native menu-bar app's would: click the icon
