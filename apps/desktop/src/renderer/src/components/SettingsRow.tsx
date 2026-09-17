@@ -61,7 +61,14 @@ export function SettingsRow({ label, description, leading, control }: SettingsRo
           ) : null}
         </Box>
       </Box>
-      <Box sx={{ flexShrink: 0 }}>{control}</Box>
+      {/* `ml: "auto"` (not just the parent's `justifyContent: "space-between"`) keeps
+       * the control pinned to the row's right edge even when `flexWrap` drops it onto
+       * its own line below a long label/description — a wrapped flex line with only
+       * one item honors an auto margin (which consumes all the line's free space)
+       * before `justifyContent`, so without it `space-between` has nothing to
+       * distribute and the control collapses back to the line's start (left) instead
+       * of staying right-aligned like every other row. */}
+      <Box sx={{ flexShrink: 0, ml: "auto" }}>{control}</Box>
     </Box>
   );
 }
