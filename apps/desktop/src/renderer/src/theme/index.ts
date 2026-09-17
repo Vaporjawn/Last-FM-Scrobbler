@@ -1,4 +1,4 @@
-import { createTheme, type Theme } from "@mui/material/styles";
+import { createTheme, lighten, type Theme } from "@mui/material/styles";
 import type { ThemeMode } from "../../../shared/settings-api.js";
 
 // MUI's dark-mode default sets `background.default` and `background.paper` to the
@@ -16,6 +16,23 @@ const DARK_BACKGROUND = { default: "#0f0c0b", paper: "#1c1714" };
 // warm rather than the cold grey a "just flip the dark palette" light mode tends to
 // produce.
 const LIGHT_BACKGROUND = { default: "#faf8f5", paper: "#ffffff" };
+
+/**
+ * `primary.main` (`#d51007`) used as small TEXT against `DARK_BACKGROUND.paper`
+ * (`#1c1714`) measures ~3.3:1 — verified by computing WCAG relative luminance by
+ * hand and confirmed live via an axe-core scan of the real running app (every
+ * `variant="outlined"`/`"text"` `color="primary"` Button, and a focused primary-color
+ * form label, flagged as a `color-contrast` violation on every page) — short of the
+ * 4.5:1 normal-text threshold, even though the same red reads fine as a
+ * larger-area accent (borders, icons), which is what the palette comment above was
+ * actually verified against. `lighten(..., 0.32)` measures ~4.7:1 against that same
+ * paper tone (still ~5.8:1 against the darker `DARK_BACKGROUND.default`, so it's
+ * covered either way) while staying unmistakably the same red — used below for the
+ * few components that render `primary.main` as dark-mode text/foreground rather than
+ * as a background/border. Light mode is untouched: red-on-white already clears WCAG
+ * AA by a wide margin, so `primary.main` itself works unmodified there.
+ */
+const DARK_MODE_ACCESSIBLE_PRIMARY_TEXT = lighten("#d51007", 0.32);
 
 /**
  * Builds this app's theme for a given mode — see `AppSettings.themeMode` (Settings →
@@ -162,6 +179,65 @@ export function createAppTheme(mode: ThemeMode): Theme {
       borderRadius: 10,
     },
     components: {
+      // Fixes the real WCAG contrast failure documented on
+      // `DARK_MODE_ACCESSIBLE_PRIMARY_TEXT` above — an outlined or text-variant
+      // primary-color Button renders `primary.main` as its own text color, which
+      // fails 4.5:1 against `DARK_BACKGROUND.paper` in dark mode. Scoped narrowly to
+      // exactly the two variants that use `primary.main` as *text* (contained
+      // buttons already pass - white `contrastText` on the red fill isn't affected),
+      // and to dark mode only - light mode's red-on-white contrast is already fine.
+      MuiButton: {
+        styleOverrides: {
+          root: ({ theme, ownerState }) => {
+            if (
+              !isDark ||
+              ownerState.color !== "primary" ||
+              (ownerState.variant !== "outlined" && ownerState.variant !== "text")
+            ) {
+              return {};
+            }
+            return {
+              color: DARK_MODE_ACCESSIBLE_PRIMARY_TEXT,
+              ...(ownerState.variant === "outlined"
+                ? { borderColor: theme.palette.primary.main }
+                : {}),
+              "&:hover": {
+                borderColor: theme.palette.primary.main,
+              },
+            };
+          },
+        },
+      },
+      // Same underlying contrast issue as `MuiButton` above, on a different
+      // component: a focused (or otherwise "active") form label renders in
+      // `primary.main`, which fails the same 4.5:1 check against
+      // `DARK_BACKGROUND.paper` in dark mode - confirmed live via axe-core against
+      // Settings' "Aspect ratio" label. Unscoped by variant (unlike Button) since
+      // every focused label uses this same color regardless of the field's own
+      // variant.
+      // Same underlying contrast issue again, on `Link`: every `<Link>` in this app
+      // (SettingsPage's two external-account links, BugReportDialog's issue link,
+      // ArtistInfoPanel's "Read more on Last.fm" link) uses the component's own
+      // default `color="primary"`, which renders `primary.main` as text - the same
+      // failing 4.5:1 ratio, confirmed live via axe-core against Settings' external
+      // links. None of this app's `<Link>` usages set an explicit `color`, so this is
+      // applied unconditionally in dark mode rather than gated on `ownerState.color`.
+      MuiLink: {
+        styleOverrides: {
+          root: isDark ? { color: DARK_MODE_ACCESSIBLE_PRIMARY_TEXT } : {},
+        },
+      },
+      MuiFormLabel: {
+        styleOverrides: {
+          root: isDark
+            ? {
+                "&.Mui-focused": {
+                  color: DARK_MODE_ACCESSIBLE_PRIMARY_TEXT,
+                },
+              }
+            : {},
+        },
+      },
       // Chip does *not* read `shape.borderRadius` — verified directly against the
       // installed @mui/material source (Chip.js hard-codes `borderRadius: 32 / 2`
       // regardless of theme). Without this override, every Chip in the app ("Now
