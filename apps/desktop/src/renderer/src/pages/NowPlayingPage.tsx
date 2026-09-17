@@ -1,5 +1,6 @@
 import type { JSX } from "react";
 import AlbumIcon from "@mui/icons-material/Album";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PauseIcon from "@mui/icons-material/Pause";
 import StopIcon from "@mui/icons-material/Stop";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
@@ -7,19 +8,23 @@ import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
 import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
 import LinearProgress from "@mui/material/LinearProgress";
 import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { PlaybackState } from "@lastfm-scrobbler/shared-types";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
 import { AsyncState } from "../components/AsyncState.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { ScrobblingIndicator } from "../components/ScrobblingIndicator.js";
+import { ListenedToCallout } from "../components/shared/ListenedToCallout.js";
 import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { StatBox } from "../components/shared/StatBox.js";
 import { TrackLoveTagControls } from "../components/shared/TrackLoveTagControls.js";
 import { useArtistInfo } from "../hooks/use-artist-info.js";
+import { useArtistTopTags } from "../hooks/use-artist-top-tags.js";
 import { useAuth } from "../hooks/use-auth.js";
 import { useNowPlaying } from "../hooks/use-now-playing.js";
 import { useTrackDetail } from "../hooks/use-track-detail.js";
@@ -99,20 +104,26 @@ export function NowPlayingPage(): JSX.Element {
     refreshing: artistInfoRefreshing,
     error: artistInfoError,
     refetch: refetchArtistInfo,
-  } = useArtistInfo(track?.artist);
+  } = useArtistInfo(track?.artist, activeAccount);
   const {
     detail: trackDetail,
     refreshing: trackDetailRefreshing,
     refetch: refetchTrackDetail,
   } = useTrackDetail(track?.artist, track?.title, activeAccount);
+  const {
+    tags: topTags,
+    refreshing: topTagsRefreshing,
+    refetch: refetchTopTags,
+  } = useArtistTopTags(track?.artist);
   // One combined refresh for the whole page's Last.fm data — the "now playing" track
   // itself is pushed live over IPC (see useNowPlaying), so there's nothing to refetch
-  // there; this refreshes the two things that genuinely are point-in-time fetches
-  // (track stats/link, artist bio/similar artists).
-  const refreshing = trackDetailRefreshing || artistInfoRefreshing;
+  // there; this refreshes the three things that genuinely are point-in-time fetches
+  // (track stats/link, artist bio/similar artists, popular tags).
+  const refreshing = trackDetailRefreshing || artistInfoRefreshing || topTagsRefreshing;
   const refetchAll = (): void => {
     refetchTrackDetail();
     refetchArtistInfo();
+    refetchTopTags();
   };
 
   if (!track) {
@@ -147,6 +158,16 @@ export function NowPlayingPage(): JSX.Element {
     );
   }
 
+  // Last.fm's own URL scheme (artist/_/track) — built synchronously so the "view on
+  // Last.fm" icon works immediately, not just once track.getInfo resolves; swapped for
+  // the real `trackDetail.url` once that's in, in case Last.fm's actual URL ever
+  // differs from this app's own guess (e.g. canonicalized artist/track spelling). Same
+  // approach as ScrobbleDetailPage's own `guessedTrackUrl`/`trackUrl`.
+  const guessedTrackUrl = `https://www.last.fm/music/${encodeURIComponent(track.artist)}/_/${encodeURIComponent(track.title)}`;
+  const trackUrl = trackDetail?.url ?? guessedTrackUrl;
+  const listenedToArtistTimes = info?.userPlayCount;
+  const listenedToTrackTimes = trackDetail?.userPlayCount;
+
   return (
     <Box sx={{ height: "100%", overflow: "auto" }}>
       <Stack
@@ -158,10 +179,17 @@ export function NowPlayingPage(): JSX.Element {
           py: 1.5,
         }}
       >
-        <Avatar sx={{ width: 32, height: 32, bgcolor: "action.selected", color: "text.secondary" }}>
+        <Avatar
+          sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: "action.selected", color: "text.secondary" }}
+        >
           <VolumeUpIcon fontSize="small" />
         </Avatar>
-        <Box>
+        {/* `minWidth: 0` (this is a flex row) + `wordBreak` so an unusually long
+            source-app identifier — most known apps resolve to a short friendly name
+            via `resolveSourceAppName`, but its fallback is the *raw*, unbounded
+            platform identifier (a bundle ID, AUMID, or MPRIS bus name) for anything
+            unrecognized — wraps instead of overflowing past the header's edge. */}
+        <Box sx={{ minWidth: 0 }}>
           <Typography
             variant="caption"
             color="text.secondary"
@@ -169,7 +197,10 @@ export function NowPlayingPage(): JSX.Element {
           >
             Scrobbling from
           </Typography>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 700, lineHeight: 1.2, wordBreak: "break-word" }}
+          >
             {resolveSourceAppName(track.sourceApp)}
           </Typography>
         </Box>
@@ -205,7 +236,16 @@ export function NowPlayingPage(): JSX.Element {
           sx={{ alignItems: { md: "flex-start" } }}
         >
           <NowPlayingArtwork imageUrl={trackDetail?.imageUrl} title={track.title} />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
+          {/* `maxWidth` caps this column's width regardless of how wide the window
+              gets — without it, a full-width `LinearProgress` stretches into an
+              absurdly thin, hundreds-of-pixels-long line on any reasonably wide
+              desktop monitor, and the bio/stat text below reads as a sparse, awkward
+              single column even in the *stacked* (`xs`) layout just under the `md`
+              breakpoint, where this Box alone (not sharing the row with the artwork)
+              already has the whole window's width to itself. Matches ArtistInfoPanel's
+              identical cap right below this, so the two sections' content stays the
+              same width instead of drifting apart on wide screens. */}
+          <Box sx={{ minWidth: 0, flex: 1, maxWidth: 640 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.5 }}>
               <Chip
                 icon={<StateIcon state={state} />}
@@ -228,6 +268,12 @@ export function NowPlayingPage(): JSX.Element {
                   // duration (see e.g. adapter-macos's getPosition), but a progress
                   // bar over 100% would look broken if one ever didn't.
                   value={Math.min(100, Math.max(0, (positionSec / track.durationSec) * 100))}
+                  // MUI's LinearProgress renders `role="progressbar"` but no
+                  // accessible name of its own (axe: aria-progressbar-name) — this is
+                  // the only progress bar on the page, so a fixed label is enough;
+                  // it doesn't need to repeat the track title already shown right
+                  // below it.
+                  aria-label="Playback progress"
                   sx={{ borderRadius: 1, height: 6, mb: 0.5 }}
                 />
                 <Stack direction="row" sx={{ justifyContent: "space-between" }}>
@@ -243,62 +289,77 @@ export function NowPlayingPage(): JSX.Element {
             <Typography variant="h4" sx={{ wordBreak: "break-word" }} gutterBottom>
               {track.title}
             </Typography>
-            <Typography variant="h6" color="text.secondary" gutterBottom>
+            {/* `component="h5"` keeps this immediately after the `h4` track title in
+                the document's heading order (axe: heading-order flags the jump
+                straight from h4 to h6) — `variant="h6"` is kept as-is so the visual
+                size/weight is unchanged; MUI decouples the two for exactly this
+                case. */}
+            <Typography
+              variant="h6"
+              component="h5"
+              color="text.secondary"
+              gutterBottom
+              sx={{ wordBreak: "break-word" }}
+            >
               by {track.artist}
             </Typography>
-            {track.album ? (
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 1.5 }}>
-                from {track.album}
-              </Typography>
-            ) : null}
 
-            {trackDetail ? (
-              <Box sx={{ mb: 1.5 }}>
-                <Stack direction="row" spacing={3}>
-                  <StatBox
-                    value={trackDetail.listeners.toLocaleString()}
-                    label="Track listener(s)"
-                    variant="subtitle1"
-                  />
-                  <StatBox
-                    value={trackDetail.playCount.toLocaleString()}
-                    label="Track play(s)"
-                    variant="subtitle1"
-                  />
-                </Stack>
-                <Link
-                  href={trackDetail.url}
+            <Stack direction="row" spacing={0.5} sx={{ my: 1 }}>
+              <TrackLoveTagControls artist={track.artist} track={track.title} />
+              <Tooltip title="View on Last.fm">
+                <IconButton
+                  size="small"
+                  component={Link}
+                  href={trackUrl}
                   target="_blank"
                   rel="noreferrer"
-                  sx={{ display: "inline-block", mt: 1, fontWeight: 600 }}
+                  aria-label="View on Last.fm"
                 >
-                  View on Last.fm
-                </Link>
-                {trackDetail.userPlayCount !== undefined ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: "block", mt: 0.5 }}
-                  >
-                    You've listened to this track {trackDetail.userPlayCount.toLocaleString()} time
-                    {trackDetail.userPlayCount === 1 ? "" : "s"}.
-                  </Typography>
-                ) : null}
-              </Box>
-            ) : null}
-
-            <Stack direction="row" spacing={0.5}>
-              <TrackLoveTagControls artist={track.artist} track={track.title} />
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Stack>
             {!activeAccount ? (
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{ display: "block", mt: 0.75 }}
+                sx={{ display: "block", mb: 1.5 }}
               >
                 Log in with Last.fm in Settings to love or tag tracks.
               </Typography>
             ) : null}
+
+            {track.album ? (
+              <Typography
+                variant="body1"
+                color="text.secondary"
+                sx={{ mb: 1.5, wordBreak: "break-word" }}
+              >
+                from {track.album}
+              </Typography>
+            ) : null}
+
+            {trackDetail ? (
+              <Stack direction="row" spacing={3} sx={{ mb: 1.5 }}>
+                <StatBox
+                  value={trackDetail.listeners.toLocaleString()}
+                  label="Track listener(s)"
+                  variant="subtitle1"
+                />
+                <StatBox
+                  value={trackDetail.playCount.toLocaleString()}
+                  label="Track play(s)"
+                  variant="subtitle1"
+                />
+              </Stack>
+            ) : null}
+
+            <ListenedToCallout
+              artistName={track.artist}
+              trackName={track.title}
+              artistPlayCount={listenedToArtistTimes}
+              trackPlayCount={listenedToTrackTimes}
+            />
           </Box>
         </Stack>
 
@@ -310,6 +371,7 @@ export function NowPlayingPage(): JSX.Element {
           similarArtists={similarArtists}
           loading={artistInfoLoading}
           error={artistInfoError}
+          topTags={topTags}
         />
       </Box>
     </Box>

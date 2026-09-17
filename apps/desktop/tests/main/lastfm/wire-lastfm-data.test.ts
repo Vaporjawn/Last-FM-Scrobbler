@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { LastfmApiError } from "@lastfm-scrobbler/core";
 
 const ipcMainHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 const ipcMain = {
@@ -230,6 +231,64 @@ describe("wireLastfmData", () => {
       artist: "Aphex Twin",
       username: "someuser",
     });
+  });
+
+  it("getArtistInfo resolves to undefined — not a rejection — when Last.fm reports the artist wasn't found", async () => {
+    // Real-world trigger: a track whose artist tag is missing/garbage (a bogus OS
+    // media-session value, badly-tagged local file, etc.) — Last.fm correctly, and
+    // routinely, reports "not found" (error code 6) for a name that was never a real
+    // artist to begin with. See `wire-lastfm-data.ts`'s `isNotFoundError` docstring.
+    const client = fakeClient();
+    client.getArtistInfo.mockRejectedValueOnce(
+      new LastfmApiError(6, "The artist you supplied could not be found"),
+    );
+    wireLastfmData({ client });
+
+    const result = await invoke(IPC_CHANNELS.lastfmGetArtistInfo, "C:\\User");
+
+    expect(result).toBeUndefined();
+  });
+
+  it("getArtistInfo still rejects for a LastfmApiError that isn't the not-found code", async () => {
+    const client = fakeClient();
+    client.getArtistInfo.mockRejectedValueOnce(new LastfmApiError(29, "Rate limit exceeded"));
+    wireLastfmData({ client });
+
+    await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Aphex Twin")).rejects.toThrow(
+      "Rate limit exceeded",
+    );
+  });
+
+  it("getArtistInfo still rejects for a non-LastfmApiError failure (e.g. network down)", async () => {
+    const client = fakeClient();
+    client.getArtistInfo.mockRejectedValueOnce(new Error("fetch failed"));
+    wireLastfmData({ client });
+
+    await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Aphex Twin")).rejects.toThrow(
+      "fetch failed",
+    );
+  });
+
+  it("getSimilarArtists resolves to an empty array — not a rejection — when Last.fm reports the artist wasn't found", async () => {
+    const client = fakeClient();
+    client.getSimilarArtists.mockRejectedValueOnce(
+      new LastfmApiError(6, "The artist you supplied could not be found"),
+    );
+    wireLastfmData({ client });
+
+    const result = await invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "C:\\User");
+
+    expect(result).toEqual([]);
+  });
+
+  it("getSimilarArtists still rejects for a LastfmApiError that isn't the not-found code", async () => {
+    const client = fakeClient();
+    client.getSimilarArtists.mockRejectedValueOnce(new LastfmApiError(29, "Rate limit exceeded"));
+    wireLastfmData({ client });
+
+    await expect(invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "Aphex Twin")).rejects.toThrow(
+      "Rate limit exceeded",
+    );
   });
 
   it("getTopTags forwards the artist name and returns the client's result", async () => {

@@ -8,12 +8,12 @@ import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import Link from "@mui/material/Link";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
+import { ListenedToCallout } from "../components/shared/ListenedToCallout.js";
 import { PlaybackStatusChip } from "../components/shared/PlaybackStatusChip.js";
 import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { TrackLoveTagControls } from "../components/shared/TrackLoveTagControls.js";
@@ -155,7 +155,12 @@ export function ScrobbleDetailPage({
             <Typography variant="h4" sx={{ wordBreak: "break-word" }} gutterBottom>
               {track.track}
             </Typography>
-            <Typography variant="h6" color="text.secondary" gutterBottom>
+            <Typography
+              variant="h6"
+              color="text.secondary"
+              gutterBottom
+              sx={{ wordBreak: "break-word" }}
+            >
               by {track.artist}
             </Typography>
 
@@ -182,40 +187,18 @@ export function ScrobbleDetailPage({
             </Stack>
 
             {album ? (
-              <Typography variant="body1" color="text.secondary">
+              <Typography variant="body1" color="text.secondary" sx={{ wordBreak: "break-word" }}>
                 from {album}
               </Typography>
             ) : null}
 
-            {listenedToArtistTimes !== undefined || listenedToTrackTimes !== undefined ? (
-              <Paper
-                variant="outlined"
-                sx={{
-                  mt: 2.5,
-                  p: 1.5,
-                  display: "inline-block",
-                  bgcolor: "background.default",
-                }}
-              >
-                <Typography variant="body2">
-                  You've listened to{" "}
-                  {listenedToArtistTimes !== undefined ? (
-                    <>
-                      <strong>{track.artist}</strong> {listenedToArtistTimes.toLocaleString()} time
-                      {listenedToArtistTimes === 1 ? "" : "s"}
-                    </>
-                  ) : null}
-                  {listenedToArtistTimes !== undefined && listenedToTrackTimes !== undefined ? " and " : null}
-                  {listenedToTrackTimes !== undefined ? (
-                    <>
-                      <strong>{track.track}</strong> {listenedToTrackTimes.toLocaleString()} time
-                      {listenedToTrackTimes === 1 ? "" : "s"}
-                    </>
-                  ) : null}
-                  .
-                </Typography>
-              </Paper>
-            ) : null}
+            <ListenedToCallout
+              artistName={track.artist}
+              trackName={track.track}
+              artistPlayCount={listenedToArtistTimes}
+              trackPlayCount={listenedToTrackTimes}
+              mt={2.5}
+            />
           </Box>
         </Stack>
 

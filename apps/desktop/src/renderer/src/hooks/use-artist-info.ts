@@ -33,9 +33,9 @@ const EMPTY_DATA: ArtistInfoData = { info: undefined, similarArtists: [] };
  * naturally here than reconciling two independent ones.
  *
  * @param username When given, `info.userPlayCount` is populated with this user's own
- * play count for the artist (see `getArtistInfo`'s docstring) — NowPlayingPage omits
- * this (no natural "which account" to attribute now-playing to), ScrobbleDetailPage
- * passes the active account.
+ * play count for the artist (see `getArtistInfo`'s docstring) — both `NowPlayingPage`
+ * and `ScrobbleDetailPage` pass the active account, since both always show a track
+ * (now playing, or a past scrobble) attributable to that one logged-in account.
  */
 export function useArtistInfo(artistName: string | undefined, username?: string): ArtistInfoState {
   const lastfm = window.lastfm;

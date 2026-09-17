@@ -22,8 +22,8 @@ export interface ArtistInfoPanelProps {
   readonly error: string | undefined;
   /** Popular community tags (see `LastfmClient.getTopTags`) — omitted entirely (no
    * "Popular tags" row at all, not an empty one) when the caller doesn't have any to
-   * show. NowPlayingPage doesn't fetch these today, so it simply doesn't pass this
-   * prop; ScrobbleDetailPage does. */
+   * show yet (e.g. still loading). Both NowPlayingPage and ScrobbleDetailPage fetch
+   * these via `useArtistTopTags` and pass them through. */
   readonly topTags?: readonly string[];
 }
 
@@ -58,8 +58,13 @@ export function ArtistInfoPanel({
     // enough room for them side by side.
     <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ alignItems: "flex-start" }}>
       <ArtistAvatar name={artistName} />
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography variant="h6" gutterBottom>
+      {/* `maxWidth` matches NowPlayingPage's identical cap on its own hero content
+          column right above this panel — without it, the bio paragraph stretches
+          into an unreadably long line on a wide desktop window, and the stat/tag/
+          similar-artist rows trail off into empty space instead of reading as one
+          coherent block. */}
+      <Box sx={{ minWidth: 0, flex: 1, maxWidth: 640 }}>
+        <Typography variant="h6" gutterBottom sx={{ wordBreak: "break-word" }}>
           {artistName}
         </Typography>
 
@@ -81,6 +86,12 @@ export function ArtistInfoPanel({
             <Stack direction="row" spacing={4} sx={{ mt: 2.5 }}>
               <StatBox value={info.listeners.toLocaleString()} label="Listener(s)" />
               <StatBox value={info.playCount.toLocaleString()} label="Play(s)" />
+              {info.userPlayCount !== undefined ? (
+                <StatBox
+                  value={info.userPlayCount.toLocaleString()}
+                  label="Play(s) in your library"
+                />
+              ) : null}
             </Stack>
 
             {topTags && topTags.length > 0 ? (

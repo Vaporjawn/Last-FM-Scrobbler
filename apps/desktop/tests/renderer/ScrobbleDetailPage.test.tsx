@@ -176,6 +176,37 @@ describe("ScrobbleDetailPage", () => {
 
       expect(screen.queryByText(/you've listened to/i)).not.toBeInTheDocument();
     });
+
+    it("omits the callout entirely when both counts are exactly zero", async () => {
+      // Regression test: a `0` used to render literally ("You've listened to Fleece
+      // 0 times and Under the Light 0 times."), which is exactly the bug reported
+      // from a real first-listen screenshot — see ListenedToCallout's own docstring.
+      installFakeLastfmApi({
+        getArtistInfo: vi.fn().mockResolvedValue({
+          name: "Fleece",
+          listeners: 260_722,
+          playCount: 2_375_774,
+          userPlayCount: 0,
+        }),
+        getTrackInfo: vi.fn().mockResolvedValue({
+          artist: "Fleece",
+          track: "Under the Light",
+          album: "Voyager",
+          listeners: 57_398,
+          playCount: 303_244,
+          userPlayCount: 0,
+          loved: false,
+          url: "https://www.last.fm/music/Fleece/_/Under+the+Light",
+        }),
+      });
+
+      renderWithSnackbar();
+
+      await screen.findByText("Under the Light");
+      await waitFor(() => {
+        expect(screen.queryByText(/you've listened to/i)).not.toBeInTheDocument();
+      });
+    });
   });
 
   describe("artist info panel", () => {
@@ -189,6 +220,15 @@ describe("ScrobbleDetailPage", () => {
       expect(screen.getByText("psychedelic")).toBeInTheDocument();
       expect(screen.getByText("Canadian")).toBeInTheDocument();
       expect(screen.getByText("Post Animal")).toBeInTheDocument();
+    });
+
+    it("shows a third 'Play(s) in your library' stat using the artist's own play count", async () => {
+      installFakeLastfmApi();
+
+      renderWithSnackbar();
+
+      expect(await screen.findByText("Play(s) in your library")).toBeInTheDocument();
+      expect(screen.getByText("80")).toBeInTheDocument();
     });
 
     it("links each popular tag to its Last.fm tag page", async () => {

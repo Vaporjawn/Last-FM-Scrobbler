@@ -7,6 +7,7 @@ import type { LastfmDataApi } from "../../src/shared/lastfm-api.js";
 import type { NowPlayingApi } from "../../src/shared/now-playing-api.js";
 import { SnackbarProvider } from "../../src/renderer/src/contexts/SnackbarProvider.js";
 import { NowPlayingPage } from "../../src/renderer/src/pages/NowPlayingPage.js";
+import { checkA11y } from "../check-a11y.js";
 
 /** `NowPlayingPage` fires snackbars via `useSnackbar()` on love/unlove/addTags — a real
  * `SnackbarProvider` (not present in a bare `render(<NowPlayingPage />)`) is needed for
@@ -145,21 +146,23 @@ describe("NowPlayingPage", () => {
     Reflect.deleteProperty(window, "auth");
   });
 
-  it("shows 'nothing is playing' when window.nowPlaying is unavailable", () => {
-    render(<NowPlayingPage />);
+  it("shows 'nothing is playing' when window.nowPlaying is unavailable", async () => {
+    const { container } = render(<NowPlayingPage />);
 
     expect(screen.getByText("Nothing is playing right now.")).toBeInTheDocument();
+    await checkA11y(container);
   });
 
   it("shows the current track pulled on mount", async () => {
     installFakeNowPlayingApi({ track: TRACK, state: "playing" });
 
-    render(<NowPlayingPage />);
+    const { container } = render(<NowPlayingPage />);
 
     expect(await screen.findByText("Weights")).toBeInTheDocument();
     expect(screen.getByText(/by everything everything/i)).toBeInTheDocument();
     expect(screen.getByText(/from man alive/i)).toBeInTheDocument();
     expect(screen.getByText("Playing")).toBeInTheDocument();
+    await checkA11y(container);
   });
 
   it("updates when a track-changed event arrives after mount", async () => {
@@ -261,14 +264,23 @@ describe("NowPlayingPage", () => {
       );
     });
 
-    it("doesn't show track stats or a Last.fm link when the lookup fails", async () => {
+    it("still shows a best-guess Last.fm link (but no stats) when the lookup fails", async () => {
+      // Regression test: the "View on Last.fm" control used to live inside the
+      // `trackDetail ? ... : null` block, so a failed lookup hid it entirely. It's
+      // now an icon button built from a synchronous `guessedTrackUrl` (same pattern
+      // as ScrobbleDetailPage's own `trackUrl`), so it's present immediately and
+      // stays present even if the stats fetch never resolves.
       installFakeNowPlayingApi({ track: TRACK, state: "playing" });
       installFakeLastfmApi({ getTrackInfo: vi.fn().mockRejectedValue(new Error("network error")) });
 
       render(<NowPlayingPage />);
 
       await screen.findByText("Weights");
-      expect(screen.queryByRole("link", { name: /view on last\.fm/i })).not.toBeInTheDocument();
+      expect(screen.queryByText("Track listener(s)")).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /view on last\.fm/i })).toHaveAttribute(
+        "href",
+        "https://www.last.fm/music/Everything%20Everything/_/Weights",
+      );
     });
 
     it("shows the logged-in account's own play count for the track when Last.fm has one", async () => {
@@ -279,7 +291,15 @@ describe("NowPlayingPage", () => {
 
       render(<NowPlayingPage />);
 
-      expect(await screen.findByText("You've listened to this track 7 times.")).toBeInTheDocument();
+      // `<strong>` splits "You've listened to..." across several text nodes, so a
+      // single-string text query can't match it (same reasoning — and the same
+      // `.closest("p")` workaround — as ScrobbleDetailPage's own equivalent tests).
+      let statsParagraph: HTMLElement | undefined;
+      await waitFor(() => {
+        statsParagraph = screen.getByText(/you've listened to/i).closest("p") ?? undefined;
+        expect(statsParagraph).toBeTruthy();
+      });
+      expect(statsParagraph).toHaveTextContent("You've listened to Weights 7 times.");
       expect(getTrackInfo).toHaveBeenCalledWith("Everything Everything", "Weights", "alice");
     });
 
@@ -292,7 +312,86 @@ describe("NowPlayingPage", () => {
 
       render(<NowPlayingPage />);
 
-      expect(await screen.findByText("You've listened to this track 1 time.")).toBeInTheDocument();
+      let statsParagraph: HTMLElement | undefined;
+      await waitFor(() => {
+        statsParagraph = screen.getByText(/you've listened to/i).closest("p") ?? undefined;
+        expect(statsParagraph).toBeTruthy();
+      });
+      expect(statsParagraph).toHaveTextContent("You've listened to Weights 1 time.");
+    });
+
+    it("combines the artist's and track's own play counts into one callout when both are on file", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      installFakeLastfmApi({
+        getArtistInfo: vi.fn().mockResolvedValue({
+          name: "Everything Everything",
+          listeners: 123_456,
+          playCount: 7_890_123,
+          userPlayCount: 500,
+        }),
+        getTrackInfo: vi.fn().mockResolvedValue({ ...DEFAULT_TRACK_DETAIL, userPlayCount: 7 }),
+      });
+
+      render(<NowPlayingPage />);
+
+      let statsParagraph: HTMLElement | undefined;
+      await waitFor(() => {
+        statsParagraph = screen.getByText(/you've listened to/i).closest("p") ?? undefined;
+        expect(statsParagraph).toBeTruthy();
+      });
+      expect(statsParagraph).toHaveTextContent(
+        "You've listened to Everything Everything 500 times and Weights 7 times.",
+      );
+    });
+
+    it("omits the listened-to callout entirely when both counts are exactly zero", async () => {
+      // Regression test: this is the actual bug reported from a real screenshot — a
+      // first-ever listen (nothing scrobbled for this artist or track yet) rendered
+      // "You've listened to X 0 times and Y 0 times.", which reads as broken rather
+      // than informative. A `0` should be treated the same as "no count to show",
+      // not shown literally.
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      installFakeLastfmApi({
+        getArtistInfo: vi.fn().mockResolvedValue({
+          name: "Everything Everything",
+          listeners: 123_456,
+          playCount: 7_890_123,
+          userPlayCount: 0,
+        }),
+        getTrackInfo: vi.fn().mockResolvedValue({ ...DEFAULT_TRACK_DETAIL, userPlayCount: 0 }),
+      });
+
+      render(<NowPlayingPage />);
+
+      await screen.findByText("Weights");
+      await waitFor(() => {
+        expect(screen.queryByText(/you've listened to/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it("shows only the artist's clause when the track's own count is zero", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      installFakeLastfmApi({
+        getArtistInfo: vi.fn().mockResolvedValue({
+          name: "Everything Everything",
+          listeners: 123_456,
+          playCount: 7_890_123,
+          userPlayCount: 500,
+        }),
+        getTrackInfo: vi.fn().mockResolvedValue({ ...DEFAULT_TRACK_DETAIL, userPlayCount: 0 }),
+      });
+
+      render(<NowPlayingPage />);
+
+      let statsParagraph: HTMLElement | undefined;
+      await waitFor(() => {
+        statsParagraph = screen.getByText(/you've listened to/i).closest("p") ?? undefined;
+        expect(statsParagraph).toBeTruthy();
+      });
+      expect(statsParagraph).toHaveTextContent("You've listened to Everything Everything 500 times.");
     });
 
     it("doesn't show a personal play count when nobody is logged in", async () => {
@@ -314,11 +413,11 @@ describe("NowPlayingPage", () => {
 
       // getTrackInfo is still called (without a username) once the stats fetch
       // resolves — assert on that instead of a fixed timeout, then confirm no
-      // personal-play-count line rendered.
+      // personal-play-count callout rendered.
       await waitFor(() => {
         expect(getTrackInfo).toHaveBeenCalledWith("Everything Everything", "Weights", undefined);
       });
-      expect(screen.queryByText(/you've listened to this track/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/you've listened to/i)).not.toBeInTheDocument();
     });
 
     it("doesn't show a personal play count when Last.fm has none on file for this account", async () => {
@@ -329,7 +428,7 @@ describe("NowPlayingPage", () => {
       render(<NowPlayingPage />);
 
       await screen.findByText("Weights");
-      expect(screen.queryByText(/you've listened to this track/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/you've listened to/i)).not.toBeInTheDocument();
     });
   });
 
@@ -464,13 +563,20 @@ describe("NowPlayingPage", () => {
     });
 
     it("doesn't render a progress bar when the track has no known duration", async () => {
+      // Checked via the MUI LinearProgress-specific class, not a bare
+      // `role: "progressbar"` query — same reasoning (and flakiness this fixes) as
+      // the "reported durationSec of exactly 0" regression test further down:
+      // ArtistInfoPanel's own "Loading artist info…" CircularProgress spinner shares
+      // that role and can still legitimately be in the document at this point, which
+      // made a bare role query intermittently pass or fail depending on how many
+      // artist/track/tag fetches were still in flight when this assertion ran.
       installFakeNowPlayingApi({ track: TRACK_WITHOUT_DURATION, state: "playing" });
       installFakeLastfmApi();
 
       render(<NowPlayingPage />);
 
       await screen.findByText("Weights");
-      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+      expect(document.querySelector(".MuiLinearProgress-root")).not.toBeInTheDocument();
     });
 
     it("doesn't render a progress bar (or divide by zero) for a reported durationSec of exactly 0", async () => {
@@ -558,6 +664,82 @@ describe("NowPlayingPage", () => {
       render(<NowPlayingPage />);
 
       expect(await screen.findByText(/no additional artist info available/i)).toBeInTheDocument();
+    });
+
+    it("looks up the artist with the active account, so a personal play count can be shown", async () => {
+      // Regression test: NowPlayingPage used to call useArtistInfo(track?.artist)
+      // without a username, so info.userPlayCount (the artist-level "Play(s) in your
+      // library" stat, and half of the combined listened-to callout) could never be
+      // populated even while logged in — unlike ScrobbleDetailPage, which always
+      // passed the active account for the same lookup.
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      const getArtistInfo = vi.fn().mockResolvedValue({
+        name: "Everything Everything",
+        listeners: 123_456,
+        playCount: 7_890_123,
+      });
+      installFakeLastfmApi({ getArtistInfo });
+
+      render(<NowPlayingPage />);
+
+      await waitFor(() => {
+        expect(getArtistInfo).toHaveBeenCalledWith("Everything Everything", "alice");
+      });
+    });
+
+    it("shows a third 'Play(s) in your library' stat once the artist's own play count is known", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeAuthApi("alice");
+      installFakeLastfmApi({
+        getArtistInfo: vi.fn().mockResolvedValue({
+          name: "Everything Everything",
+          listeners: 123_456,
+          playCount: 7_890_123,
+          userPlayCount: 500,
+        }),
+      });
+
+      render(<NowPlayingPage />);
+
+      expect(await screen.findByText("Play(s) in your library")).toBeInTheDocument();
+      expect(screen.getByText("500")).toBeInTheDocument();
+    });
+
+    it("doesn't show the 'Play(s) in your library' stat when nobody is logged in", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+
+      await screen.findByText(/a british art-rock band\./i);
+      expect(screen.queryByText("Play(s) in your library")).not.toBeInTheDocument();
+    });
+
+    it("shows popular tags as links to their Last.fm tag page", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeLastfmApi({
+        getTopTags: vi.fn().mockResolvedValue(["art rock", "indie"]),
+      });
+
+      render(<NowPlayingPage />);
+
+      expect(await screen.findByText("art rock")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "art rock" })).toHaveAttribute(
+        "href",
+        "https://www.last.fm/tag/art%20rock",
+      );
+      expect(screen.getByText("indie")).toBeInTheDocument();
+    });
+
+    it("doesn't show a 'Popular Tags' heading when there are none", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      installFakeLastfmApi();
+
+      render(<NowPlayingPage />);
+
+      await screen.findByText(/a british art-rock band\./i);
+      expect(screen.queryByText("Popular Tags")).not.toBeInTheDocument();
     });
   });
 
@@ -679,6 +861,24 @@ describe("NowPlayingPage", () => {
 
       expect(await screen.findByText("2")).toBeInTheDocument();
       expect(getTrackInfo).toHaveBeenCalledTimes(2);
+    });
+
+    it("also re-fetches popular tags when the refresh button is clicked", async () => {
+      installFakeNowPlayingApi({ track: TRACK, state: "playing" });
+      const getTopTags = vi.fn().mockResolvedValue([]);
+      installFakeLastfmApi({ getTopTags });
+
+      render(<NowPlayingPage />);
+      await screen.findByText("Weights");
+      await waitFor(() => {
+        expect(getTopTags).toHaveBeenCalledTimes(1);
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Refresh track info" }));
+
+      await waitFor(() => {
+        expect(getTopTags).toHaveBeenCalledTimes(2);
+      });
     });
 
     it("doesn't show a refresh button when nothing is playing", () => {

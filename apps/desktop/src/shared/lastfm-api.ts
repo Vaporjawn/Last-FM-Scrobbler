@@ -71,7 +71,12 @@ export interface LastfmDataApi {
    * doesn't include this count at all, so it's always a second, independent request
    * either way — call sites that don't need it don't pay for it. */
   getLovedTracksCount(user: string): Promise<number>;
-  getArtistInfo(artist: string, username?: string): Promise<ArtistInfo>;
+  /** `undefined` when Last.fm has no such artist in its catalog (error code 6 — a
+   * routine, common outcome for missing/garbage artist metadata, not a real failure)
+   * — see `main/lastfm/wire-lastfm-data.ts`'s `isNotFoundError`. */
+  getArtistInfo(artist: string, username?: string): Promise<ArtistInfo | undefined>;
+  /** Empty (not a rejection) for the same "no such artist" case as `getArtistInfo`
+   * above. */
   getSimilarArtists(artist: string, limit?: number): Promise<readonly SimilarArtist[]>;
   /** Popular community tags for an artist — see `LastfmClient.getTopTags`. */
   getTopTags(artist: string): Promise<readonly string[]>;
