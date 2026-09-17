@@ -209,4 +209,43 @@ describe("NavigationSidebar", () => {
       expect(screen.getByLabelText("Expand sidebar")).toBeInTheDocument();
     });
   });
+
+  // Regression test for a real bug: SidebarButton used to render its ListItemButton
+  // directly as a List child with no ListItem wrapper - since ListItemButton renders
+  // as a plain <button> (not <li>), that put non-<li> elements directly inside the
+  // <ul> a MUI List renders, which axe-core's `list` rule correctly flags as invalid
+  // (confirmed live via an axe-core scan of the real running app - every page failed
+  // this check, since the sidebar is global). Checked for both the collapsed
+  // (Tooltip-wrapped) and expanded button shapes, since the wrapper differs between
+  // them.
+  it.each([true, false])(
+    "keeps every <ul> valid (only <li> children) when collapsed=%s",
+    (isCollapsed) => {
+      const settings: AppSettings = {
+        ...DEFAULT_APP_SETTINGS,
+        aspectRatio: isCollapsed ? "9:14" : "16:9",
+      };
+      const { container } = render(
+        <SettingsContext.Provider
+          value={{
+            settings,
+            loading: false,
+            error: undefined,
+            updateSettings: vi.fn().mockResolvedValue(ok()),
+            resetSettings: vi.fn().mockResolvedValue(ok()),
+          }}
+        >
+          <NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} onReportBug={vi.fn()} />
+        </SettingsContext.Provider>,
+      );
+
+      const lists = container.querySelectorAll("ul");
+      expect(lists.length).toBeGreaterThan(0);
+      for (const list of lists) {
+        for (const child of list.children) {
+          expect(child.tagName).toBe("LI");
+        }
+      }
+    },
+  );
 });

@@ -7,6 +7,7 @@ import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
@@ -57,12 +58,25 @@ function SidebarButton({
 
   // Tooltips only add value once the label itself is hidden — showing both the visible
   // label and a tooltip repeating it is just noise.
-  return collapsed ? (
-    <Tooltip title={label} placement="right">
-      {button}
-    </Tooltip>
-  ) : (
-    button
+  //
+  // `ListItem disablePadding` wraps every button below - not just visual (MUI's own
+  // documented pattern for a List containing ListItemButton), it's also a real
+  // accessibility fix: a plain ListItemButton renders as a `<button>`, so a List of
+  // bare ListItemButtons (the previous shape here) put `<button>` elements directly
+  // inside the `<ul>` List renders, which axe-core's `list` rule correctly flags -
+  // `<ul>`/`<ol>` may only directly contain `<li>` (`disablePadding` just removes the
+  // padding List otherwise adds around each item, since ListItemButton already
+  // supplies its own).
+  return (
+    <ListItem disablePadding>
+      {collapsed ? (
+        <Tooltip title={label} placement="right">
+          {button}
+        </Tooltip>
+      ) : (
+        button
+      )}
+    </ListItem>
   );
 }
 
