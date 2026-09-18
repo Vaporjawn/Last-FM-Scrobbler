@@ -316,6 +316,23 @@ whichever account is currently active. If no account is active yet, scrobbles si
 accumulate in the queue (bounded — see docs/adr/0006-offline-queue-persistence.md)
 until the user logs in.
 
+### Network status / offline mode
+
+`NetworkStatusMonitor` (`packages/core/src/network/`) aggregates connectivity signal
+from every place the app talks to Last.fm/Libre.fm/ListenBrainz — see
+docs/adr/0011-network-status-detection.md for why it classifies real traffic instead
+of polling. `main/network/wire-network-status.ts` pushes its status to the renderer
+over `IPC_CHANNELS.networkStatusChanged` (same push-plus-pull shape as the auto-
+updater's `UpdatesApi`) and keeps the tray icon's tooltip in sync.
+
+In the renderer, `useNetworkStatus()` subscribes to this; `NetworkStatusChip` (mounted
+in `NavigationSidebar`) shows "Offline"/"N pending", hidden entirely when there's no
+connected service to test against or everything is already fully synced.
+`useLastfmFetch` and `useFriendsActivity` both auto-retry once, on an offline→online
+transition, any view that currently has an error — no per-page wiring needed beyond
+that. `ArtistInfoPanel` additionally offers a manual "Try again" button via
+`AsyncState`'s `onRetry`.
+
 ## Bug reporting
 
 A "Report a Bug" button lives at the bottom of the sidebar (next to Settings,
