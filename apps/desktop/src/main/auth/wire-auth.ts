@@ -1,9 +1,11 @@
 import electron from "electron";
 import {
   AuthFlow,
+  reportNetworkOutcome,
   type AccountStore,
   type AppCredentialsStore,
   type AuthFlowClient,
+  type NetworkStatusMonitor,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import { assertTrustedSender } from "../validate-ipc-sender.js";
@@ -72,6 +74,10 @@ export interface WireAuthOptions {
    * below — that fails synchronously, before any browser is opened, so whoever clicked
    * the button is still right there to see the normal error. */
   readonly onLoginFailed?: (message: string) => void;
+  /** Reports the login attempt's outcome for the offline-mode status chip/tray
+   * tooltip — see `reportNetworkOutcome`. Optional so existing/future tests that
+   * don't care about network-status reporting need not supply one. */
+  readonly networkStatus?: NetworkStatusMonitor;
 }
 
 /**
@@ -90,6 +96,7 @@ export function wireAuth(options: WireAuthOptions): () => void {
     relaunch,
     onLoginSuccess,
     onLoginFailed,
+    networkStatus,
   } = options;
 
   ipcMain.handle(IPC_CHANNELS.authIsConfigured, (event): boolean => {
@@ -131,7 +138,7 @@ export function wireAuth(options: WireAuthOptions): () => void {
     const authFlow = new AuthFlow({ client, openUrl });
     inFlightLogin = (async () => {
       try {
-        const session = await authFlow.authenticate();
+        const session = await reportNetworkOutcome(networkStatus, authFlow.authenticate());
         await accountStore.addAccount({
           username: session.username,
           sessionKey: session.sessionKey,

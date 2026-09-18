@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { AccountStore, AppCredentialsStore, type SecretStorage } from "@lastfm-scrobbler/core";
+import {
+  AccountStore,
+  AppCredentialsStore,
+  NetworkStatusMonitor,
+  ScrobbleQueue,
+  type SecretStorage,
+} from "@lastfm-scrobbler/core";
 
 const ipcMainHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 const ipcMain = {
@@ -212,6 +218,31 @@ describe("wireAuth", () => {
     wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore, client: failingClient, openUrl: vi.fn() });
 
     await expect(invoke(IPC_CHANNELS.authLogin)).rejects.toThrow("nope");
+  });
+
+  it("reports a classified network failure during login to networkStatus and surfaces the friendly message", async () => {
+    const accountStore = new AccountStore(inMemoryStorage());
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const networkStatus = new NetworkStatusMonitor({ queue });
+    const networkFailure = Object.assign(new Error("connect failed"), { code: "ENOTFOUND" });
+    const client = {
+      getAuthToken: vi.fn().mockRejectedValue(networkFailure),
+      buildAuthUrl: vi.fn(),
+      getSession: vi.fn(),
+    };
+    wireAuth({
+      expectedOrigin: EXPECTED_ORIGIN,
+      accountStore,
+      client,
+      openUrl: vi.fn(),
+      networkStatus,
+    });
+
+    await expect(invoke(IPC_CHANNELS.authLogin)).rejects.toThrow(
+      "Can't reach Last.fm — check your internet connection.",
+    );
+    expect(networkStatus.getStatus().online).toBe(false);
+    queue.close();
   });
 
   it("login throws a clear error when the app isn't configured with API credentials", async () => {

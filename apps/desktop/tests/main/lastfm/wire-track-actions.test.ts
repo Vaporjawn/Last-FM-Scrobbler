@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { AccountStore, type SecretStorage } from "@lastfm-scrobbler/core";
+import {
+  AccountStore,
+  NetworkStatusMonitor,
+  ScrobbleQueue,
+  type SecretStorage,
+} from "@lastfm-scrobbler/core";
 
 const ipcMainHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 const ipcMain = {
@@ -139,6 +144,29 @@ describe("wireTrackActions", () => {
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmLoveTrack)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmUnloveTrack)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmAddTags)).toBe(false);
+  });
+
+  it("reports a classified network failure to networkStatus", async () => {
+    const accountStore = await accountStoreWithActiveAccount("alice", "sk-123");
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const networkStatus = new NetworkStatusMonitor({ queue });
+    const networkFailure = Object.assign(new Error("connect failed"), { code: "ECONNREFUSED" });
+    wireTrackActions({
+      expectedOrigin: EXPECTED_ORIGIN,
+      accountStore,
+      createSessionClient: () => ({
+        love: vi.fn().mockRejectedValue(networkFailure),
+        unlove: vi.fn(),
+        addTags: vi.fn(),
+      }),
+      networkStatus,
+    });
+
+    await expect(invoke(IPC_CHANNELS.lastfmLoveTrack, "Artist", "Track")).rejects.toThrow(
+      "Can't reach Last.fm — check your internet connection.",
+    );
+    expect(networkStatus.getStatus().online).toBe(false);
+    queue.close();
   });
 
   describe("untrusted sender", () => {

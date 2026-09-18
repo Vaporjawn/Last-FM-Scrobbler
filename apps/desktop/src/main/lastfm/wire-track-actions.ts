@@ -1,5 +1,10 @@
 import electron from "electron";
-import type { AccountStore, LastfmClient } from "@lastfm-scrobbler/core";
+import {
+  reportNetworkOutcome,
+  type AccountStore,
+  type LastfmClient,
+  type NetworkStatusMonitor,
+} from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import { assertTrustedSender } from "../validate-ipc-sender.js";
 
@@ -30,6 +35,10 @@ export interface WireTrackActionsOptions {
    * configured at all (see `main/lastfm/resolve-lastfm-credentials.ts`), independent of
    * whether an account is logged in. */
   readonly createSessionClient: ((sessionKey: string) => TrackActionsClient) | undefined;
+  /** Reports each action's outcome for the offline-mode status chip/tray tooltip —
+   * see `reportNetworkOutcome`. Optional so existing/future tests that don't care
+   * about network-status reporting need not supply one. */
+  readonly networkStatus?: NetworkStatusMonitor;
 }
 
 const NOT_CONFIGURED_MESSAGE =
@@ -48,7 +57,7 @@ const NO_ACTIVE_ACCOUNT_MESSAGE =
  * always "whoever's currently active."
  */
 export function wireTrackActions(options: WireTrackActionsOptions): () => void {
-  const { expectedOrigin, accountStore, createSessionClient } = options;
+  const { expectedOrigin, accountStore, createSessionClient, networkStatus } = options;
 
   async function withActiveClient<T>(
     run: (client: TrackActionsClient) => Promise<T>,
@@ -60,7 +69,7 @@ export function wireTrackActions(options: WireTrackActionsOptions): () => void {
     if (!active) {
       throw new Error(NO_ACTIVE_ACCOUNT_MESSAGE);
     }
-    return run(createSessionClient(active.sessionKey));
+    return reportNetworkOutcome(networkStatus, run(createSessionClient(active.sessionKey)));
   }
 
   ipcMain.handle(
