@@ -1,6 +1,7 @@
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
+import "vitest-axe/extend-expect";
 
 // Explicit cleanup is required because tests import `afterEach` etc. from "vitest"
 // rather than relying on Vitest's `globals: true` — Testing Library's automatic

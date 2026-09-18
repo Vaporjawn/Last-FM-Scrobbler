@@ -12,6 +12,7 @@
     "src/renderer/src/**/*",
     "src/shared/**/*",
     "tests/setup.ts",
+    "tests/check-a11y.ts",
     "tests/renderer/**/*",
     "vitest.config.ts"
   ]
