@@ -3,6 +3,7 @@ import type { PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
 import type {
   ArtistInfo,
   Friend,
+  NetworkStatus,
   RecentTrack,
   SimilarArtist,
   TopAlbum,
@@ -19,6 +20,7 @@ import type { AuthApi } from "../shared/auth-api.js";
 import type { BugReportApi } from "../shared/bug-report-api.js";
 import type { FilterApi, FilterValidationResult } from "../shared/filter-api.js";
 import type { LastfmDataApi } from "../shared/lastfm-api.js";
+import type { NetworkStatusApi } from "../shared/network-status-api.js";
 import type { NowPlayingApi } from "../shared/now-playing-api.js";
 import type { NowPlayingSnapshot } from "../shared/now-playing-snapshot.js";
 import type { LibrefmApi, ListenBrainzApi } from "../shared/secondary-auth-api.js";
@@ -269,6 +271,21 @@ const updatesApi: UpdatesApi = {
   },
 };
 
+const networkStatusApi: NetworkStatusApi = {
+  getStatus() {
+    return ipcRenderer.invoke(IPC_CHANNELS.networkStatusGetStatus) as Promise<NetworkStatus>;
+  },
+  onStatusChanged(callback) {
+    const listener = (_event: Electron.IpcRendererEvent, status: NetworkStatus): void => {
+      callback(status);
+    };
+    ipcRenderer.on(IPC_CHANNELS.networkStatusChanged, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.networkStatusChanged, listener);
+    };
+  },
+};
+
 const appInfoApi: AppInfoApi = {
   getVersion() {
     return ipcRenderer.invoke(IPC_CHANNELS.appGetVersion) as Promise<string>;
@@ -288,6 +305,7 @@ contextBridge.exposeInMainWorld("filter", filterApi);
 contextBridge.exposeInMainWorld("bugReport", bugReportApi);
 contextBridge.exposeInMainWorld("settings", settingsApi);
 contextBridge.exposeInMainWorld("updates", updatesApi);
+contextBridge.exposeInMainWorld("networkStatus", networkStatusApi);
 contextBridge.exposeInMainWorld("appInfo", appInfoApi);
 // A plain value (not an async API) so the renderer can pick OS-appropriate copy (e.g.
 // "Close to tray" vs. "Close to menu bar") without a round trip — see SettingsPage.

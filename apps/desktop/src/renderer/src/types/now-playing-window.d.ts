@@ -4,6 +4,7 @@ import type { AuthApi } from "../../../shared/auth-api.js";
 import type { BugReportApi } from "../../../shared/bug-report-api.js";
 import type { FilterApi } from "../../../shared/filter-api.js";
 import type { LastfmDataApi } from "../../../shared/lastfm-api.js";
+import type { NetworkStatusApi } from "../../../shared/network-status-api.js";
 import type { NowPlayingApi } from "../../../shared/now-playing-api.js";
 import type { LibrefmApi, ListenBrainzApi } from "../../../shared/secondary-auth-api.js";
 import type { SettingsApi } from "../../../shared/settings-api.js";
@@ -24,6 +25,7 @@ declare global {
     readonly bugReport?: BugReportApi;
     readonly settings?: SettingsApi;
     readonly updates?: UpdatesApi;
+    readonly networkStatus?: NetworkStatusApi;
     readonly appInfo?: AppInfoApi;
     /** `process.platform`, exposed as a plain value — see `preload/index.ts`. Optional
      * for the same reason as the APIs above (absent outside a real Electron renderer). */

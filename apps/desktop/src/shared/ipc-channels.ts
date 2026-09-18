@@ -129,6 +129,14 @@ export const IPC_CHANNELS = {
   /** Triggers an update check immediately, regardless of `AppSettings.autoUpdateEnabled`. */
   updatesCheckNow: "updates:check-now",
 
+  /** Pushed whenever `NetworkStatusMonitor`'s status changes (online/offline,
+   * pendingCount, lastSyncedAt) — see `main/network/wire-network-status.ts` and
+   * `shared/network-status-api.ts`. */
+  networkStatusChanged: "network-status:changed",
+  /** Renderer -> main `invoke`: pulls the current status on mount, same push-plus-
+   * pull reasoning as `updatesGetStatus`/`nowPlayingGetCurrent`. */
+  networkStatusGetStatus: "network-status:get-status",
+
   /** Real per-artist photo lookup via Deezer — see `shared/artist-image-api.ts` and
    * `packages/core`'s `fetchArtistImageUrl` for why this isn't a `lastfm:*` channel. */
   artistImageGetUrl: "artist-image:get-url",
