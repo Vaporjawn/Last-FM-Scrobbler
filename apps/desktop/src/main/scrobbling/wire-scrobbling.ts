@@ -1,5 +1,6 @@
 import type {
   AccountStore,
+  NetworkStatusMonitor,
   ScrobbleEligibleEvent,
   ScrobbleQueue,
   ScrobblingClient,
@@ -62,6 +63,11 @@ export interface ScrobblingServiceConnection {
 
 export interface WireScrobblingOptions {
   readonly queue: ScrobbleQueue;
+  /** Reports connectivity outcomes and pending-queue changes for the offline-mode
+   * status chip/tray tooltip — see `reportNetworkOutcome`'s docstring for the general
+   * pattern this follows. Optional so existing/future tests that don't care about
+   * network-status reporting need not supply one. */
+  readonly networkStatus?: NetworkStatusMonitor;
   /** Last.fm's account store — kept as its own named field (rather than folded into
    * `additionalServices`) since it's this app's original and still-primary scrobbling
    * destination, and every existing caller/test already supplies it this way. Optional
@@ -156,7 +162,8 @@ interface ConnectedService {
  * idempotent-safe to retry).
  */
 export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle {
-  const { queue, accountStore, createSessionClient, onScrobbled, onScrobbleFailed } = options;
+  const { queue, accountStore, createSessionClient, onScrobbled, onScrobbleFailed, networkStatus } =
+    options;
   let consecutiveFailures = 0;
 
   const primaryService: ScrobblingServiceConnection | undefined =
@@ -190,6 +197,7 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
       timestamp: event.startedAt,
       ...toOptionalTrackFields(event.track),
     });
+    networkStatus?.reportQueueChanged();
   }
 
   async function onTrackChanged(event: TrackChangedEvent): Promise<void> {
@@ -248,6 +256,7 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
       // Routing it through that same accounting instead means a keychain/storage
       // failure eventually surfaces to the user exactly like a real network outage
       // would, rather than disappearing silently.
+      networkStatus?.reportFailure(error);
       consecutiveFailures += 1;
       if (consecutiveFailures === FAILURE_NOTIFICATION_THRESHOLD) {
         const reason = error instanceof Error ? error.message : String(error);
@@ -282,6 +291,7 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
             id,
             ok: false as const,
             reason: error instanceof Error ? error.message : String(error),
+            cause: error,
           };
         }
       }),
@@ -295,6 +305,15 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     // reachable isn't the "can't scrobble at all" condition onScrobbleFailed exists to
     // report.
     const anyServiceReachable = outcomes.some((outcome) => outcome.ok);
+    if (anyServiceReachable) {
+      networkStatus?.reportSuccess();
+    } else {
+      for (const outcome of outcomes) {
+        if (!outcome.ok) {
+          networkStatus?.reportFailure(outcome.cause);
+        }
+      }
+    }
 
     const accepted: ScrobbledTrack[] = [];
     batch.forEach((item, index) => {
@@ -333,6 +352,7 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
         }
       }
     });
+    networkStatus?.reportQueueChanged();
 
     if (anyServiceReachable) {
       consecutiveFailures = 0;

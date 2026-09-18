@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { AccountStore, ScrobbleQueue, type SecretStorage } from "@lastfm-scrobbler/core";
+import {
+  AccountStore,
+  NetworkStatusMonitor,
+  ScrobbleQueue,
+  type ScrobblingClient,
+  type SecretStorage,
+} from "@lastfm-scrobbler/core";
 import type { TrackInfo } from "@lastfm-scrobbler/shared-types";
 import { wireScrobbling } from "../../../src/main/scrobbling/wire-scrobbling.js";
 
@@ -674,5 +680,52 @@ describe("wireScrobbling", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("reports success to networkStatus when a drain batch reaches a connected service", async () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const accountStore = new AccountStore(inMemoryStorage());
+    await accountStore.addAccount({ username: "alice", sessionKey: "key" });
+    await accountStore.setActiveAccount("alice");
+    const networkStatus = new NetworkStatusMonitor({ queue });
+    const client: ScrobblingClient = {
+      updateNowPlaying: vi.fn(),
+      scrobble: vi.fn().mockResolvedValue({ results: [{ ignoredCode: 0 }] }),
+    };
+    const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+      queue,
+      accountStore,
+      createSessionClient: () => client,
+      networkStatus,
+    });
+    onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+    await drainOnce();
+
+    expect(networkStatus.getStatus().online).toBe(true);
+    stop();
+    queue.close();
+  });
+
+  it("reports a classified network failure to networkStatus when connectedServices() rejects", async () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const failingAccountStore = {
+      getActiveAccount: vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error("keychain unavailable"), { code: "ECONNREFUSED" })),
+    } as unknown as AccountStore;
+    const networkStatus = new NetworkStatusMonitor({ queue });
+    const { drainOnce, stop } = wireScrobbling({
+      queue,
+      accountStore: failingAccountStore,
+      createSessionClient: vi.fn(),
+      networkStatus,
+    });
+
+    await drainOnce();
+
+    expect(networkStatus.getStatus().online).toBe(false);
+    stop();
+    queue.close();
   });
 });
