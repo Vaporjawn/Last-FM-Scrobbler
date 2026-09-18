@@ -1,7 +1,8 @@
-import type { RecentTrack } from "@lastfm-scrobbler/core";
+import type { NetworkStatus, RecentTrack } from "@lastfm-scrobbler/core";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LastfmDataApi } from "../../src/shared/lastfm-api.js";
+import type { NetworkStatusApi } from "../../src/shared/network-status-api.js";
 import { useFriendsActivity } from "../../src/renderer/src/hooks/use-friends-activity.js";
 
 // This codebase otherwise deliberately has no dedicated hook test files (every other
@@ -56,9 +57,32 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Matches `use-updates.test.ts`'s own `installFakeUpdatesApi` convention — bypasses
+ * `window.networkStatus`'s `readonly` typing via `Object.defineProperty` rather than a
+ * direct assignment, and returns a way to push status updates on demand. */
+function installFakeNetworkStatusApi(initial: NetworkStatus): {
+  push: (status: NetworkStatus) => void;
+} {
+  const listeners = new Set<(status: NetworkStatus) => void>();
+  const api: NetworkStatusApi = {
+    getStatus: vi.fn().mockResolvedValue(initial),
+    onStatusChanged: (callback) => {
+      listeners.add(callback);
+      return () => listeners.delete(callback);
+    },
+  };
+  Object.defineProperty(window, "networkStatus", { value: api, configurable: true });
+  return {
+    push: (status) => {
+      for (const listener of listeners) listener(status);
+    },
+  };
+}
+
 describe("useFriendsActivity", () => {
   afterEach(() => {
     Reflect.deleteProperty(window, "lastfm");
+    Reflect.deleteProperty(window, "networkStatus");
   });
 
   it("starts every friend at loading with no track", () => {
@@ -227,5 +251,59 @@ describe("useFriendsActivity", () => {
       });
     });
     expect(getRecentTracks).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-fetches automatically once network status flips from offline to online, only if any entry currently has an error", async () => {
+    const { push } = installFakeNetworkStatusApi({ online: true, pendingCount: 0, lastSyncedAt: null });
+    const getRecentTracks = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce([track("Recovered Song")]);
+    installFakeLastfmApi(getRecentTracks);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const { result } = renderHook(() => useFriendsActivity(["alice"]));
+
+    await waitFor(() => {
+      expect(result.current.activityByUsername.alice?.error).toBe("boom");
+    });
+
+    act(() => {
+      push({ online: false, pendingCount: 0, lastSyncedAt: null });
+    });
+    act(() => {
+      push({ online: true, pendingCount: 0, lastSyncedAt: 1_700_000_000 });
+    });
+
+    await waitFor(() => {
+      expect(getRecentTracks).toHaveBeenCalledTimes(2);
+    });
+    expect(result.current.activityByUsername.alice).toEqual({
+      track: track("Recovered Song"),
+      loading: false,
+      error: undefined,
+    });
+    warn.mockRestore();
+  });
+
+  it("does not re-fetch on reconnect when no entry currently has an error", async () => {
+    const { push } = installFakeNetworkStatusApi({ online: true, pendingCount: 0, lastSyncedAt: null });
+    const getRecentTracks = vi.fn().mockResolvedValue([track("Song")]);
+    installFakeLastfmApi(getRecentTracks);
+
+    renderHook(() => useFriendsActivity(["alice"]));
+    await waitFor(() => {
+      expect(getRecentTracks).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      push({ online: false, pendingCount: 0, lastSyncedAt: null });
+    });
+    act(() => {
+      push({ online: true, pendingCount: 0, lastSyncedAt: 1_700_000_001 });
+    });
+    await delay(2);
+
+    expect(getRecentTracks).toHaveBeenCalledTimes(1);
   });
 });

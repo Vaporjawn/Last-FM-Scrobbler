@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchEachWithLimit } from "./fetch-each-with-limit.js";
 import type { FriendActivityState } from "./friend-activity-state.js";
+import { useNetworkStatus } from "./use-network-status.js";
 
 export type FriendsActivityMap = Readonly<Record<string, FriendActivityState>>;
 
@@ -95,6 +96,29 @@ export function useFriendsActivity(usernames: readonly string[]): FriendsActivit
   const refetch = useCallback(() => {
     setReloadToken((token) => token + 1);
   }, []);
+
+  // Same reconnect-triggered refetch behavior as `useLastfmFetch` — see that hook's
+  // matching effect for the full reasoning — adapted to this hook's per-username
+  // error map instead of a single `error` field.
+  const { status: networkStatus } = useNetworkStatus();
+  const wasOfflineRef = useRef(false);
+  const hasAnyErrorRef = useRef(false);
+  hasAnyErrorRef.current = Object.values(activityByUsername).some(
+    (entry) => entry.error !== undefined,
+  );
+
+  useEffect(() => {
+    if (networkStatus.online === false) {
+      wasOfflineRef.current = true;
+      return;
+    }
+    if (networkStatus.online === true && wasOfflineRef.current) {
+      wasOfflineRef.current = false;
+      if (hasAnyErrorRef.current) {
+        refetch();
+      }
+    }
+  }, [networkStatus.online, refetch]);
 
   return { activityByUsername, refetch };
 }
