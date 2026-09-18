@@ -274,12 +274,6 @@ export function NowPlayingPage(): JSX.Element {
                   // duration (see e.g. adapter-macos's getPosition), but a progress
                   // bar over 100% would look broken if one ever didn't.
                   value={Math.min(100, Math.max(0, (positionSec / track.durationSec) * 100))}
-                  // MUI's LinearProgress renders `role="progressbar"` but no
-                  // accessible name of its own (axe: aria-progressbar-name) — this is
-                  // the only progress bar on the page, so a fixed label is enough;
-                  // it doesn't need to repeat the track title already shown right
-                  // below it.
-                  aria-label="Playback progress"
                   sx={{ borderRadius: 1, height: 6, mb: 0.5 }}
                 />
                 <Stack direction="row" sx={{ justifyContent: "space-between" }}>
