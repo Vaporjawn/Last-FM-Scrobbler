@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
+import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { SettingsProvider } from "./contexts/SettingsProvider.js";
 import { TrayPopover } from "./TrayPopover.js";
 
@@ -28,4 +29,12 @@ function Root(): JSX.Element {
   );
 }
 
-createRoot(container).render(<Root />);
+// Wraps the whole tree (both branches of Root, above) — see ErrorBoundary's own
+// docstring for why it sits outside SettingsProvider specifically: an error thrown by
+// SettingsProvider itself (or anything App depends on before its own ThemeProvider
+// mounts) still needs to be caught, not just errors from deeper in the tree.
+createRoot(container).render(
+  <ErrorBoundary>
+    <Root />
+  </ErrorBoundary>,
+);
