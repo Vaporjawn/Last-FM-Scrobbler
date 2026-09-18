@@ -20,6 +20,9 @@ export interface ArtistInfoPanelProps {
   readonly similarArtists: readonly SimilarArtist[];
   readonly loading: boolean;
   readonly error: string | undefined;
+  /** Passed through to `AsyncState`'s own `onRetry` — see that prop's docstring.
+   * Omitted entirely where the caller has no way to re-fetch. */
+  readonly onRetry?: () => void;
   /** Popular community tags (see `LastfmClient.getTopTags`) — omitted entirely (no
    * "Popular tags" row at all, not an empty one) when the caller doesn't have any to
    * show yet (e.g. still loading). Both NowPlayingPage and ScrobbleDetailPage fetch
@@ -42,6 +45,7 @@ export function ArtistInfoPanel({
   similarArtists,
   loading,
   error,
+  onRetry,
   topTags,
 }: ArtistInfoPanelProps): JSX.Element {
   const artistLastfmUrl = `https://www.last.fm/music/${encodeURIComponent(artistName)}`;
@@ -71,7 +75,7 @@ export function ArtistInfoPanel({
         {loading ? (
           <AsyncState kind="loading" label="Loading artist info…" />
         ) : error ? (
-          <AsyncState kind="error" message={error} />
+          <AsyncState kind="error" message={error} {...(onRetry ? { onRetry } : {})} />
         ) : info ? (
           <>
             {bioSummary ? (

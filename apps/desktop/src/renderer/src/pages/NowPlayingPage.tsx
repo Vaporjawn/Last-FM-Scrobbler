@@ -371,6 +371,7 @@ export function NowPlayingPage(): JSX.Element {
           similarArtists={similarArtists}
           loading={artistInfoLoading}
           error={artistInfoError}
+          onRetry={refetchArtistInfo}
           topTags={topTags}
         />
       </Box>

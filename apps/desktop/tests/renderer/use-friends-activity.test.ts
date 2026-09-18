@@ -276,13 +276,13 @@ describe("useFriendsActivity", () => {
     });
 
     await waitFor(() => {
-      expect(getRecentTracks).toHaveBeenCalledTimes(2);
+      expect(result.current.activityByUsername.alice).toEqual({
+        track: track("Recovered Song"),
+        loading: false,
+        error: undefined,
+      });
     });
-    expect(result.current.activityByUsername.alice).toEqual({
-      track: track("Recovered Song"),
-      loading: false,
-      error: undefined,
-    });
+    expect(getRecentTracks).toHaveBeenCalledTimes(2);
     warn.mockRestore();
   });
 

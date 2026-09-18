@@ -210,6 +210,7 @@ export function ScrobbleDetailPage({
           similarArtists={similarArtists}
           loading={artistInfoLoading}
           error={artistInfoError}
+          onRetry={refetchArtistInfo}
           topTags={topTags}
         />
       </Box>

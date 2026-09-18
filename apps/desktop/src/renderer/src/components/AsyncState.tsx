@@ -50,11 +50,10 @@ interface AsyncStateEmptyProps {
 interface AsyncStateErrorProps {
   readonly kind: "error";
   readonly message: string;
-  /** Only pass this where the page actually has a way to re-fetch. As of this
-   * component's introduction, none of this app's data-fetching hooks
-   * (`useRecentTracks`/`useTopArtists`/`useFriends`/`useArtistInfo`) expose a retry
-   * function — they fetch once off their dependencies — so no current call site
-   * passes this; it exists for pages/hooks that gain one later. */
+  /** Pass this where the page actually has a way to re-fetch — most
+   * `useLastfmFetch`-based hooks already expose `refetch` (see `ArtistInfoPanel`'s
+   * `onRetry` for the first wired example). Omit where there's genuinely nothing to
+   * retry. */
   readonly onRetry?: () => void;
 }
 
