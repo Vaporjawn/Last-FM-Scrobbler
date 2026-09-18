@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://lastfm.freetls.fastly.net https://cdn-images.dzcdn.net"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.freetls.fastly.net https://*.dzcdn.net"
     />
     <!--
       img-src explicitly allows Last.fm's real image CDN (confirmed live via curl
@@ -12,14 +12,29 @@
       *photos* specifically are the one exception — see docs/modules/core.md's "Known
       limitation: artist images" for why those never differ from a Last.fm-side
       placeholder in practice, and where real artist photos actually come from
-      instead) plus Deezer's image CDN (`cdn-images.dzcdn.net`, confirmed live the
-      same way — see `packages/core`'s `fetchArtistImageUrl`, the real source for
-      artist photos throughout this app) — without either, `default-src 'self'`
-      silently blocks every one of those images at the browser level with a CSP
-      violation in the console, which is exactly what happened here the first time:
-      the whole data/IPC/render pipeline worked correctly end to end, real image URLs
-      reached a real <img src>, and the browser blocked the request anyway. `data:`
-      covers any inline/base64 image content (icons, etc.).
+      instead) plus Deezer's image CDN (`*.dzcdn.net` — see `packages/core`'s
+      `fetchArtistImageUrl`, the real source for artist photos throughout this app) —
+      without either, `default-src 'self'` silently blocks every one of those images
+      at the browser level with a CSP violation in the console, which is exactly what
+      happened here the first time: the whole data/IPC/render pipeline worked
+      correctly end to end, real image URLs reached a real <img src>, and the browser
+      blocked the request anyway.
+
+      Both hosts are wildcarded to a subdomain (`https://*.freetls.fastly.net`,
+      `https://*.dzcdn.net`) rather than pinned to one exact hostname
+      (`lastfm.freetls.fastly.net`, `cdn-images.dzcdn.net`): both `imageUrl`/
+      `avatarUrl` (Last.fm) and `picture_xl`/`picture_big`/`picture_medium` (Deezer)
+      come straight from each provider's own live API response, not from a URL this
+      app constructs — so the exact subdomain is whatever that provider's CDN happens
+      to hand back, and it can differ per response/endpoint. Confirmed live: Last.fm
+      has served images from both `lastfm.freetls.fastly.net` (the case this policy
+      originally covered) and `lastfm-img.freetls.fastly.net` (which broke a
+      hostname-pinned policy the same way, with the same "everything passed tests but
+      images were silently blocked" symptom); Deezer has been seen using both
+      `cdn-images.dzcdn.net` and `e-cdn-images.dzcdn.net`. Pinning to one observed
+      hostname reintroduces this exact bug the next time either provider's CDN
+      responds from a different subdomain of the same service. `data:` covers any
+      inline/base64 image content (icons, etc.).
     -->
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
