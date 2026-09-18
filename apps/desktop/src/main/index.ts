@@ -10,6 +10,7 @@ import {
   LastfmClient,
   ListenBrainzClient,
   Logger,
+  NetworkStatusMonitor,
   ScrobbleQueue,
   type CompiledFilter,
 } from "@lastfm-scrobbler/core";
@@ -29,6 +30,7 @@ import { wireTrackActions } from "./lastfm/wire-track-actions.js";
 import { wireArtistImage } from "./artist-images/wire-artist-image.js";
 import { createAccountStore } from "./auth/create-account-store.js";
 import { wireFilterValidation } from "./filters/wire-filter-validation.js";
+import { wireNetworkStatus } from "./network/wire-network-status.js";
 import { wireAuth } from "./auth/wire-auth.js";
 import { buildLibrefmClient } from "./auth/build-librefm-client.js";
 import { wireSecondaryAuth } from "./auth/wire-secondary-auth.js";
@@ -291,6 +293,21 @@ void app.whenReady().then(async () => {
     logger.warn("Last.fm API credentials not configured this run — login disabled.");
   }
 
+  // Constructed here (rather than inside the `if (accountStore)` block further down,
+  // where the queue used to live) so wireAuth/wireLastfmData/wireTrackActions below —
+  // called before that block — can report to the same shared monitor as scrobbling
+  // does. `networkStatus` stays `undefined` under the exact same condition
+  // `scrobbleQueue` does (both need secure storage), so the offline-mode status
+  // surface (see main/network/wire-network-status.ts, wired further down) is simply
+  // inert — never pushed to, never claiming a real online/offline state — in a build
+  // with no secure storage available, rather than reporting anything misleading.
+  const scrobbleQueue = accountStore
+    ? new ScrobbleQueue({ databasePath: join(userDataDir, "scrobble-queue.sqlite3") })
+    : undefined;
+  const networkStatus = scrobbleQueue
+    ? new NetworkStatusMonitor({ queue: scrobbleQueue })
+    : undefined;
+
   wireAuth({
     expectedOrigin: expectedRendererOrigin,
     accountStore,
@@ -298,6 +315,7 @@ void app.whenReady().then(async () => {
     openUrl: openExternalIfSafe,
     credentialsSource: resolvedCredentials?.source,
     appCredentialsStore,
+    ...(networkStatus ? { networkStatus } : {}),
     relaunch: () => {
       isQuitting = true;
       app.relaunch();
@@ -391,7 +409,7 @@ void app.whenReady().then(async () => {
       });
     },
   });
-  wireLastfmData({ client: lastfmClient });
+  wireLastfmData({ client: lastfmClient, ...(networkStatus ? { networkStatus } : {}) });
   // Tries Last.fm's own artist photo first when `lastfmClient` is configured (usually
   // a miss — see wire-artist-image.ts's docstring), Deezer's public artist search
   // always as the guaranteed fallback — unlike wireLastfmData above, this still works
@@ -414,7 +432,12 @@ void app.whenReady().then(async () => {
         })
     : undefined;
 
-  wireTrackActions({ expectedOrigin: expectedRendererOrigin, accountStore, createSessionClient });
+  wireTrackActions({
+    expectedOrigin: expectedRendererOrigin,
+    accountStore,
+    createSessionClient,
+    ...(networkStatus ? { networkStatus } : {}),
+  });
 
   let onScrobbleEligible: CreateMainWindowOptions["onScrobbleEligible"];
   let onTrackChanged: CreateMainWindowOptions["onTrackChanged"];
@@ -425,12 +448,10 @@ void app.whenReady().then(async () => {
   // librefmAccountStore/listenbrainzAccountStore all share one safeStorage instance,
   // so they're either all defined or all undefined together — this one check stands
   // in for "is secure storage available" generally, not just for Last.fm.
-  if (accountStore) {
-    const scrobbleQueue = new ScrobbleQueue({
-      databasePath: join(userDataDir, "scrobble-queue.sqlite3"),
-    });
+  if (accountStore && scrobbleQueue && networkStatus) {
     const scrobbling = wireScrobbling({
       queue: scrobbleQueue,
+      networkStatus,
       ...(lastfmClient && createSessionClient ? { accountStore, createSessionClient } : {}),
       additionalServices: [
         {
@@ -613,6 +634,21 @@ void app.whenReady().then(async () => {
     ),
   });
 
+  // `undefined` under the exact same condition `networkStatus` itself is (see its
+  // construction above) — nothing to push/sync in that case, so this whole block is
+  // just skipped rather than wiring an inert monitor.
+  const networkStatusHandle = networkStatus
+    ? wireNetworkStatus({
+        monitor: networkStatus,
+        // Live accessors, not captured values — same "read fresh on every push"
+        // reasoning as wireUpdates'/wireAppInfo's own getMainWindow/onShowMainWindow
+        // right below, and as `tray` itself (module-scope, assigned further down once
+        // the tray block runs).
+        getMainWindow: () => mainWindow,
+        getTray: () => tray,
+      })
+    : undefined;
+
   wireAppInfo({
     getVersion: () => app.getVersion(),
     // Reads the live `mainWindow` binding, not a stale reference, matching
@@ -716,6 +752,10 @@ void app.whenReady().then(async () => {
         app.quit();
       },
     });
+    // Catches up the tooltip to whatever status is already known — `tray` didn't
+    // exist yet when networkStatusHandle was wired above, so any status change
+    // before this point had nothing to apply its tooltip text to.
+    networkStatusHandle?.syncTrayTooltip();
   }
 
   app.on("before-quit", () => {
