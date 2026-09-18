@@ -45,26 +45,57 @@
     />
     <meta name="application-name" content="Last.fm Scrobbler" />
 
-    <!-- `theme.ts` hardcodes MUI's dark palette (mode: "dark", no light variant) — this
-    app has exactly one theme, so these can be static rather than media-query-driven.
-    `color-scheme` makes Chromium's own UI (scrollbars, native form controls, the
-    default white canvas painted before any CSS loads) dark by default instead of
-    light-then-flipped; `theme-color` is the matching signal for anything else that
-    reads it (e.g. a future `BrowserWindow` titlebar overlay color). -->
+    <!-- `theme.ts`'s `createAppTheme(mode)` supports both "light" and "dark" now (see
+    `AppSettings.themeMode`, toggled by Settings → General's "Dark mode" switch) — so
+    this app has two themes, not one, and these can no longer be static. The `content`
+    values below are just the pre-script default (dark, this app's original look) —
+    `/theme-init.js`, loaded just after them, overwrites both to match the user's real
+    persisted setting before anything paints. `color-scheme` makes Chromium's own UI
+    (scrollbars, native form controls, the default canvas painted before any CSS loads)
+    match instead of light-then-flipped (or vice versa); `theme-color` is the matching
+    signal for anything else that reads it (e.g. a future `BrowserWindow` titlebar
+    overlay color). -->
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#121212" />
+    <meta name="theme-color" content="#0f0c0b" />
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Sets `<html>`'s `data-theme` attribute (which the `<style>` block below keys
+    off of) from the real persisted theme *before* that `<style>` block — and
+    therefore before anything paints. Plain, parser-blocking, same-origin external
+    script rather than an inline one: this page's CSP (`script-src 'self'`, above) has
+    no `'unsafe-inline'`/nonce, so an inline `<script>` here would simply be blocked.
+    See `renderer/public/theme-init.js` for the rest of this story (where
+    `window.initialThemeMode` comes from, why it's already defined by the time this
+    runs). Without this, a light-mode user saw a dark flash on every launch — before
+    React ever mounted and swapped in the real MUI theme. -->
+    <script src="/theme-init.js"></script>
 
     <style>
       /* Inline and synchronous on purpose: paints before styles.css or any bundled CSS
       is fetched/parsed, closing the brief flash-of-white-canvas Chromium otherwise
-      shows between window-open and MUI's CssBaseline taking over — #121212 is MUI's
-      own default dark `palette.background.default`, so this seam is invisible. */
+      shows between window-open and MUI's CssBaseline taking over. Keyed off `<html>`'s
+      `data-theme` attribute (set by `/theme-init.js`, just above, before this
+      `<style>` block is even reached — see that script's own comment) rather than a
+      single fixed color, now that this app has two themes. `#0f0c0b`/`#faf8f5` are
+      `theme/index.ts`'s own real `DARK_BACKGROUND.default`/`LIGHT_BACKGROUND.default`
+      — not MUI's generic `#121212` default this used to hardcode — so this seam stays
+      invisible in both modes. `:not([data-theme="light"])`, rather than a plain
+      `[data-theme="dark"]`, is what covers the brief instant before `/theme-init.js`
+      actually runs: falling back to dark matches this app's original, dark-only look. */
       html,
       body {
         margin: 0;
-        background: #121212;
+      }
+
+      html:not([data-theme="light"]),
+      html:not([data-theme="light"]) body {
+        background: #0f0c0b;
         color-scheme: dark;
+      }
+
+      html[data-theme="light"],
+      html[data-theme="light"] body {
+        background: #faf8f5;
+        color-scheme: light;
       }
 
       /* Shown only until React mounts and replaces #root's contents (see main.tsx) —
@@ -77,6 +108,9 @@
         min-height: 100vh;
       }
 
+      /* rgba(255,255,255,0.12)/rgba(0,0,0,0.12) — the same proportional ring contrast
+      against each background. `border-top-color` (Last.fm's own red) stays the same
+      brand color in both modes, same as `theme/index.ts`'s own `palette.primary.main`. */
       #root:empty::after {
         content: "";
         width: 2.5rem;
@@ -85,6 +119,10 @@
         border: 3px solid rgba(255, 255, 255, 0.12);
         border-top-color: #d51007;
         animation: app-loading-spin 0.8s linear infinite;
+      }
+
+      html[data-theme="light"] #root:empty::after {
+        border-color: rgba(0, 0, 0, 0.12);
       }
 
       @keyframes app-loading-spin {

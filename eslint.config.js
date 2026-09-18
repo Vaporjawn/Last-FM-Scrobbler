@@ -58,4 +58,18 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
+  {
+    // `apps/desktop/src/renderer/public/` is Vite's `publicDir` — files here are
+    // copied verbatim into the built renderer output and served as real static
+    // assets (see `renderer/index.html`'s `/favicon.png` and `/theme-init.js`), not
+    // bundled/transpiled by Vite the way `renderer/src/**` is. `theme-init.js`
+    // specifically is a plain classic `<script src>` loaded directly by `index.html`
+    // (deliberately not a module — see its own comment), so it needs real browser
+    // globals (`window`, `document`) declared, same reasoning as the Node-scripts
+    // block above just for the opposite runtime.
+    files: ["apps/desktop/src/renderer/public/**/*.js"],
+    languageOptions: {
+      globals: globals.browser,
+    },
+  },
 );

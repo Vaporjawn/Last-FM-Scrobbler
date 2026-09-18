@@ -175,6 +175,28 @@ describe("createMainWindow", () => {
     });
   });
 
+  describe("initial theme mode", () => {
+    it("carries the given themeMode into webPreferences.additionalArguments", () => {
+      createMainWindow({ playbackSource: undefined, initialThemeMode: "light" });
+
+      const created = createdWindows.at(-1);
+      const webPreferences = created?.options.webPreferences as
+        | { additionalArguments?: readonly string[] }
+        | undefined;
+      expect(webPreferences?.additionalArguments).toContain("--initial-theme-mode=light");
+    });
+
+    it("defaults to dark when initialThemeMode is omitted", () => {
+      createMainWindow({ playbackSource: undefined });
+
+      const created = createdWindows.at(-1);
+      const webPreferences = created?.options.webPreferences as
+        | { additionalArguments?: readonly string[] }
+        | undefined;
+      expect(webPreferences?.additionalArguments).toContain("--initial-theme-mode=dark");
+    });
+  });
+
   describe("default landscape window size", () => {
     it("uses the flat default size on a large-enough display", () => {
       createMainWindow({ playbackSource: undefined, initialAspectRatio: 0 });

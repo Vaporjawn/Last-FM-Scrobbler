@@ -7,7 +7,8 @@ import type {
   ScrobbleEligibleEvent,
   TrackChangedEvent,
 } from "@lastfm-scrobbler/core";
-import type { WindowBounds } from "../shared/settings-api.js";
+import type { ThemeMode, WindowBounds } from "../shared/settings-api.js";
+import { buildInitialThemeModeArgument } from "../shared/initial-theme-mode-argument.js";
 import { computeMinimumSizeForAspectRatio } from "./window/compute-minimum-size-for-aspect-ratio.js";
 import { isSafeExternalUrl } from "./window/is-safe-external-url.js";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
@@ -93,6 +94,16 @@ export interface CreateMainWindowOptions {
    * to show the window as soon as its first frame is ready, same as before this option
    * existed. */
   readonly startHidden?: boolean;
+  /** The persisted `AppSettings.themeMode` at the moment this window is created — read
+   * synchronously from `SettingsStore` in `main/index.ts`, before this function is even
+   * called, so it's available here in time to reach `preload/index.ts` (via
+   * `additionalArguments` below) before this window's renderer content loads at all.
+   * See `renderer/index.html`/`renderer/public/theme-init.js` for why: without this, a
+   * light-mode user saw a dark flash on every launch, before React ever mounted and
+   * swapped in the real MUI theme. Omit (or `undefined`) falls back to `"dark"` — this
+   * app's original look, and `DEFAULT_APP_SETTINGS.themeMode`'s own default — matching
+   * every caller (including this module's own tests) that doesn't care about theming. */
+  readonly initialThemeMode?: ThemeMode;
 }
 
 /**
@@ -110,6 +121,7 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
     initialAspectRatio,
     filter,
     startHidden,
+    initialThemeMode,
   } = options;
 
   // `initialBounds` (a prior session's real size/position) takes precedence over any
@@ -239,6 +251,13 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
       // are what actually keep the renderer's web content isolated from Node, and
       // neither is affected by this setting.
       sandbox: false,
+      // Carries the persisted theme mode into the renderer process's `process.argv`,
+      // read back out by `preload/index.ts`'s `resolveThemeModeFromArgv` and exposed
+      // as `window.initialThemeMode` — see `initialThemeMode`'s own docstring above
+      // for why this needs to be available this early (before `loadFile` below even
+      // resolves), and `shared/initial-theme-mode-argument.ts` for the shared flag
+      // format both sides agree on.
+      additionalArguments: [buildInitialThemeModeArgument(initialThemeMode ?? "dark")],
       // Electron enables Chromium's Hunspell-based spellchecker by default, which
       // loads dictionary data and runs its own utility process. This app has no
       // free-text input surfaces, so there's nothing for it to check — skip the

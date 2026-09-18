@@ -543,7 +543,8 @@ void app.whenReady().then(async () => {
   function createAndWireMainWindow(windowOptions?: {
     startHidden?: boolean;
   }): Electron.BrowserWindow {
-    const { windowBounds, aspectRatio, filterExpression, skipNonMusicVideos } = settingsStore.get();
+    const { windowBounds, aspectRatio, filterExpression, skipNonMusicVideos, themeMode } =
+      settingsStore.get();
     // Compiled once, here, not live-updated: unlike aspectRatio/themeMode above,
     // `Tracker` (packages/core) has no way to swap its filter after construction, so
     // a filter-expression/skipNonMusicVideos change only takes effect on the next
@@ -559,6 +560,7 @@ void app.whenReady().then(async () => {
       initialAspectRatio: resolveAspectRatioValue(aspectRatio),
       ...(filter ? { filter } : {}),
       ...(windowOptions?.startHidden ? { startHidden: true } : {}),
+      initialThemeMode: themeMode,
     });
     wireCloseToTray({
       window,

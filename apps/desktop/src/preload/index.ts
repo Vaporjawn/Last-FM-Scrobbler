@@ -12,6 +12,7 @@ import type {
   UserProfile,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../shared/ipc-channels.js";
+import { resolveThemeModeFromArgv } from "../shared/initial-theme-mode-argument.js";
 import type { AppInfoApi } from "../shared/app-info-api.js";
 import type { ArtistImageApi } from "../shared/artist-image-api.js";
 import type { AuthApi } from "../shared/auth-api.js";
@@ -291,3 +292,17 @@ contextBridge.exposeInMainWorld("appInfo", appInfoApi);
 // A plain value (not an async API) so the renderer can pick OS-appropriate copy (e.g.
 // "Close to tray" vs. "Close to menu bar") without a round trip — see SettingsPage.
 contextBridge.exposeInMainWorld("platform", process.platform);
+// Same "plain value, not an async API" reasoning as `platform` above — the persisted
+// `AppSettings.themeMode` this window was created with (see `create-main-window.ts`'s
+// `initialThemeMode` option, threaded here via `additionalArguments`/`process.argv`;
+// see `shared/initial-theme-mode-argument.ts` for the flag format both sides agree
+// on). `renderer/public/theme-init.js` is the one and only reader — a plain,
+// parser-blocking `<script src>` in `index.html` (this page's CSP, `script-src
+// 'self'`, blocks inline scripts, so it can't just read this off a `<script>` tag
+// itself the way a looser-CSP app might) that runs before any of the page's own
+// content paints, applying it to `<html>`'s `data-theme` attribute so index.html's
+// pre-mount CSS (and `ErrorBoundary.tsx`'s crash-fallback screen) can honor the
+// user's real theme instead of assuming dark. `contextBridge.exposeInMainWorld` calls
+// are guaranteed by Electron to run before any of the page's own scripts, so
+// `theme-init.js` can always read this synchronously without a race.
+contextBridge.exposeInMainWorld("initialThemeMode", resolveThemeModeFromArgv(process.argv));

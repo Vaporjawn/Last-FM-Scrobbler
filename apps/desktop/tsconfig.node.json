@@ -9,6 +9,7 @@
     "src/preload/**/*",
     "src/shared/**/*",
     "tests/main/**/*",
+    "tests/shared/**/*",
     "electron.vite.config.ts",
     "e2e/**/*",
     "playwright.config.ts"
