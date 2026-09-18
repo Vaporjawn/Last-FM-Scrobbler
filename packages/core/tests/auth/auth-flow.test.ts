@@ -70,6 +70,34 @@ describe("AuthFlow", () => {
     expect(getSession).toHaveBeenCalledTimes(1);
   });
 
+  it("uses a real setTimeout-based sleep when no sleepImpl is given", async () => {
+    vi.useFakeTimers();
+    try {
+      const getSession = vi
+        .fn()
+        .mockImplementationOnce(notAuthorizedYet)
+        .mockResolvedValueOnce(SESSION);
+      const client = {
+        getAuthToken: vi.fn().mockResolvedValue("token-abc"),
+        buildAuthUrl: vi.fn().mockReturnValue("https://example.com/auth"),
+        getSession,
+      };
+      // No sleepImpl provided — exercises the module's real, setTimeout-backed
+      // default sleep implementation instead of a test double.
+      const flow = new AuthFlow({ client, openUrl: vi.fn() });
+
+      const resultPromise = flow.authenticate();
+      // Matches the module's own DEFAULT_POLL_INTERVAL_MS (3000).
+      await vi.advanceTimersByTimeAsync(3000);
+      const session = await resultPromise;
+
+      expect(getSession).toHaveBeenCalledTimes(2);
+      expect(session).toEqual(SESSION);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("gives up with AuthTimeoutError once the deadline passes", async () => {
     let elapsedMs = 0;
     const client = {

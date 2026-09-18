@@ -85,6 +85,17 @@ describe("AccountStore", () => {
     expect((await store.getActiveAccount())?.username).toBe("bob");
   });
 
+  it("removing a non-active account leaves the active account untouched", async () => {
+    const store = new AccountStore(createInMemoryStorage());
+    await store.addAccount({ username: "alice", sessionKey: "sk-alice" });
+    await store.addAccount({ username: "bob", sessionKey: "sk-bob" });
+
+    await store.removeAccount("bob");
+
+    expect(await store.listAccounts()).toEqual([{ username: "alice", sessionKey: "sk-alice" }]);
+    expect((await store.getActiveAccount())?.username).toBe("alice");
+  });
+
   it("removing the last account leaves no active account", async () => {
     const store = new AccountStore(createInMemoryStorage());
     await store.addAccount({ username: "alice", sessionKey: "sk-alice" });
@@ -104,6 +115,35 @@ describe("AccountStore", () => {
 
     expect(await second.listAccounts()).toEqual([{ username: "alice", sessionKey: "sk-alice" }]);
     expect((await second.getActiveAccount())?.username).toBe("alice");
+  });
+
+  describe("tolerance of a storage backend with missing values", () => {
+    it("skips a listed key whose value is missing when listing accounts", async () => {
+      const storage = createInMemoryStorage();
+      await storage.set("account:alice", JSON.stringify({ username: "alice", sessionKey: "sk-alice" }));
+      // Simulate a key that shows up in list() (e.g. underlying storage enumerated it)
+      // but whose value has since disappeared (deleted out from under a stale listing).
+      const originalGet = storage.get.bind(storage);
+      storage.get = (key: string) => (key === "account:ghost" ? Promise.resolve(undefined) : originalGet(key));
+      const originalList = storage.list.bind(storage);
+      storage.list = async () => [...(await originalList()), "account:ghost"];
+
+      const store = new AccountStore(storage);
+
+      expect(await store.listAccounts()).toEqual([{ username: "alice", sessionKey: "sk-alice" }]);
+    });
+
+    it("returns undefined when the active-account pointer references a missing record", async () => {
+      const storage = createInMemoryStorage();
+      const store = new AccountStore(storage);
+      await store.addAccount({ username: "alice", sessionKey: "sk-alice" });
+      // Corrupt storage directly: the active pointer still says "alice", but the
+      // underlying account record for "alice" has been removed without going
+      // through removeAccount (e.g. external tampering, a partial migration).
+      await storage.delete("account:alice");
+
+      expect(await store.getActiveAccount()).toBeUndefined();
+    });
   });
 
   describe("namespace", () => {
