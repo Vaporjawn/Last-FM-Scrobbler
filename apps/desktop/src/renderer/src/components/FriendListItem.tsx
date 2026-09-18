@@ -1,4 +1,6 @@
 import type { JSX } from "react";
+import MusicOffIcon from "@mui/icons-material/MusicOff";
+import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import ListItem from "@mui/material/ListItem";
@@ -39,9 +41,11 @@ export interface FriendListItemProps {
    * change from this component's first version, which fetched its own activity
    * per-row: `FriendsPage` needs visibility into every friend's `nowPlaying` status
    * to sort "scrobbling now" friends to the top, which isn't possible if that data
-   * lives inside each row instead of above them. Renders nothing extra while
-   * loading, on failure, or if the friend has no scrobble history — `error` is
-   * intentionally not surfaced here (see `FriendActivityState`'s docstring). */
+   * lives inside each row instead of above them. Shows a plain "No recent activity"
+   * placeholder (not a blank space) while loading, on failure, or if the friend has
+   * no scrobble history — `error` is intentionally not surfaced here (see
+   * `FriendActivityState`'s docstring); the placeholder doesn't distinguish which of
+   * those three it is. */
   readonly activity: FriendActivityState;
   /** Opens `ScrobbleDetailPage` for this friend's activity track when given — same
    * prop shape and same "row becomes a real button" treatment as
@@ -243,7 +247,41 @@ export function FriendListItem({
               </Stack>
             </Box>
           </Box>
-        ) : null}
+        ) : (
+          // A same-shaped placeholder, not `null` — rendering nothing here used to
+          // collapse this half of the row down to whatever height the friend column
+          // alone needed, so a list mixing friends with and without recent activity
+          // visibly zig-zagged between two different row heights row to row. This
+          // keeps every row the same height and shape regardless of which friends
+          // happen to have anything to show on the right, matching the two-column
+          // layout's own "reserved unconditionally" contract (see this component's
+          // docstring) — that contract already covered horizontal alignment; this is
+          // the vertical half of the same idea. The label itself needs the same
+          // `minWidth: 0` Box + `noWrap` treatment every other text element in this
+          // row already has (username, secondaryLine, track title, artist) — without
+          // it, this is the one piece of text in the whole row that can wrap onto a
+          // second line at the narrow widths this app supports, silently reopening
+          // the exact row-height mismatch this placeholder exists to close.
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0 }}>
+            <Avatar
+              variant="rounded"
+              sx={{
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
+                flexShrink: 0,
+                bgcolor: "action.selected",
+                color: "text.secondary",
+              }}
+            >
+              <MusicOffIcon fontSize="medium" />
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary" noWrap>
+                No recent activity
+              </Typography>
+            </Box>
+          </Box>
+        )}
       </Paper>
     </ListItem>
   );

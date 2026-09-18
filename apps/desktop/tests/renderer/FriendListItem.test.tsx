@@ -66,6 +66,43 @@ describe("FriendListItem", () => {
     expect(screen.queryByText("·")).not.toBeInTheDocument();
   });
 
+  it("shows a same-shaped placeholder (not blank space) when the friend has no recent activity", () => {
+    // Regression test: this used to render nothing at all for a friend with no
+    // `activity.track`, which collapsed that half of the row down to whatever
+    // height the friend column alone needed — a list mixing friends with and
+    // without activity visibly zig-zagged between two different row heights.
+    render(
+      <List>
+        <FriendListItem friend={friend({})} activity={EMPTY_ACTIVITY} />
+      </List>,
+    );
+
+    expect(screen.getByText("No recent activity")).toBeInTheDocument();
+  });
+
+  it("keeps the 'No recent activity' placeholder on one line, like every other row's text", () => {
+    // Every other piece of text in this row (username, real name/location, track
+    // title, artist) is `noWrap` — so at the narrow widths the track/activity column
+    // has to support (see PlaybackStatusChip's own docstring), it truncates with an
+    // ellipsis instead of wrapping onto a second line. This placeholder used to be
+    // the one exception: plain multi-line-capable Typography with no `noWrap` and no
+    // `minWidth: 0` on its wrapping Box, so at those same narrow widths it could wrap
+    // "No recent activity" onto two lines while every activity-having row next to it
+    // stayed single-line — reintroducing, for this specific row shape, the exact
+    // row-height inconsistency the same-shaped-placeholder fix above exists to
+    // prevent. Asserting the real `noWrap` class (not a jsdom-computed layout value —
+    // see TopAlbumListItem.test.tsx's docstring for why this project doesn't trust
+    // jsdom's flex-layout resolution) is what actually distinguishes "will truncate"
+    // from "will wrap".
+    render(
+      <List>
+        <FriendListItem friend={friend({})} activity={EMPTY_ACTIVITY} />
+      </List>,
+    );
+
+    expect(screen.getByText("No recent activity")).toHaveClass("MuiTypography-noWrap");
+  });
+
   it("is not interactive when onSelectTrack is omitted", () => {
     render(
       <List>

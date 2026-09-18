@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
+import { fetchEachWithLimit } from "./fetch-each-with-limit.js";
 
 export type AccountAvatarMap = Readonly<Record<string, string | undefined>>;
+
+/** Maximum number of `getUserInfo` calls this hook allows in flight at once — same
+ * concurrency limit and rationale as `useFriendsActivity`'s `MAX_CONCURRENT_REQUESTS`,
+ * applied here for consistency even though this hook is currently only ever called
+ * with the small locally-saved-account list (see `SettingsPage`), not a friend list. */
+const MAX_CONCURRENT_REQUESTS = 8;
 
 /**
  * Real Last.fm profile-photo URLs for a list of account usernames (e.g. every saved
@@ -24,25 +31,24 @@ export function useAccountAvatars(usernames: readonly string[]): AccountAvatarMa
       setAvatarsByUsername({});
       return;
     }
+    const lastfm = window.lastfm;
     let cancelled = false;
 
-    usernames.forEach((username) => {
-      window.lastfm
-        ?.getUserInfo(username)
-        .then((profile) => {
-          if (!cancelled) {
-            setAvatarsByUsername((previous) => ({ ...previous, [username]: profile.avatarUrl }));
-          }
-        })
-        .catch(() => {
-          // Decorative data — a failed lookup falls back to the letter avatar exactly
-          // like "no photo found", silently, same contract as useFriendsActivity's
-          // per-item fetches and useArtistImage's artist-photo lookups.
-          if (!cancelled) {
-            setAvatarsByUsername((previous) => ({ ...previous, [username]: undefined }));
-          }
-        });
-    });
+    void fetchEachWithLimit(
+      usernames,
+      (username) => lastfm.getUserInfo(username),
+      MAX_CONCURRENT_REQUESTS,
+      (username, result) => {
+        if (cancelled) {
+          return;
+        }
+        // Decorative data — a failed lookup falls back to the letter avatar exactly
+        // like "no photo found", silently, same contract as useFriendsActivity's
+        // per-item fetches and useArtistImage's artist-photo lookups.
+        const avatarUrl = result.status === "fulfilled" ? result.value.avatarUrl : undefined;
+        setAvatarsByUsername((previous) => ({ ...previous, [username]: avatarUrl }));
+      },
+    );
 
     return () => {
       cancelled = true;

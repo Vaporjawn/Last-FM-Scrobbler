@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuthApi } from "../../src/shared/auth-api.js";
 import type { LastfmDataApi } from "../../src/shared/lastfm-api.js";
 import { FriendsPage } from "../../src/renderer/src/pages/FriendsPage.js";
+import { checkA11y } from "../check-a11y.js";
 
 function installFakeApis(options: {
   activeAccount?: string;
@@ -58,9 +59,10 @@ describe("FriendsPage", () => {
   it("prompts to log in when no account is active", async () => {
     installFakeApis({});
 
-    render(<FriendsPage onNavigateToSettings={vi.fn()} />);
+    const { container } = render(<FriendsPage onNavigateToSettings={vi.fn()} />);
 
     expect(await screen.findByText(/log in.*settings/i)).toBeInTheDocument();
+    await checkA11y(container);
   });
 
   it("takes the user to Settings when the login prompt's button is clicked", async () => {
@@ -82,11 +84,12 @@ describe("FriendsPage", () => {
         .mockResolvedValue([{ username: "bob", realName: "Bob Smith" }, { username: "carol" }]),
     });
 
-    render(<FriendsPage onNavigateToSettings={vi.fn()} />);
+    const { container } = render(<FriendsPage onNavigateToSettings={vi.fn()} />);
 
     expect(await screen.findByText("bob")).toBeInTheDocument();
     expect(screen.getByText("Bob Smith")).toBeInTheDocument();
     expect(screen.getByText("carol")).toBeInTheDocument();
+    await checkA11y(container);
   });
 
   it("shows an empty-state message when there are no friends", async () => {
