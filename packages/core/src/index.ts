@@ -18,6 +18,17 @@ export type {
   ScrobbleQueueOptions,
 } from "./queue/scrobble-queue.js";
 export { ScrobbleQueue } from "./queue/scrobble-queue.js";
+export { isNetworkError } from "./network/is-network-error.js";
+export type {
+  NetworkStatus,
+  NetworkStatusMonitorOptions,
+  QueueCountSource,
+} from "./network/network-status-monitor.js";
+export { NetworkStatusMonitor } from "./network/network-status-monitor.js";
+export {
+  NETWORK_UNAVAILABLE_MESSAGE,
+  reportNetworkOutcome,
+} from "./network/report-network-outcome.js";
 export { LastfmClient } from "./lastfm-api/client.js";
 export type { LastfmClientOptions } from "./lastfm-api/client.js";
 export { isRetryableApiErrorCode } from "./lastfm-api/is-retryable-api-error-code.js";
