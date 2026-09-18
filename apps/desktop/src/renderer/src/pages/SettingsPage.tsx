@@ -2,6 +2,7 @@ import type { JSX, SubmitEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import AspectRatioIcon from "@mui/icons-material/AspectRatio";
+import ClearIcon from "@mui/icons-material/Clear";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import HubIcon from "@mui/icons-material/Hub";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -15,6 +16,7 @@ import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import FormControl from "@mui/material/FormControl";
+import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import InputLabel from "@mui/material/InputLabel";
 import Link from "@mui/material/Link";
@@ -280,7 +282,8 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
-  const handleLibrefmConnect = (): void => {
+  const handleLibrefmConnect = (event: SubmitEvent<HTMLFormElement>): void => {
+    event.preventDefault();
     // Unlike Last.fm's two-step "save a key, then separately log in" flow, Libre.fm's
     // saved key takes effect immediately (see useLibrefmAuth's saveCredentials
     // docstring) — so a single "Connect" button chains both steps, since there's no
@@ -337,7 +340,8 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
-  const handleListenBrainzConnect = (): void => {
+  const handleListenBrainzConnect = (event: SubmitEvent<HTMLFormElement>): void => {
+    event.preventDefault();
     void listenBrainzConnect(listenBrainzToken).then((result) => {
       if (result.success) {
         setListenBrainzToken("");
@@ -476,6 +480,9 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     "start minimized",
     "login item",
     "open at login",
+    "enable scrobbling",
+    "disable scrobbling",
+    "pause scrobbling",
     "reset to defaults",
     "reset settings",
   );
@@ -570,12 +577,36 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                     <SearchIcon fontSize="small" color="disabled" />
                   </InputAdornment>
                 ),
+                // Same conditional clear button as ScrobblesPage's/FriendsPage's own
+                // search boxes (mirrored exactly, just against this page's
+                // `query`/`setQuery` state instead of their `searchQuery`/
+                // `setSearchQuery`) — there was no way to reset a typed query here
+                // short of manually deleting every character.
+                endAdornment: query ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      edge="end"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setQuery("");
+                      }}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined,
               },
             }}
-            sx={{
-              minWidth: 200,
-              "& .MuiOutlinedInput-root": { borderRadius: 999 },
-            }}
+            // Deliberately the theme's own default rounding (`shape.borderRadius: 10`,
+            // theme/index.ts), not a one-off pill shape — this previously overrode it
+            // to `borderRadius: 999` with no comment explaining why, inconsistent with
+            // ScrobblesPage's/FriendsPage's search boxes (which take the theme default
+            // unstyled) and with the theme's own explicit "without going full
+            // pill-shaped" rationale for 10px. Dropped rather than extending the pill
+            // shape app-wide so all three search boxes — and every other rounded
+            // surface in the app — share one deliberate treatment.
+            sx={{ minWidth: 200 }}
           />
           <SettingsSaveStatus state={saveState} />
         </Stack>
@@ -595,6 +626,23 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
         >
           {generalVisible ? (
             <SettingsSectionCard icon={<TuneIcon fontSize="small" />} title="General">
+              <SettingsRow
+                label="Enable scrobbling"
+                description={
+                  "Pause scrobbling without quitting the app — Now Playing keeps showing what's " +
+                  "actually playing, but nothing is submitted to your connected services while " +
+                  "this is off. Takes effect immediately, no restart needed."
+                }
+                control={
+                  <Switch
+                    checked={settings.scrobblingEnabled}
+                    onChange={(event) => {
+                      handleUpdateSetting({ scrobblingEnabled: event.target.checked });
+                    }}
+                    slotProps={{ input: { "aria-label": "Enable scrobbling" } }}
+                  />
+                }
+              />
               <SettingsRow
                 label="Dark mode"
                 description={
@@ -1059,53 +1107,59 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
                     Libre.fm
                   </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560, mb: 1 }}>
-                    <TextField
-                      // Deliberately not "Libre.fm API key" — SettingsPage.test.tsx's
-                      // existing Last.fm API-key tests query via a bare
-                      // /api key/i-style regex, which would otherwise ambiguously
-                      // match both this field and Last.fm's own (see this section's
-                      // sibling card below). "Key"/"Secret" alone stay unambiguous
-                      // while the adjacent "Libre.fm" heading above still makes it
-                      // clear what they're for.
-                      label="Key"
-                      value={librefmApiKey}
-                      onChange={(event) => {
-                        setLibrefmApiKey(event.target.value);
-                      }}
+                  {/* A real <form> (matching the Last.fm API-key form below) rather
+                      than a bare onClick handler on the button — otherwise pressing
+                      Enter after typing into either field does nothing, unlike every
+                      other text-entry-plus-submit control on this page. */}
+                  <Box component="form" onSubmit={handleLibrefmConnect}>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560, mb: 1 }}>
+                      <TextField
+                        // Deliberately not "Libre.fm API key" — SettingsPage.test.tsx's
+                        // existing Last.fm API-key tests query via a bare
+                        // /api key/i-style regex, which would otherwise ambiguously
+                        // match both this field and Last.fm's own (see this section's
+                        // sibling card below). "Key"/"Secret" alone stay unambiguous
+                        // while the adjacent "Libre.fm" heading above still makes it
+                        // clear what they're for.
+                        label="Key"
+                        value={librefmApiKey}
+                        onChange={(event) => {
+                          setLibrefmApiKey(event.target.value);
+                        }}
+                        size="small"
+                        fullWidth
+                        autoComplete="off"
+                      />
+                      <TextField
+                        label="Secret"
+                        type="password"
+                        value={librefmApiSecret}
+                        onChange={(event) => {
+                          setLibrefmApiSecret(event.target.value);
+                        }}
+                        size="small"
+                        fullWidth
+                        autoComplete="off"
+                      />
+                    </Stack>
+                    <Button
+                      type="submit"
                       size="small"
-                      fullWidth
-                      autoComplete="off"
-                    />
-                    <TextField
-                      label="Secret"
-                      type="password"
-                      value={librefmApiSecret}
-                      onChange={(event) => {
-                        setLibrefmApiSecret(event.target.value);
-                      }}
-                      size="small"
-                      fullWidth
-                      autoComplete="off"
-                    />
-                  </Stack>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={handleLibrefmConnect}
-                    disabled={
-                      librefmIsLoggingIn ||
-                      librefmIsSavingCredentials ||
-                      !librefmApiKey.trim() ||
-                      !librefmApiSecret.trim()
-                    }
-                  >
-                    {librefmIsLoggingIn
-                      ? "Waiting for approval on Libre.fm…"
-                      : librefmIsSavingCredentials
-                        ? "Saving…"
-                        : "Connect to Libre.fm"}
-                  </Button>
+                      variant="outlined"
+                      disabled={
+                        librefmIsLoggingIn ||
+                        librefmIsSavingCredentials ||
+                        !librefmApiKey.trim() ||
+                        !librefmApiSecret.trim()
+                      }
+                    >
+                      {librefmIsLoggingIn
+                        ? "Waiting for approval on Libre.fm…"
+                        : librefmIsSavingCredentials
+                          ? "Saving…"
+                          : "Connect to Libre.fm"}
+                    </Button>
+                  </Box>
                   <Divider sx={{ mt: 1.25 }} />
                 </Box>
               )}
@@ -1143,28 +1197,34 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                     </Link>{" "}
                     and paste it below.
                   </Typography>
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560 }}>
-                    <TextField
-                      label="User token"
-                      type="password"
-                      value={listenBrainzToken}
-                      onChange={(event) => {
-                        setListenBrainzToken(event.target.value);
-                      }}
-                      size="small"
-                      fullWidth
-                      autoComplete="off"
-                    />
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={handleListenBrainzConnect}
-                      disabled={listenBrainzIsConnecting || !listenBrainzToken.trim()}
-                      sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", md: "center" } }}
-                    >
-                      {listenBrainzIsConnecting ? "Connecting…" : "Connect"}
-                    </Button>
-                  </Stack>
+                  {/* A real <form> (matching the Last.fm API-key form below) rather
+                      than a bare onClick handler on the button — otherwise pressing
+                      Enter after typing into the token field does nothing, unlike
+                      every other text-entry-plus-submit control on this page. */}
+                  <Box component="form" onSubmit={handleListenBrainzConnect}>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560 }}>
+                      <TextField
+                        label="User token"
+                        type="password"
+                        value={listenBrainzToken}
+                        onChange={(event) => {
+                          setListenBrainzToken(event.target.value);
+                        }}
+                        size="small"
+                        fullWidth
+                        autoComplete="off"
+                      />
+                      <Button
+                        type="submit"
+                        size="small"
+                        variant="outlined"
+                        disabled={listenBrainzIsConnecting || !listenBrainzToken.trim()}
+                        sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", md: "center" } }}
+                      >
+                        {listenBrainzIsConnecting ? "Connecting…" : "Connect"}
+                      </Button>
+                    </Stack>
+                  </Box>
                 </Box>
               )}
             </SettingsSectionCard>

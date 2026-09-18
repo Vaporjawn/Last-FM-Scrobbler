@@ -37,6 +37,7 @@ import {
   type ResolvedLibrefmCredentials,
 } from "./auth/resolve-librefm-credentials.js";
 import { applyLoginItemSettings } from "./login-items/apply-login-item-settings.js";
+import { gateScrobblingEnabled } from "./scrobbling/gate-scrobbling-enabled.js";
 import { wireScrobbling } from "./scrobbling/wire-scrobbling.js";
 import { wireBugReport } from "./bug-report/wire-bug-report.js";
 import { createSettingsStore } from "./settings/settings-store.js";
@@ -490,13 +491,24 @@ void app.whenReady().then(async () => {
         });
       },
     });
-    onScrobbleEligible = scrobbling.onScrobbleEligible;
-    // Pushes a real-time "now playing" update to Last.fm on every new track — see
-    // wire-scrobbling.ts's ScrobblingHandle.onTrackChanged docstring for why this is
-    // separate from onScrobbleEligible above (different timeline, best-effort).
-    onTrackChanged = (event) => {
-      void scrobbling.onTrackChanged(event);
-    };
+    // Gates both callbacks on AppSettings.scrobblingEnabled, read fresh on every
+    // event — see gate-scrobbling-enabled.ts's own docstring for why this lives here,
+    // right at the seam between wireNowPlaying's Tracker callbacks and wireScrobbling's
+    // enqueue/updateNowPlaying calls, rather than baked into the CompiledFilter below
+    // (which can't be swapped after startup — this setting needs to be, with no
+    // restart).
+    const gatedScrobbling = gateScrobblingEnabled({
+      onScrobbleEligible: scrobbling.onScrobbleEligible,
+      // Pushes a real-time "now playing" update to Last.fm on every new track — see
+      // wire-scrobbling.ts's ScrobblingHandle.onTrackChanged docstring for why this is
+      // separate from onScrobbleEligible above (different timeline, best-effort).
+      onTrackChanged: (event) => {
+        void scrobbling.onTrackChanged(event);
+      },
+      isScrobblingEnabled: () => settingsStore.get().scrobblingEnabled,
+    });
+    onScrobbleEligible = gatedScrobbling.onScrobbleEligible;
+    onTrackChanged = gatedScrobbling.onTrackChanged;
   }
 
   wireBugReport({

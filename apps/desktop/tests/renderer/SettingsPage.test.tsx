@@ -9,6 +9,7 @@ import { DEFAULT_APP_SETTINGS, type AppSettings, type SettingsApi } from "../../
 import { SettingsProvider } from "../../src/renderer/src/contexts/SettingsProvider.js";
 import { SnackbarProvider } from "../../src/renderer/src/contexts/SnackbarProvider.js";
 import { SettingsPage } from "../../src/renderer/src/pages/SettingsPage.js";
+import { checkA11y } from "../check-a11y.js";
 
 /** `SettingsPage` fires snackbars via `useSnackbar()` and reads/writes settings via
  * `useSettings()` — real `SnackbarProvider`/`SettingsProvider` ancestors (not present
@@ -156,9 +157,10 @@ describe("SettingsPage", () => {
     installFakeAuthApi();
     installFakeAppInfoApi("1.2.3");
 
-    renderSettingsPage({ onNavigateToSettings: vi.fn() });
+    const { container } = renderSettingsPage({ onNavigateToSettings: vi.fn() });
 
     expect(await screen.findByText(/1\.2\.3/)).toBeInTheDocument();
+    await checkA11y(container);
   });
 
   it("shows a 'not configured' message when the app has no Last.fm API credentials", async () => {
@@ -190,9 +192,10 @@ describe("SettingsPage", () => {
       listAccounts: vi.fn().mockResolvedValue([]),
     });
 
-    renderSettingsPage({ onNavigateToSettings: vi.fn() });
+    const { container } = renderSettingsPage({ onNavigateToSettings: vi.fn() });
 
     expect(await screen.findByRole("button", { name: /log in with last\.fm/i })).toBeInTheDocument();
+    await checkA11y(container);
   });
 
   it("clicking login calls window.auth.login()", async () => {
@@ -308,6 +311,37 @@ describe("SettingsPage", () => {
       expect(logout).toHaveBeenCalledWith("alice");
     });
     expect(await screen.findByText("Logged out alice.")).toBeInTheDocument();
+  });
+
+  // Mirrors ScrobblesPage's/FriendsPage's own "search icon and clear button" tests —
+  // same conditional endAdornment pattern, applied to this page's `query`/`setQuery`
+  // state instead of their `searchQuery`/`setSearchQuery`.
+  describe("search icon and clear button", () => {
+    it("does not show a clear button when the search field is empty", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      await screen.findByPlaceholderText("Search settings…");
+
+      expect(screen.queryByRole("button", { name: /clear search/i })).not.toBeInTheDocument();
+    });
+
+    it("shows a clear button once search text is entered, and clicking it resets the search", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const searchBox = await screen.findByPlaceholderText("Search settings…");
+
+      fireEvent.change(searchBox, { target: { value: "notifications" } });
+      expect(screen.queryByText("General")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /clear search/i }));
+
+      expect(screen.getByPlaceholderText("Search settings…")).toHaveValue("");
+      expect(await screen.findByText("General")).toBeInTheDocument();
+    });
   });
 
   describe("account avatars", () => {
@@ -515,6 +549,44 @@ describe("SettingsPage", () => {
       });
     });
 
+    it("submits the Libre.fm connect form when Enter is pressed in a field, not just by clicking Connect", async () => {
+      // A real Enter keypress in a text <input> triggers a browser's native "implicit
+      // form submission" — dispatching a `submit` event on the field's enclosing
+      // <form> — which jsdom doesn't implement as a default action for simulated
+      // keydown events (see https://github.com/jsdom/jsdom/issues/3117). So this
+      // exercises that same mechanism directly instead of simulating the keypress
+      // itself: proving both that these fields now sit inside a real <form> (they
+      // didn't before this fix — Enter did nothing) and that submitting it invokes the
+      // same connect flow as clicking "Connect to Libre.fm" does.
+      const setCredentials = vi.fn().mockResolvedValue(undefined);
+      const login = vi.fn().mockResolvedValue({ username: "alice" });
+      installFakeAuthApi();
+      installFakeLibrefmApi({ setCredentials, login });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const keyField = await screen.findByLabelText(/^key$/i);
+      const secretField = screen.getByLabelText(/^secret$/i);
+      act(() => {
+        fireEvent.change(keyField, { target: { value: "lf-key" } });
+        fireEvent.change(secretField, { target: { value: "lf-secret" } });
+      });
+
+      const form = keyField.closest("form");
+      if (!form) {
+        throw new Error("Expected the Libre.fm key/secret fields to be wrapped in a <form>.");
+      }
+      act(() => {
+        fireEvent.submit(form);
+      });
+
+      await waitFor(() => {
+        expect(setCredentials).toHaveBeenCalledWith("lf-key", "lf-secret");
+      });
+      await waitFor(() => {
+        expect(login).toHaveBeenCalled();
+      });
+    });
+
     it("shows a single 'Log in with Libre.fm' button, no key fields, when credentials are baked in", async () => {
       const login = vi.fn().mockResolvedValue({ username: "alice" });
       installFakeAuthApi();
@@ -618,6 +690,32 @@ describe("SettingsPage", () => {
       });
       await waitFor(() => {
         expect(screen.getByLabelText(/user token/i)).toHaveValue("");
+      });
+    });
+
+    it("submits the ListenBrainz connect form when Enter is pressed in the token field, not just by clicking Connect", async () => {
+      // See the equivalent Libre.fm test above for why this fires `submit` on the
+      // field's form directly rather than simulating an Enter keydown.
+      const connect = vi.fn().mockResolvedValue({ username: "alice" });
+      installFakeAuthApi();
+      installFakeListenBrainzApi({ connect });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const tokenField = await screen.findByLabelText(/user token/i);
+      act(() => {
+        fireEvent.change(tokenField, { target: { value: "lb-token" } });
+      });
+
+      const form = tokenField.closest("form");
+      if (!form) {
+        throw new Error("Expected the ListenBrainz token field to be wrapped in a <form>.");
+      }
+      act(() => {
+        fireEvent.submit(form);
+      });
+
+      await waitFor(() => {
+        expect(connect).toHaveBeenCalledWith("lb-token");
       });
     });
 
@@ -902,6 +1000,61 @@ describe("SettingsPage", () => {
       expect(
         await screen.findByRole("switch", { name: /show application icon in the menu bar/i }),
       ).not.toBeChecked();
+    });
+  });
+
+  describe("scrobbling enabled", () => {
+    it("shows scrobbling enabled on by default", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      const scrobblingSwitch = await screen.findByRole("switch", { name: /enable scrobbling/i });
+      expect(scrobblingSwitch).toBeChecked();
+    });
+
+    it("reflects a previously-saved scrobblingEnabled: false setting on load", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, scrobblingEnabled: false }),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      const scrobblingSwitch = await screen.findByRole("switch", { name: /enable scrobbling/i });
+      expect(scrobblingSwitch).not.toBeChecked();
+    });
+
+    it("switching scrobbling off calls window.settings.set with scrobblingEnabled false", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) => Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }));
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      const scrobblingSwitch = await screen.findByRole("switch", { name: /enable scrobbling/i });
+
+      act(() => {
+        fireEvent.click(scrobblingSwitch);
+      });
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ scrobblingEnabled: false });
+      });
+    });
+
+    it("is findable via the search box", async () => {
+      installFakeAuthApi();
+      installFakeSettingsApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      await screen.findByRole("switch", { name: /enable scrobbling/i });
+
+      fireEvent.change(screen.getByPlaceholderText("Search settings…"), {
+        target: { value: "pause scrobbling" },
+      });
+
+      expect(await screen.findByRole("switch", { name: /enable scrobbling/i })).toBeInTheDocument();
     });
   });
 

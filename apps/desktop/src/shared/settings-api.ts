@@ -171,6 +171,29 @@ export interface AppSettings {
    */
   readonly startMinimized: boolean;
   /**
+   * When `true` (the default, so nobody who never visits the new toggle sees any
+   * behavior change), eligible plays are actually submitted — a scrobble-queue enqueue
+   * (`main/scrobbling/wire-scrobbling.ts`'s `onScrobbleEligible`) and a real-time "now
+   * playing" push to every connected service (`onTrackChanged`). Turning this off
+   * pauses *submission* only: `main/playback/wire-now-playing.ts`'s raw relay to the
+   * renderer keeps running untouched, so the Now Playing view still shows whatever's
+   * actually playing — see that module's own docstring for why "what's playing" and
+   * "what's eligible to scrobble" are deliberately different questions. This is the
+   * one blanket pause switch (no quitting the app required); `filterExpression`/
+   * `skipNonMusicVideos` below remain the per-track exclusion mechanism. **Read fresh
+   * at the moment each event fires, not captured once at startup** —
+   * `main/scrobbling/gate-scrobbling-enabled.ts` is what actually enforces this, right
+   * where `wireNowPlaying`'s `onScrobbleEligible`/`onTrackChanged` callbacks would
+   * otherwise reach `wireScrobbling`'s enqueue/`updateNowPlaying` calls — so toggling
+   * Settings → General's "Enable scrobbling" switch takes effect on the very next
+   * track, same live-update convention as `notifyOnScrobble`/`notifyOnScrobbleFailure`
+   * above. Deliberately **not** baked into a `CompiledFilter` the way
+   * `filterExpression`/`skipNonMusicVideos` are: `Tracker` (packages/core) can't swap
+   * its filter after construction, which is exactly the restart-required behavior this
+   * setting exists to avoid.
+   */
+  readonly scrobblingEnabled: boolean;
+  /**
    * A `packages/core` filter-DSL expression (see `compileFilter`'s docstring for the
    * grammar — fields `artist`/`title`/`album`/`albumArtist`/`durationSec`/`sourceApp`,
    * operators `==`/`!=`/`contains`/`matches`/`<`/`>`/etc., combined with `and`/`or`/
@@ -256,7 +279,11 @@ export interface AppSettings {
  * settings existed, so anyone who never visits the new toggles sees no behavior
  * change. `launchAtLogin`/`startMinimized` start `false` — this app never registered
  * itself as a login item before these settings existed, so anyone who never visits the
- * new toggles sees no behavior change. `showDockIcon`/`showTrayIcon` start `true` —
+ * new toggles sees no behavior change. `scrobblingEnabled` starts `true` — this app
+ * always submitted eligible plays unconditionally before this setting existed, so
+ * anyone who never visits Settings → General's new "Enable scrobbling" toggle sees no
+ * behavior change; it's an opt-out pause switch, not an opt-in. `showDockIcon`/
+ * `showTrayIcon` start `true` —
  * this app always showed both before these settings existed, so anyone who never
  * visits the new toggles sees no visual change. `skipNonMusicVideos` starts `false` —
  * see that field's own docstring for why this one is opt-in rather than opt-out. */
@@ -270,6 +297,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notifyOnScrobbleFailure: true,
   launchAtLogin: false,
   startMinimized: false,
+  scrobblingEnabled: true,
   skipNonMusicVideos: false,
   showDockIcon: true,
   showTrayIcon: true,
