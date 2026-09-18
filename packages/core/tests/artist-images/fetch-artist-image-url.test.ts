@@ -44,6 +44,12 @@ describe("fetchArtistImageUrl", () => {
     expect(await fetchArtistImageUrl("zzznonexistent", fetchMock)).toBeUndefined();
   });
 
+  it("returns undefined when the response body omits the data field entirely", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({}));
+
+    expect(await fetchArtistImageUrl("zzznonexistent", fetchMock)).toBeUndefined();
+  });
+
   it("treats Deezer's own 'no photo' placeholder hash as no image", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
       jsonResponse({
