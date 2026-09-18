@@ -16,6 +16,7 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import { isPortraitAspectRatio } from "../../../shared/settings-api.js";
 import { useSettings } from "../contexts/settings-context.js";
+import { NetworkStatusChip } from "./NetworkStatusChip.js";
 import { NAV_ITEMS, SETTINGS_ITEM, type NavItem, type ViewId } from "./nav-items.js";
 
 const WIDTH_EXPANDED = 200;
@@ -293,6 +294,7 @@ export function NavigationSidebar({
         />
         {onReportBug ? <ReportBugButton collapsed={collapsed} onClick={onReportBug} /> : null}
       </List>
+      <NetworkStatusChip collapsed={collapsed} />
       <CollapseToggle
         collapsed={collapsed}
         onClick={() => {
