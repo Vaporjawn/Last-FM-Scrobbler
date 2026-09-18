@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNetworkStatus } from "./use-network-status.js";
 
 interface FetchState<TData> {
   readonly data: TData;
@@ -154,6 +155,31 @@ export function useLastfmFetch<TData>(
         }));
       });
   }, []);
+
+  // Auto-recovers a currently-errored view once connectivity returns — see
+  // docs/adr/0011-network-status-detection.md. `hasErrorRef` (read at the moment the
+  // transition fires, not a dependency) mirrors `fetchingRef`'s existing "ref read at
+  // the moment it matters" convention already used elsewhere in this hook, so this
+  // effect's own dependency array only needs `networkStatus.online`/`refetch` — a
+  // healthy view with no error is left alone rather than needlessly re-fetched on
+  // every reconnect.
+  const { status: networkStatus } = useNetworkStatus();
+  const wasOfflineRef = useRef(false);
+  const hasErrorRef = useRef(false);
+  hasErrorRef.current = state.error !== undefined;
+
+  useEffect(() => {
+    if (networkStatus.online === false) {
+      wasOfflineRef.current = true;
+      return;
+    }
+    if (networkStatus.online === true && wasOfflineRef.current) {
+      wasOfflineRef.current = false;
+      if (hasErrorRef.current) {
+        refetch();
+      }
+    }
+  }, [networkStatus.online, refetch]);
 
   return { ...state, refetch };
 }
