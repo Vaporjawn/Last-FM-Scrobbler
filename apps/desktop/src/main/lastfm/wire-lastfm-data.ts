@@ -1,9 +1,11 @@
 import electron from "electron";
 import {
   LastfmApiError,
+  reportNetworkOutcome,
   type ArtistInfo,
   type Friend,
   type LastfmClient,
+  type NetworkStatusMonitor,
   type RecentTrack,
   type SimilarArtist,
   type TopAlbum,
@@ -59,6 +61,10 @@ export interface LastfmDataClient {
 export interface WireLastfmDataOptions {
   /** `undefined` when this build has no Last.fm API credentials configured. */
   readonly client: LastfmDataClient | undefined;
+  /** Reports each call's outcome for the offline-mode status chip/tray tooltip — see
+   * `reportNetworkOutcome`. Optional so existing/future tests that don't care about
+   * network-status reporting need not supply one. */
+  readonly networkStatus?: NetworkStatusMonitor;
 }
 
 const NOT_CONFIGURED_MESSAGE =
@@ -71,9 +77,15 @@ const NOT_CONFIGURED_MESSAGE =
  * account is needed, just a username (typically the active account's, chosen by the
  * renderer) or, for the artist endpoints, just an artist name. Signed, account-specific
  * actions (love/unlove/addTags) live in `wire-track-actions.ts` instead.
+ *
+ * Every `client` call is wrapped in `reportNetworkOutcome` (see that function's
+ * docstring) — a classified connectivity failure reports to `networkStatus` and
+ * surfaces to the renderer as a friendly message instead of a raw technical one; an
+ * application-level failure (including the `isNotFoundError` case below) passes
+ * through completely unaffected.
  */
 export function wireLastfmData(options: WireLastfmDataOptions): () => void {
-  const { client } = options;
+  const { client, networkStatus } = options;
 
   ipcMain.handle(
     IPC_CHANNELS.lastfmGetRecentTracks,
@@ -86,11 +98,14 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getRecentTracks({
-        user: String(user),
-        ...(limit !== undefined ? { limit: Number(limit) } : {}),
-        ...(page !== undefined ? { page: Number(page) } : {}),
-      });
+      return reportNetworkOutcome(
+        networkStatus,
+        client.getRecentTracks({
+          user: String(user),
+          ...(limit !== undefined ? { limit: Number(limit) } : {}),
+          ...(page !== undefined ? { page: Number(page) } : {}),
+        }),
+      );
     },
   );
 
@@ -105,11 +120,14 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getTopArtists({
-        user: String(user),
-        ...(limit !== undefined ? { limit: Number(limit) } : {}),
-        ...(period !== undefined ? { period: period as TopArtistsPeriod } : {}),
-      });
+      return reportNetworkOutcome(
+        networkStatus,
+        client.getTopArtists({
+          user: String(user),
+          ...(limit !== undefined ? { limit: Number(limit) } : {}),
+          ...(period !== undefined ? { period: period as TopArtistsPeriod } : {}),
+        }),
+      );
     },
   );
 
@@ -124,11 +142,14 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getTopTracks({
-        user: String(user),
-        ...(limit !== undefined ? { limit: Number(limit) } : {}),
-        ...(period !== undefined ? { period: period as TopTracksPeriod } : {}),
-      });
+      return reportNetworkOutcome(
+        networkStatus,
+        client.getTopTracks({
+          user: String(user),
+          ...(limit !== undefined ? { limit: Number(limit) } : {}),
+          ...(period !== undefined ? { period: period as TopTracksPeriod } : {}),
+        }),
+      );
     },
   );
 
@@ -143,11 +164,14 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getTopAlbums({
-        user: String(user),
-        ...(limit !== undefined ? { limit: Number(limit) } : {}),
-        ...(period !== undefined ? { period: period as TopAlbumsPeriod } : {}),
-      });
+      return reportNetworkOutcome(
+        networkStatus,
+        client.getTopAlbums({
+          user: String(user),
+          ...(limit !== undefined ? { limit: Number(limit) } : {}),
+          ...(period !== undefined ? { period: period as TopAlbumsPeriod } : {}),
+        }),
+      );
     },
   );
 
@@ -157,7 +181,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getFriends({ user: String(user) });
+      return reportNetworkOutcome(networkStatus, client.getFriends({ user: String(user) }));
     },
   );
 
@@ -167,7 +191,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getUserInfo({ user: String(user) });
+      return reportNetworkOutcome(networkStatus, client.getUserInfo({ user: String(user) }));
     },
   );
 
@@ -177,7 +201,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getLovedTracksCount({ user: String(user) });
+      return reportNetworkOutcome(networkStatus, client.getLovedTracksCount({ user: String(user) }));
     },
   );
 
@@ -205,17 +229,24 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       // expected outcome dressed up as a crash. `ArtistInfoPanel` already renders
       // `undefined` as its normal "No additional artist info available." empty state,
       // so no renderer-side change is needed once this resolves instead of rejects.
-      return client
-        .getArtistInfo({
+      //
+      // `reportNetworkOutcome` runs on the *inner* call, before this `.catch` below —
+      // a classified network failure never reaches `isNotFoundError` at all (it's
+      // already been rewritten and reported by then); a real not-found
+      // `LastfmApiError` passes through `reportNetworkOutcome` completely unchanged
+      // and is still caught here exactly as before.
+      return reportNetworkOutcome(
+        networkStatus,
+        client.getArtistInfo({
           artist: String(artist),
           ...(typeof username === "string" ? { username } : {}),
-        })
-        .catch((error: unknown) => {
-          if (isNotFoundError(error)) {
-            return undefined;
-          }
-          throw error;
-        });
+        }),
+      ).catch((error: unknown) => {
+        if (isNotFoundError(error)) {
+          return undefined;
+        }
+        throw error;
+      });
     },
   );
 
@@ -231,17 +262,18 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       // error even after getArtistInfo's own fix. An empty array is
       // `ArtistInfoPanel`'s existing "no similar artists" shape (it only renders the
       // "Similar Artists" section when `similarArtists.length > 0`).
-      return client
-        .getSimilarArtists({
+      return reportNetworkOutcome(
+        networkStatus,
+        client.getSimilarArtists({
           artist: String(artist),
           ...(limit !== undefined ? { limit: Number(limit) } : {}),
-        })
-        .catch((error: unknown) => {
-          if (isNotFoundError(error)) {
-            return [];
-          }
-          throw error;
-        });
+        }),
+      ).catch((error: unknown) => {
+        if (isNotFoundError(error)) {
+          return [];
+        }
+        throw error;
+      });
     },
   );
 
@@ -251,7 +283,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
-      return client.getTopTags({ artist: String(artist) });
+      return reportNetworkOutcome(networkStatus, client.getTopTags({ artist: String(artist) }));
     },
   );
 
@@ -262,11 +294,14 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
       // Same reasoning as getArtistInfo's handler above.
-      return client.getTrackInfo({
-        artist: String(artist),
-        track: String(track),
-        ...(typeof username === "string" ? { username } : {}),
-      });
+      return reportNetworkOutcome(
+        networkStatus,
+        client.getTrackInfo({
+          artist: String(artist),
+          track: String(track),
+          ...(typeof username === "string" ? { username } : {}),
+        }),
+      );
     },
   );
 

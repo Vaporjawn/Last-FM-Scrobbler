@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { LastfmApiError } from "@lastfm-scrobbler/core";
+import { LastfmApiError, NetworkStatusMonitor, ScrobbleQueue } from "@lastfm-scrobbler/core";
 
 const ipcMainHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
 const ipcMain = {
@@ -362,5 +362,34 @@ describe("wireLastfmData", () => {
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetSimilarArtists)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopTags)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTrackInfo)).toBe(false);
+  });
+
+  it("reports a classified network failure to networkStatus and surfaces the friendly message", async () => {
+    const networkFailure = Object.assign(new Error("connect failed"), { code: "ECONNREFUSED" });
+    const client = fakeClient();
+    client.getRecentTracks.mockRejectedValue(networkFailure);
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const networkStatus = new NetworkStatusMonitor({ queue });
+    wireLastfmData({ client, networkStatus });
+
+    await expect(invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice")).rejects.toThrow(
+      "Can't reach Last.fm — check your internet connection.",
+    );
+    expect(networkStatus.getStatus().online).toBe(false);
+    queue.close();
+  });
+
+  it("does not misreport a not-found error (application-level) as offline", async () => {
+    const notFound = new LastfmApiError(6, "The artist you supplied could not be found");
+    const client = fakeClient();
+    client.getArtistInfo.mockRejectedValue(notFound);
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const networkStatus = new NetworkStatusMonitor({ queue });
+    networkStatus.reportSuccess();
+    wireLastfmData({ client, networkStatus });
+
+    await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Nonexistent Artist")).resolves.toBeUndefined();
+    expect(networkStatus.getStatus().online).toBe(true);
+    queue.close();
   });
 });
