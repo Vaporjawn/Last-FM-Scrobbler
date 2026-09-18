@@ -60,4 +60,25 @@ describe("tokenize", () => {
   it("throws on an unterminated regex literal", () => {
     expect(() => tokenize("/unterminated")).toThrow(/unterminated regex literal/i);
   });
+
+  it("tokenizes a bare greater-than as its own operator token", () => {
+    // Existing coverage only exercises "<" and ">=" — this fills in the other half
+    // of the `ch === "<" || ch === ">"` branch.
+    expect(tokenize(">")).toEqual([
+      { type: "op", value: ">" },
+      { type: "eof", value: "" },
+    ]);
+  });
+
+  it("throws on a bare = that isn't part of the == operator", () => {
+    expect(() => tokenize("=")).toThrow(/unexpected character "="/);
+  });
+
+  it("throws on a bare ! that isn't part of the != operator", () => {
+    expect(() => tokenize("!")).toThrow(/unexpected character "!"/);
+  });
+
+  it("throws on a character it doesn't recognize at all", () => {
+    expect(() => tokenize("@")).toThrow(/unexpected character "@"/);
+  });
 });

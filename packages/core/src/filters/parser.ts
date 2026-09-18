@@ -164,7 +164,11 @@ class Parser {
 
   private peek(): Token {
     const token = this.tokens[this.position];
+    // v8 ignore next 3 -- defensive: `tokenize` always appends a trailing "eof"
+    // token, and `advance()` never increments `position` past it, so `this.position`
+    // can never index past the end of `this.tokens`; `token` is always defined here.
     if (!token) {
+      // v8 ignore next -- see the ignore comment above this if-statement.
       throw new FilterSyntaxError("unexpected end of expression");
     }
     return token;

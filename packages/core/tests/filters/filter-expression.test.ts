@@ -63,6 +63,12 @@ describe("compileFilter", () => {
     expect(filter.test(minimalTrack())).toBe(false);
   });
 
+  it("treats a missing albumArtist as an empty string, matching an equality check against \"\"", () => {
+    const filter = compileFilter('albumArtist == ""');
+    expect(filter.test(minimalTrack())).toBe(true);
+    expect(filter.test(track({ albumArtist: "Radiohead" }))).toBe(false);
+  });
+
   it("compares the numeric durationSec field", () => {
     expect(compileFilter("durationSec < 30").test(track({ durationSec: 15 }))).toBe(true);
     expect(compileFilter("durationSec < 30").test(track({ durationSec: 300 }))).toBe(false);
@@ -107,5 +113,47 @@ describe("compileFilter", () => {
 
   it("throws a descriptive error for an unknown operator", () => {
     expect(() => compileFilter('sourceApp startsWith "a"')).toThrow(/unexpected token/i);
+  });
+
+  it("throws a descriptive error for trailing tokens after a complete expression", () => {
+    expect(() => compileFilter('sourceApp == "x" bogus')).toThrow(/unexpected token.*bogus/i);
+  });
+
+  it("throws a descriptive error when a parenthesized group is missing its closing paren", () => {
+    expect(() => compileFilter('(sourceApp == "x" bogus)')).toThrow(/expected "\)"/);
+  });
+
+  it("throws a descriptive error when an expression doesn't start with a field name", () => {
+    expect(() => compileFilter("123")).toThrow(/unexpected token/i);
+  });
+
+  it("throws a descriptive error for an operator invalid on a numeric field", () => {
+    expect(() => compileFilter('durationSec contains "x"')).toThrow(
+      /operator "contains" is not valid for numeric field "durationSec"/,
+    );
+  });
+
+  it("throws a descriptive error for an operator invalid on a string field", () => {
+    expect(() => compileFilter("sourceApp < 5")).toThrow(
+      /operator "<" is not valid for field "sourceApp"/,
+    );
+  });
+
+  it("throws a descriptive error when matches is given a non-regex value", () => {
+    expect(() => compileFilter('title matches "notregex"')).toThrow(
+      /"matches" requires a regex literal/,
+    );
+  });
+
+  it("throws a descriptive error when a numeric field is given a non-numeric value", () => {
+    expect(() => compileFilter('durationSec == "notanumber"')).toThrow(
+      /field "durationSec" requires a numeric value/,
+    );
+  });
+
+  it("throws a descriptive error when a string field is given a non-string value", () => {
+    expect(() => compileFilter("sourceApp == 5")).toThrow(
+      /field "sourceApp" requires a string value/,
+    );
   });
 });

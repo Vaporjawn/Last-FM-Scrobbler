@@ -25,7 +25,11 @@ export function tokenize(input: string): Token[] {
 
   while (i < input.length) {
     const ch = input[i];
+    // v8 ignore next -- defensive: `i < input.length` above guarantees `input[i]` is
+    // always a defined single character; this only exists to satisfy
+    // noUncheckedIndexedAccess and can never actually be exercised.
     if (ch === undefined) {
+      // v8 ignore next -- see the ignore comment above this if-statement.
       break;
     }
 
@@ -71,6 +75,8 @@ export function tokenize(input: string): Token[] {
     if (DIGIT.test(ch)) {
       let j = i;
       let dotCount = 0;
+      // v8 ignore next -- the `?? ""` fallback is unreachable: `j < input.length` is
+      // checked first (short-circuiting `&&`), so `input[j]` is always defined here.
       while (j < input.length && /[0-9.]/.test(input[j] ?? "")) {
         if (input[j] === ".") {
           dotCount += 1;
@@ -109,6 +115,8 @@ export function tokenize(input: string): Token[] {
 
     if (IDENT_START.test(ch)) {
       let j = i;
+      // v8 ignore next -- same reasoning as the digit-scan loop above: `j <
+      // input.length` short-circuits before `input[j]` is ever read past bounds.
       while (j < input.length && IDENT_CHAR.test(input[j] ?? "")) {
         j += 1;
       }
