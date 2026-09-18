@@ -84,9 +84,14 @@ configured (correctly validates requests, responds `503`).
     (see "Rate limiting" below).
   - `400` for invalid request bodies.
   - `503` if `GITHUB_PAT` isn't configured for this deployment.
-  - `502` if GitHub's API call fails (the specific GitHub error detail is logged
-    server-side via `console.error`, not returned to the caller — an anonymous,
-    unauthenticated endpoint shouldn't echo internal error detail).
+  - `502` if GitHub's API call fails with a transient error — a `5xx`/`429` from
+    GitHub's own API, or an unexpected 2xx response shape (the specific GitHub error
+    detail is logged server-side via `console.error`, not returned to the caller — an
+    anonymous, unauthenticated endpoint shouldn't echo internal error detail).
+  - `500` if GitHub's API call fails with a permanent `4xx` (other than `429`) — a
+    maintainer-side misconfiguration (bad/expired `GITHUB_PAT`, wrong repo,
+    insufficient scope) that retrying will never fix, reported distinctly from the
+    `502` "try again later" case above.
   - `201` with `{issueUrl, issueNumber}` on success.
 
 ## Module layout (`src/`)
@@ -103,9 +108,9 @@ configured (correctly validates requests, responds `503`).
   code block per diagnostic, only rendered when at least one diagnostic is present),
   and the fixed no-linked-account disclaimer.
 - `github-issue-creation-error.ts` — `GitHubIssueCreationError`, carrying the HTTP
-  `status` GitHub responded with alongside the message — lets a caller distinguish a
-  transient 5xx from a permanent 4xx in principle, though `index.ts`'s `fetch` handler
-  currently collapses every case to a flat `502` regardless.
+  `status` GitHub responded with alongside the message — lets `index.ts`'s `fetch`
+  handler distinguish a transient `5xx`/`429` (reported to the caller as `502`) from a
+  permanent `4xx` (reported as `500`).
 - `create-github-issue.ts` — `createGitHubIssue(report, githubPat, fetchImpl?)`. Posts
   to `https://api.github.com/repos/Vaporjawn/Last-FM-Scrobbler/issues` with
   `Authorization: Bearer <pat>`, `Accept: application/vnd.github+json`, and a pinned

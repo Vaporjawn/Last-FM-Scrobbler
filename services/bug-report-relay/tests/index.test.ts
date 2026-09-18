@@ -125,6 +125,29 @@ describe("bug-report-relay fetch handler", () => {
     expect(payload.error).not.toContain("secret internal detail");
   });
 
+  it("returns 500 (not 502) when GitHub rejects the request with a permanent 4xx status", async () => {
+    // A 4xx from GitHub (bad/expired PAT, wrong repo, insufficient scope, etc.) is a
+    // maintainer-side misconfiguration that retrying will never fix, unlike the
+    // transient 5xx case above — so it gets its own status instead of a flat 502.
+    mockGitHubApi(() => new Response("Bad credentials", { status: 401 }));
+
+    const response = await postReport("203.0.113.17", { title: "Crash", body: "Details here." });
+
+    expect(response.status).toBe(500);
+    const payload = await response.json<{ error: string }>();
+    expect(payload.error).not.toContain("Bad credentials");
+  });
+
+  it("returns 502 (not 500) when GitHub itself rate limits the request", async () => {
+    // 429 is numerically a 4xx, but it's transient like a 5xx, not a permanent
+    // misconfiguration — it must not fall into the "permanent 4xx" 500 bucket above.
+    mockGitHubApi(() => new Response("API rate limit exceeded", { status: 429 }));
+
+    const response = await postReport("203.0.113.18", { title: "Crash", body: "Details here." });
+
+    expect(response.status).toBe(502);
+  });
+
   it("returns 502 (not a false 201 success) when GitHub's 2xx response has an unexpected shape", async () => {
     // Regression test: response.json<T>() is only a compile-time type assertion —
     // nothing validated at runtime that a 2xx response actually had html_url/number.
