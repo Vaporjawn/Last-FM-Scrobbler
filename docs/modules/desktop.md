@@ -936,17 +936,21 @@ Same CSP fix as Profile above applies here too (see "the CSP silently blocked ev
 real Last.fm image") — both features were built together, and both were affected by
 the same missing `img-src` directive.
 
-**Known scaling consideration, not yet addressed**: activity is fetched with one
-`getRecentTracks` call per friend, all fired in parallel as soon as the friend list
-loads (each `FriendListItem` mounts its own `useFriendActivity`). For an account with
-a large friend list (spot-checked against a real account with 117 friends — see
-`docs/modules/core.md`), that's 117 simultaneous unsigned API requests on every
-Friends page visit. Last.fm's API has generally tolerated this in ad-hoc testing, but
-there's no batching, staggering, throttling, or caching between visits — if this turns
-out to be a real problem in practice (rate-limit errors, a slow/janky page load for
-accounts with hundreds of friends), the fix would be either windowed/staggered
-fetching (e.g. N at a time via a small concurrency limiter) or fetching activity only
-for friends actually scrolled into view, not a redesign of the underlying approach.
+**Scaling**: activity is fetched with one `getRecentTracks` call per friend
+(`renderer/src/hooks/use-friends-activity.ts`), but no more than
+`MAX_CONCURRENT_REQUESTS` (8) of them in flight at once — a small worker-pool
+concurrency limiter (`renderer/src/hooks/fetch-each-with-limit.ts`, shared with
+`use-account-avatars.ts`'s per-account `getUserInfo` lookups) rather than firing every
+request in parallel. For an account with a large friend list (spot-checked against a
+real account with 117 friends — see `docs/modules/core.md`), that previously meant 117
+simultaneous unsigned API requests on every Friends page visit; Last.fm's API had
+generally tolerated this in ad-hoc testing, but there was no batching, staggering, or
+throttling between visits. Each friend's row still starts loading and updates
+independently as its own request settles — the limiter changes only how many requests
+are in flight at once, not the per-row independence described above. There's still no
+caching between visits; if that turns out to matter in practice, fetching activity only
+for friends actually scrolled into view would be the next step, not a redesign of the
+underlying approach.
 
 ## Snackbars (in-app transient feedback)
 
@@ -1032,17 +1036,28 @@ constructor (`tests/main/notifications/show-notification.test.ts` and the releva
 cases in each module's own test file) — the real OS-level rendering isn't.
 
 ## Not yet built (real feature work, tracked here so it isn't lost)
-- "Launch at login" (the tray/menu-bar background-app behavior itself is built — see
-  above; auto-*update* is also built — see "Auto-update" above — this is specifically
-  about auto-*starting* on OS boot/login, a different feature).
 - *Automatic* crash reporting — an opt-in reporter that auto-fills the bug-report
   dialog (or reports silently) on an unhandled exception/crash. The manual "Report a
   Bug" button/dialog is built (see "Bug reporting" above); wiring it to fire
   automatically on a crash is not.
 - i18n / language selection.
-- Scrobbling settings UI (enable/disable, exclusion filter expression editor for
-  `packages/core`'s filter DSL) — the pipeline honors a `CompiledFilter` if the
-  `Tracker` is constructed with one, but there's no UI yet to author one.
+- ~~Scrobbling settings UI is still missing a global enable/disable toggle~~ — built:
+  Settings → General's "Enable scrobbling" switch (`SettingsPage.tsx`) toggles
+  `AppSettings.scrobblingEnabled` (default `true`). Unlike the exclusion-filter editor
+  below, this is live-toggled with no restart —
+  `main/scrobbling/gate-scrobbling-enabled.ts` gates `main/playback/wire-now-playing.ts`'s
+  `onScrobbleEligible`/`onTrackChanged` callbacks right before they'd reach
+  `main/scrobbling/wire-scrobbling.ts`'s enqueue/`updateNowPlaying` calls, reading
+  `settingsStore.get().scrobblingEnabled` fresh on every event rather than baking it
+  into the `CompiledFilter` below (which can't be swapped after startup). The Now
+  Playing view keeps showing whatever's actually playing while paused — only
+  submission is suppressed. The exclusion-filter half is also built: Settings → Filter
+  (`SettingsPage.tsx`'s `filterExpressionInput` state and `handleSaveFilterExpression`
+  handler) lets a user author a `packages/core` filter-DSL expression, validates it
+  live against `main/filters/wire-filter-validation.ts`'s IPC handler as they type and
+  again on save, and persists it into `AppSettings.filterExpression` — which
+  `main/index.ts` compiles into the `CompiledFilter` the `Tracker` is constructed with
+  (see "Scrobbling pipeline" above).
 - Custom, original application icon artwork — the app now has a real, working icon
   (see "App icon" above), just one derived from Last.fm's own branding rather than
   bespoke artwork commissioned for this project specifically; not a functional gap,
@@ -1062,7 +1077,9 @@ All five views are real (not placeholders) and visually distinct from bare place
 text — Card/Paper layouts, icons, and rank/progress styling rather than plain lists:
 Now Playing, Scrobbles, Profile, and Friends render live data once logged in (or a
 clear "log in on Settings" prompt when not); Settings has General (background-app
-behavior) and Accounts tabs; bug reporting is wired end to end. Main-process wiring
+behavior), Filter (the exclusion-filter expression editor — see "Not yet built" below
+for exactly what it does and doesn't cover), and Accounts sections; bug reporting is
+wired end to end. Main-process wiring
 (playback source selection, now-playing IPC, auth IPC, read-only Last.fm data IPC,
 scrobble queue + submission, bug-report relay, settings persistence, tray/close-to-tray)
 is complete and unit-tested (196 tests: secret storage, account store and
