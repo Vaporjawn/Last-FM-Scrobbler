@@ -68,6 +68,34 @@ describe("TrackLoveTagControls", () => {
     expect(await screen.findByText("Tags added.")).toBeInTheDocument();
   });
 
+  it("submits the tag popover when Enter is pressed in the field, not just by clicking Add", async () => {
+    // A real Enter keypress in a text <input> triggers a browser's native "implicit
+    // form submission" — dispatching a `submit` event on the field's enclosing
+    // <form> — which jsdom doesn't implement as a default action for simulated keydown
+    // events (see https://github.com/jsdom/jsdom/issues/3117). So this exercises that
+    // same mechanism directly instead of simulating the keypress itself: proving both
+    // that the field now sits inside a real <form> (it didn't before this fix — Enter
+    // did nothing) and that submitting it invokes the same add-tags flow as clicking
+    // "Add" does.
+    const addTags = vi.fn().mockResolvedValue(undefined);
+    installFakeLastfmApi({ addTags });
+    renderWithSnackbar();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add tags" }));
+    const input = await screen.findByPlaceholderText("tags, separated, by commas");
+    fireEvent.change(input, { target: { value: "mellow, guitar" } });
+
+    const form = input.closest("form");
+    if (!form) {
+      throw new Error("Expected the tag input to be wrapped in a <form>.");
+    }
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(addTags).toHaveBeenCalledWith("Crumb", "Ghostride", ["mellow", "guitar"]);
+    });
+  });
+
   it("keeps the popover open with the typed input intact when addTags fails", async () => {
     // Regression test: handleAddTags used to close the popover (discarding whatever
     // the user had typed) unconditionally, even on failure — a transient error (e.g.

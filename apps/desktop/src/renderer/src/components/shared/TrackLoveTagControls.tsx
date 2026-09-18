@@ -1,8 +1,9 @@
-import type { JSX } from "react";
+import type { JSX, SubmitEvent } from "react";
 import { useState } from "react";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Popover from "@mui/material/Popover";
@@ -94,6 +95,15 @@ export function TrackLoveTagControls({
     });
   };
 
+  const handleTagFormSubmit = (event: SubmitEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    const tags = tagInput
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    handleAddTags(tags);
+  };
+
   const loveLabel = trackLabel
     ? loved
       ? `Unlove ${trackLabel}`
@@ -136,31 +146,25 @@ export function TrackLoveTagControls({
         onClose={closeTagPopover}
         anchorOrigin={{ vertical: "bottom", horizontal: tagPopoverAnchorHorizontal }}
       >
-        <Stack direction="row" spacing={1} sx={{ p: 1.5, alignItems: "center" }}>
-          <TextField
-            size="small"
-            placeholder="tags, separated, by commas"
-            value={tagInput}
-            onChange={(event) => {
-              setTagInput(event.target.value);
-            }}
-            autoFocus
-          />
-          <Button
-            size="small"
-            variant="contained"
-            disabled={!tagInput.trim() || submitting}
-            onClick={() => {
-              const tags = tagInput
-                .split(",")
-                .map((tag) => tag.trim())
-                .filter(Boolean);
-              handleAddTags(tags);
-            }}
-          >
-            Add
-          </Button>
-        </Stack>
+        {/* A real <form> rather than a bare onClick handler on the button — otherwise
+            pressing Enter after typing tags does nothing, even though the field's
+            `autoFocus` above signals it's meant for fast keyboard entry. */}
+        <Box component="form" onSubmit={handleTagFormSubmit}>
+          <Stack direction="row" spacing={1} sx={{ p: 1.5, alignItems: "center" }}>
+            <TextField
+              size="small"
+              placeholder="tags, separated, by commas"
+              value={tagInput}
+              onChange={(event) => {
+                setTagInput(event.target.value);
+              }}
+              autoFocus
+            />
+            <Button type="submit" size="small" variant="contained" disabled={!tagInput.trim() || submitting}>
+              Add
+            </Button>
+          </Stack>
+        </Box>
       </Popover>
     </>
   );
