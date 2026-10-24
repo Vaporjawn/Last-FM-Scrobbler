@@ -52,6 +52,10 @@ describe("resolveSessionBusAddress", () => {
     ).toBe("unix:path=/run/user/7/bus");
   });
 
+  it("checks the real filesystem by default (an implausible user id has no socket)", () => {
+    expect(resolveSessionBusAddress({ env: {}, uid: 987_654_321 })).toBeUndefined();
+  });
+
   it("reads the real environment and user id by default", () => {
     // Whatever this machine has, the call must not throw and must yield a string or undefined.
     const address = resolveSessionBusAddress();
