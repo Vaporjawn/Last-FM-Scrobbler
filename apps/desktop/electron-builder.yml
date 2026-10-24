@@ -88,6 +88,15 @@ linux:
     - deb
   category: AudioVideo
   maintainer: Victor Williams <victor.williams.dev@gmail.com>
+  # Lets desktop environments associate the running window with this .desktop entry
+  # (electron-builder warns otherwise); pairs with `desktopName` in package.json.
+  syncDesktopName: true
+
+# The deb's default file name interpolates the scoped package name
+# (@lastfm-scrobbler/desktop), which fpm then treats as a nested output directory that
+# does not exist ("Parent directory does not exist").
+deb:
+  artifactName: lastfm-scrobbler_${version}_${arch}.${ext}
 
 # Where to publish to (GitHub Releases) *and* where the packaged app's own
 # electron-updater instance looks for new versions at runtime (baked into the app as

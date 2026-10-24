@@ -9,6 +9,7 @@
     "email": "victor.williams.dev@gmail.com",
     "url": "https://github.com/Vaporjawn"
   },
+  "desktopName": "lastfm-scrobbler.desktop",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
