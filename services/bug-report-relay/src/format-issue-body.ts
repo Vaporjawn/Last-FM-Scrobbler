@@ -34,7 +34,7 @@ function neutralizeForIssueBody(text: string): string {
  * renderer would disagree about what the text says. After escaping, every `&` is `&amp;`,
  * so no entity can be formed.
  *
- * A zero-width space after the `@`, `#`, `GH-` or `github.com` keeps the text readable but
+ * A zero-width space after the `@`, `#` or `GH-`, and inside `github.com` host keeps the text readable but
  * no longer parses as a mention or reference. An `@` that follows a word character
  * (`name@example.com`) is an email address, not a mention, and is left alone.
  */
@@ -45,8 +45,8 @@ function neutralizeNotifications(text: string): string {
     .replace(/>/g, "&gt;")
     .replace(/(?<![A-Za-z0-9])@(?=[A-Za-z0-9_-])/g, "@\u200B")
     .replace(/#(?=\d)/g, "#\u200B")
-    .replace(/\bGH-(?=\d)/gi, (prefix) => `${prefix}\u200B`)
-    .replace(/github\.com(?=\/)/gi, (host) => `${host}\u200B`);
+    .replace(/(?<![A-Za-z0-9])GH-(?=\d)/gi, (prefix) => `${prefix}\u200B`)
+    .replace(/github\.com/gi, (host) => `github\u200B${host.slice("github".length)}`);
 }
 
 /**

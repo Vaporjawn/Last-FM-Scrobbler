@@ -150,8 +150,20 @@ describe("formatIssueBody", () => {
 
       expect(body).toContain(`GH-${ZWSP}42`);
       expect(body).toContain(`gh-${ZWSP}7`);
-      expect(body).toContain(`github.com${ZWSP}/octo/repo/issues/9`);
+      expect(body).toContain(`github${ZWSP}.com/octo/repo/issues/9`);
       expect(body).not.toMatch(/GH-42|github\.com\/octo/i);
+    });
+
+    it("defuses references wrapped in markdown emphasis and links to the bare host", () => {
+      const body = formatIssueBody({
+        title: "t",
+        body: "_GH-1_ __GH-2__ *GH-3* and github.com and www.github.com?x",
+      });
+
+      expect(body).toContain(`_GH-${ZWSP}1_`);
+      expect(body).toContain(`__GH-${ZWSP}2__`);
+      expect(body).toContain(`*GH-${ZWSP}3*`);
+      expect(body).not.toMatch(/github\.com/i);
     });
 
     it("leaves email addresses, lone symbols and ordinary text alone", () => {
