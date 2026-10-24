@@ -123,39 +123,17 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gnome-keyring libsecret-1-0 dbus-x11
 
-      - name: Diagnose a crash under a D-Bus session (Linux, temporary)
-        if: matrix.os == 'ubuntu-latest'
-        continue-on-error: true
-        working-directory: apps/desktop
-        run: |
-          APP="$PWD/release/linux-unpacked/lastfm-scrobbler"
-          NODE_DIR="$PWD/release/linux-unpacked/resources/app.asar.unpacked/node_modules/usocket/build/Release"
-          run_app() {
-            set +e
-            "$@" > /tmp/app.log 2>&1
-            echo "exit=$? (133 = SIGTRAP crash, 124 = still running when the timeout ended, i.e. healthy)"
-            grep -E "uncaught|Error:|FATAL|Check failed|dbus|usocket" /tmp/app.log | grep -v "OS-level encryption" | head -8
-          }
-          echo "=== D: no session bus ==="
-          run_app env -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a timeout 20 "$APP" --no-sandbox --enable-logging=stderr
-          echo "=== A: session bus, usocket present ==="
-          run_app dbus-run-session -- xvfb-run -a timeout 20 "$APP" --no-sandbox --enable-logging=stderr
-          echo "=== B: session bus, usocket native addon removed ==="
-          mv "$NODE_DIR/uwrap.node" /tmp/uwrap.node.hold
-          run_app dbus-run-session -- xvfb-run -a timeout 20 "$APP" --no-sandbox --enable-logging=stderr
-          mv /tmp/uwrap.node.hold "$NODE_DIR/uwrap.node"
-
       - name: Smoke test the packaged app (Linux)
         if: matrix.os == 'ubuntu-latest'
         working-directory: apps/desktop
         run: |
           dbus-run-session -- bash -c '
+            set -e
             eval "$(echo "" | gnome-keyring-daemon --unlock --components=secrets)"
-            export GNOME_KEYRING_CONTROL ELECTRON_ENABLE_LOGGING=1
-            echo "=== attempt A: libsecret chosen by flag ==="
-            SMOKE_EXTRA_ARGS="--password-store=gnome-libsecret" xvfb-run -a node scripts/smoke-packaged-app.mjs && exit 0
-            echo "=== attempt B: libsecret chosen by desktop environment ==="
-            XDG_CURRENT_DESKTOP=GNOME xvfb-run -a node scripts/smoke-packaged-app.mjs
+            export GNOME_KEYRING_CONTROL
+            # A real session bus is deliberate: it is what made the packaged app crash
+            # at launch before dbus-next was kept away from the native usocket addon.
+            SMOKE_EXTRA_ARGS="--password-store=gnome-libsecret" xvfb-run -a node scripts/smoke-packaged-app.mjs
           '
         env:
           SMOKE_EXECUTABLE: ${{ github.workspace }}/apps/desktop/${{ matrix.smoke }}
