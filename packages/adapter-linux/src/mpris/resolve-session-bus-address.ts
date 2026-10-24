@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { getCurrentUserId } from "./get-current-user-id.js";
 
 export interface ResolveSessionBusAddressOptions {
   /** Injectable for testing; defaults to `process.env`. */
@@ -22,7 +23,7 @@ export function resolveSessionBusAddress(
     return fromEnvironment;
   }
 
-  const uid = "uid" in options ? options.uid : process.getuid?.();
+  const uid = "uid" in options ? options.uid : getCurrentUserId();
   if (uid === undefined) {
     return undefined;
   }
