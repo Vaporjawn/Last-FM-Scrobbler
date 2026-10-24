@@ -146,10 +146,12 @@ IPv6) grew isolate memory for as long as their entries stayed inside the window.
 - **Not JSON** is a `400` with a fixed message, not the parser's.
 - **Diagnostics keys** are limited to 100 characters, like their values.
 - **No notifications from anonymous text**: because issues are filed with a real
-  account's token, `@user` / `@org/team` mentions and `#123` / `owner/repo#123`
-  references in the report body and diagnostics get a zero-width space after the `@` or
-  `#`, so they neither notify anyone nor add a cross-reference to an unrelated issue.
-  An `@` after a word character (an email address) is left alone.
+  account's token, the report body and diagnostics are first HTML-escaped (`&`, `<`, `>`),
+  so an entity such as `&#64;user` or an inline tag cannot decode back into an `@` or `#`
+  after sanitizing. Then `@user` / `@org/team` mentions, `#123` / `owner/repo#123` and
+  `GH-123` references, and `github.com/...` links get a zero-width space after the `@`,
+  `#`, `GH-` or host, so they neither notify anyone nor add a cross-reference to an
+  unrelated issue. An `@` after a word character (an email address) is left alone.
 - **GitHub call timeout**: 10 seconds; a stall surfaces as a `502` ("try again later")
   rather than pinning the request.
 

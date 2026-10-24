@@ -128,6 +128,32 @@ describe("formatIssueBody", () => {
       expect(body).toContain(`@${ZWSP}user #${ZWSP}5`);
     });
 
+    it("cannot be bypassed with HTML entities or inline tags that decode back to @ or #", () => {
+      const body = formatIssueBody({
+        title: "t",
+        body: "&#64;octocat &#x40;octocat &#35;123 <b>@</b>octocat",
+      });
+
+      // Every `&` is escaped, so no entity can be formed for the renderer to decode.
+      expect(body).toContain(`&amp;#${ZWSP}64;octocat`);
+      expect(body).toContain("&amp;#x40;octocat");
+      expect(body).toContain(`&amp;#${ZWSP}35;123`);
+      expect(body).not.toContain("<b>");
+      expect(body).not.toMatch(/(^|[^p;])&#/);
+    });
+
+    it("defuses GH-123 references and github.com issue links", () => {
+      const body = formatIssueBody({
+        title: "t",
+        body: "see GH-42, gh-7 and https://github.com/octo/repo/issues/9",
+      });
+
+      expect(body).toContain(`GH-${ZWSP}42`);
+      expect(body).toContain(`gh-${ZWSP}7`);
+      expect(body).toContain(`github.com${ZWSP}/octo/repo/issues/9`);
+      expect(body).not.toMatch(/GH-42|github\.com\/octo/i);
+    });
+
     it("leaves email addresses, lone symbols and ordinary text alone", () => {
       const text = "mail me at name@example.com, cost is 5 @ 3 and use # for headings";
 
