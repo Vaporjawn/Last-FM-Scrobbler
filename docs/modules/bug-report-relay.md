@@ -133,6 +133,26 @@ Durable Object namespace to provision). A globally-consistent limit (a Durable O
 per IP, or Cloudflare's Rate Limiting bindings) is a reasonable future upgrade if abuse
 becomes a real problem — see ADR 0004.
 
+The map is bounded at 10,000 clients: when it is full, expired entries are swept first,
+and only if every remaining one is still inside its window is the longest-tracked
+client forgotten. Without that cap a flood of distinct source addresses (cheap over
+IPv6) grew isolate memory for as long as their entries stayed inside the window.
+
+## Request limits and issue-body safety
+
+- **Body size**: a request whose declared `content-length` exceeds 1 MiB, or whose body
+  grows past it while being read (the header can be absent or wrong), is answered `413`
+  without buffering the rest.
+- **Not JSON** is a `400` with a fixed message, not the parser's.
+- **Diagnostics keys** are limited to 100 characters, like their values.
+- **No notifications from anonymous text**: because issues are filed with a real
+  account's token, `@user` / `@org/team` mentions and `#123` / `owner/repo#123`
+  references in the report body and diagnostics get a zero-width space after the `@` or
+  `#`, so they neither notify anyone nor add a cross-reference to an unrelated issue.
+  An `@` after a word character (an email address) is left alone.
+- **GitHub call timeout**: 10 seconds; a stall surfaces as a `502` ("try again later")
+  rather than pinning the request.
+
 ## Not yet built
 
 - Issue de-duplication (search before create) — a reasonable future enhancement, not
@@ -179,7 +199,7 @@ real deploy happens and `BUG_REPORT_RELAY_URL` is set to that deployment's URL,
 `apps/desktop` has no relay to point at by default, and "Report a Bug" correctly (not a
 bug) shows "not configured" — see docs/modules/desktop.md.
 
-A separate, real bug *was* found and fixed while verifying this: `apps/desktop`
+A separate, real bug _was_ found and fixed while verifying this: `apps/desktop`
 previously had no mechanism to actually bake a `BUG_REPORT_RELAY_URL` repo secret into
 a packaged build at all (setting it during CI packaging did nothing on its own — see
 docs/modules/desktop.md's "Bug reporting" section for the full story). That's now

@@ -8,19 +8,19 @@ a background app by default — see "Background app (tray / menu bar)" below.
 
 ## Required environment variables
 
-- `LASTFM_API_KEY` / `LASTFM_API_SECRET` — credentials for *this application* as
+- `LASTFM_API_KEY` / `LASTFM_API_SECRET` — credentials for _this application_ as
   registered at https://www.last.fm/api/account/create. This project never generates
   or hardcodes real Last.fm credentials — set these two environment variables
   yourself before running `npm run dev`/`start`, and bake them into whatever build
   pipeline produces distributable packages, **or** skip this entirely and let end
   users supply their own key via Settings → Accounts (see "Bring your own key"
   below) — either path works, and both are available in the same build
-  simultaneously. Without *either* source configured, the app still launches, but
+  simultaneously. Without _either_ source configured, the app still launches, but
   login and all Last.fm data views report "not configured" rather than throwing.
   **Baking works for a packaged build**: `apps/desktop/electron.vite.config.ts`
   `define`-inlines the CI job's `LASTFM_API_KEY`/`LASTFM_API_SECRET` into the compiled
   main bundle as `process.env.BAKED_LASTFM_API_KEY`/`..._SECRET` at `electron-vite
-  build` time, and `main/lastfm/read-baked-lastfm-credentials.ts` reads them (see
+build` time, and `main/lastfm/read-baked-lastfm-credentials.ts` reads them (see
   "Bug reporting" below for the history). Verified by building with marker values and
   finding them in `out/main/index.js` only (not the renderer or preload bundles), and
   by an absent-secret control build that bakes nothing. Because the secret ships
@@ -29,7 +29,7 @@ a background app by default — see "Background app (tray / menu bar)" below.
   credentials (rotate it on Last.fm's API account page if it is ever abused).
 - `LIBREFM_API_KEY` / `LIBREFM_API_SECRET` — the same idea as `LASTFM_API_KEY`/
   `LASTFM_API_SECRET` above, but for Libre.fm (an additional, optional scrobbling
-  destination connected *alongside* Last.fm, not instead of it — see "Additional
+  destination connected _alongside_ Last.fm, not instead of it — see "Additional
   services" below). **Not currently configured for this repo** — nothing in this repo
   has ever registered a real Libre.fm API key, so this pair is unset by default and
   Settings → Accounts falls back to its own "bring your own key" form for Libre.fm
@@ -61,7 +61,7 @@ BUG_REPORT_RELAY_URL=
 extra dependency), skipped entirely in a packaged build (`app.isPackaged`), since a
 distributed app has no reason to read a loose text file for secrets — see that file's
 comment for the exact reasoning. This is purely a "don't retype it every launch"
-convenience; it changes nothing about *where* the values come from — you still have to
+convenience; it changes nothing about _where_ the values come from — you still have to
 obtain a real key yourself (nothing in this repo can do that for you, and nothing here
 ever hardcodes one), same as documented above and in "Bring your own key" below.
 
@@ -98,7 +98,7 @@ logged warning) rather than crashing the app or silently storing secrets insecur
 Last.fm's own API docs (`last.fm/api/desktopauth`), the desktop token-based auth flow
 has **no redirect/callback mechanism at all**. Their docs state it plainly: after the
 user grants access, "the user is asked to close their browser and return to your
-application" — manually. (The `cb` callback-URL parameter that *does* exist is
+application" — manually. (The `cb` callback-URL parameter that _does_ exist is
 documented under the separate "web application" flow at `last.fm/api/webauth`, which
 uses a different, token-less mechanism entirely — Last.fm generates and delivers the
 token via that callback itself, rather than the app pre-fetching one via
@@ -160,11 +160,11 @@ silent no-op with zero trace of it happening, which is exactly what made this bu
 to diagnose the first few times around); (2) whether a "Login failed" log line shows
 up at all, roughly 5 minutes after login was started (points at the poll timing out —
 i.e., "Allow Access" was never actually clicked on Last.fm's page, or was clicked too
-late); (3) whether *neither* appears at all, which points at `onLoginSuccess`/
+late); (3) whether _neither_ appears at all, which points at `onLoginSuccess`/
 `onLoginFailed` not being reached — a real wiring bug upstream, in `AuthFlow` itself or
 the IPC plumbing, rather than anything about focus or notifications specifically. Also
 worth ruling out first, given this app is designed to persist in the background: make
-sure you're testing against a freshly *restarted* process (fully quit via the tray/menu
+sure you're testing against a freshly _restarted_ process (fully quit via the tray/menu
 bar "Quit" item, not just closed-to-tray) after any code change — Electron's main
 process doesn't hot-reload, and `wireCloseToTray` deliberately keeps the same
 long-running process alive across window closes, so it's easy to keep testing stale
@@ -172,7 +172,7 @@ code without realizing it.
 
 ### Bring your own key
 
-Logging in needs an *application*-level Last.fm API key/secret pair to exist first
+Logging in needs an _application_-level Last.fm API key/secret pair to exist first
 (distinct from the per-user session key `AuthFlow` gets — see above). There are two
 ways to supply one, and both are available in the same build at once:
 
@@ -197,7 +197,7 @@ ways to supply one, and both are available in the same build at once:
    Saving persists it via `AppCredentialsStore` (`ElectronSecretStorage`-backed, same
    mechanism as account session keys, but a separate store/file —
    `app-credentials.json` vs. `secrets.json` — since this holds an application
-   credential, not a per-user one). A saved key only takes effect on the *next* launch
+   credential, not a per-user one). A saved key only takes effect on the _next_ launch
    (`main/lastfm/resolve-lastfm-credentials.ts` resolves it once at `app.whenReady()`),
    so the Settings UI offers a "Restart now" button (`window.auth.relaunch()` →
    `app.relaunch()` + `app.exit()`) right after saving.
@@ -211,7 +211,7 @@ instance, so Settings doesn't offer to edit or clear it — see
 
 ### Additional services (Libre.fm / ListenBrainz)
 
-Settings → Accounts also offers Libre.fm and ListenBrainz — connected *alongside*
+Settings → Accounts also offers Libre.fm and ListenBrainz — connected _alongside_
 Last.fm, not switched between: every scrobble and now-playing update goes to every
 currently-connected service at once (see `main/scrobbling/wire-scrobbling.ts`'s
 docstring). Each has its own connect/disconnect state, entirely independent of
@@ -219,11 +219,11 @@ Last.fm's.
 
 **Libre.fm** reuses `LastfmClient` itself, pointed at Libre.fm's own API/auth-page
 URLs (protocol-identical to Last.fm — see `LastfmClientOptions.baseUrl`/`authUrl`) —
-and follows the *exact same* `LIBREFM_API_KEY`/`LIBREFM_API_SECRET`-then-bring-your-
+and follows the _exact same_ `LIBREFM_API_KEY`/`LIBREFM_API_SECRET`-then-bring-your-
 own-key precedence Last.fm uses (see `resolve-librefm-credentials.ts`), so once a real
 key is baked in, Settings collapses to a single "Log in with Libre.fm" button, same as
 Last.fm. One thing this differs from Last.fm on deliberately: a saved Libre.fm key
-takes effect *immediately*, no relaunch needed (`resolveLibrefmCredentials` is
+takes effect _immediately_, no relaunch needed (`resolveLibrefmCredentials` is
 re-checked on every login attempt, not resolved once at startup) — there's no
 "environment vs. user-supplied, fixed for the process lifetime" split to preserve the
 way Last.fm's `credentialsSource` has, since nothing else in this app depends on
@@ -231,7 +231,7 @@ Libre.fm's client being constructed only once. **Two things about Libre.fm were 
 independently live-verified this session** (see `wire-secondary-auth.ts`'s docstrings
 for the full caveat): the exact authorization-page URL (guessed by analogy with
 Last.fm's own `www.last.fm`-vs-`ws.audioscrobbler.com` split), and whether Libre.fm's
-signed endpoints (`auth.getSession`, `track.scrobble`) actually require a *real*,
+signed endpoints (`auth.getSession`, `track.scrobble`) actually require a _real_,
 Libre.fm-registered key/secret pair, or tolerate an arbitrary one the way
 `auth.getToken` was confirmed to. If login fails once a real attempt is made, checking
 those two things first is the fastest path to a fix.
@@ -306,7 +306,7 @@ specifically — `BrowserWindow`'s `icon` option doesn't affect that on macOS).
 `resolve-tray-icon-path.ts` does (see above) — both now share one `resolve-resource-path.ts`
 helper rather than duplicating that dev-vs-packaged branch.
 
-Real custom icon *artwork* commissioned specifically for this project is still not
+Real custom icon _artwork_ commissioned specifically for this project is still not
 built — see "Not yet built" below; this section is about the (real, working,
 Last.fm-derived) icon that exists today, not a placeholder.
 
@@ -372,7 +372,7 @@ this repo's owner supplied a real `GITHUB_PAT`, an actual filed issue
 (https://github.com/Vaporjawn/Last-FM-Scrobbler/issues/9) proving the full path works
 end-to-end, not just up to a credential boundary — see docs/modules/bug-report-relay.md's
 "Status".
-The one thing that *was* a genuine bug (not just "not deployed yet"): setting
+The one thing that _was_ a genuine bug (not just "not deployed yet"): setting
 `BUG_REPORT_RELAY_URL` as a CI secret during packaging did nothing on its own — a
 packaged Electron main process is real Node.js code, and CI-time env vars only exist
 for that CI job's own process, not the binary it produces. Fixed by having
@@ -438,10 +438,10 @@ A few things worth knowing if you touch this config:
 - **Ad-hoc code signing is forced on macOS when no real certificate is configured**,
   via `apps/desktop/scripts/package.mjs` passing `--config.mac.identity=-` unless
   `CSC_LINK` is set. This isn't optional cosmetic polish: verified locally that a
-  *fully unsigned* packaged app (electron-builder's own default when it finds no
+  _fully unsigned_ packaged app (electron-builder's own default when it finds no
   valid signing identity — confirmed via `codesign -dv`, which showed the raw
   downloaded Electron binary's own original signature untouched, `Sealed
-  Resources=none`) fails to launch at all on Apple Silicon with **no error output of
+Resources=none`) fails to launch at all on Apple Silicon with **no error output of
   any kind** — the kernel's code-integrity enforcement silently kills it. Ad-hoc
   signing (`codesign --sign -`, no real identity, still not enough to satisfy
   Gatekeeper's "identified developer" check) is the minimum needed for the app to
@@ -487,7 +487,7 @@ those targets build cleanly.
 (`main/updates/create-updater-client.ts` wraps its `autoUpdater` singleton behind a
 small `UpdaterClient` interface for testability; `main/updates/wire-updates.ts` drives
 the actual check/download/prompt lifecycle and the `shared/updates-api.ts` IPC
-surface). Reads *where* to check from `app-update.yml`, generated at package time from
+surface). Reads _where_ to check from `app-update.yml`, generated at package time from
 `electron-builder.yml`'s `publish: {provider: github, owner: Vaporjawn, repo:
 Last-FM-Scrobbler}` block — this only actually resolves to anything once
 `.github/workflows/release.yml` has published at least one real GitHub Release (see
@@ -497,7 +497,7 @@ repo.
 - **When it checks**: once ~10 seconds after launch, then every 4 hours while running
   (a background/tray app can stay running for days — see "Background app" above) —
   both gated on `AppSettings.autoUpdateEnabled` (default on; toggle lives in
-  Settings → General, next to a "Check for updates now" button that *always* works
+  Settings → General, next to a "Check for updates now" button that _always_ works
   regardless of the toggle).
 - **What happens when one's found**: `autoUpdater.autoDownload` is left `true`, so a
   detected update downloads automatically in the background — no separate "download
@@ -519,7 +519,7 @@ repo.
 - **Not verified**: end-to-end, since it requires at least two real, code-signed
   published releases (an "old" and a "new" one) to actually exercise a check → download
   → install cycle — nothing this development environment can produce without real
-  signing credentials and a real prior release to update *from*. The IPC
+  signing credentials and a real prior release to update _from_. The IPC
   wiring/state-machine/settings-gating logic is unit-tested (fake `UpdaterClient`
   event emitter — see `tests/main/updates/`), but the real `electron-updater` ↔
   GitHub Releases integration itself is not.
@@ -540,7 +540,7 @@ after actually launching the built app (`electron-vite preview`) surfaced
 'BrowserWindow'`, which unit tests alone never would have caught (they mock
 `"electron"` entirely). Relatedly: if you're developing inside a shell where
 `ELECTRON_RUN_AS_NODE=1` is set (some sandboxed/CI shells set this), Electron's binary
-runs as plain Node.js and the real `electron` module — named *or* default export —
+runs as plain Node.js and the real `electron` module — named _or_ default export —
 isn't available at all; `electron` in-process becomes `undefined`/inert instead of the
 real API. That variable must be unset (or absent) for `npm run dev` / `electron-vite
 preview` to actually launch a working window.
@@ -572,7 +572,7 @@ something unit tests would ever surface, since they mock `"electron"` and never
 actually load a real preload script).
 
 The failure mode this produces is easy to misdiagnose: when the preload script can't
-load, `contextBridge.exposeInMainWorld` never runs, so *every* `window.*` API
+load, `contextBridge.exposeInMainWorld` never runs, so _every_ `window.*` API
 (`window.auth`, `window.settings`, `window.nowPlaying`, …) is silently `undefined` in
 the renderer. Every hook here is written to degrade gracefully when its API is
 missing (see each hook's docstring) — which is correct behavior for a component test,
@@ -580,10 +580,10 @@ but in a real broken-preload scenario it means the UI doesn't show an error, it 
 quietly does nothing: Settings' Accounts section, for example, showed an endless
 loading spinner rather than any indication of what had gone wrong (see `useAuth`'s
 `refresh()`, which now also falls back to a non-loading state and surfaces `error` if
-its initial IPC calls reject, precisely so a future instance of *any* IPC failure —
+its initial IPC calls reject, precisely so a future instance of _any_ IPC failure —
 this one or otherwise — fails visibly instead of hanging forever).
 
-`sandbox: false` here only affects what the *preload script itself* can access (it
+`sandbox: false` here only affects what the _preload script itself_ can access (it
 gets a full Node environment instead of the restricted sandboxed one) — it does not
 weaken `contextIsolation: true`/`nodeIntegration: false` above, which are what
 actually keep the renderer's web content isolated from Node. Since the preload script
@@ -603,7 +603,7 @@ bug.
 `create-main-window.ts` calls `mainWindow.webContents.setWindowOpenHandler(...)`,
 denying the request and handing the URL to `shell.openExternal` instead. Without it,
 every `<a target="_blank">` in the renderer (the "Get your Last.fm API key" link, the
-artist bio's "Read more on Last.fm" link, etc.) opened in a brand-new *Electron*
+artist bio's "Read more on Last.fm" link, etc.) opened in a brand-new _Electron_
 window — this app's own window, with none of the user's actual browser
 logins/extensions/history — rather than their real default browser. `AuthFlow`'s own
 browser step (`main/index.ts`'s `wireAuth({ openUrl: (url) => shell.openExternal(url)
@@ -627,14 +627,16 @@ avatar feature was built, tested (200+ passing tests), typechecked, linted, and
 manually smoke-tested with a clean console on a cold launch. All of that passed
 because none of it renders a real browser Content-Security-Policy the way an actual
 Chromium renderer process does — component tests run in jsdom, which doesn't enforce
-CSP at all. The bug only became visible by launching the *packaged/previewed* app for
+CSP at all. The bug only became visible by launching the _packaged/previewed_ app for
 real and reading its devtools/stdout console, which showed the exact violation:
+
 ```
 Loading the image 'https://lastfm.freetls.fastly.net/i/u/300x300/...' violates the
 following Content Security Policy directive: "default-src 'self'". Note that
 'img-src' was not explicitly set, so 'default-src' is used as a fallback. The action
 has been blocked.
 ```
+
 Fixed by adding `img-src 'self' data: https://lastfm.freetls.fastly.net` explicitly.
 `data:` covers inline/base64 image content; the explicit Last.fm CDN host (rather than
 a blanket `https:`) keeps the policy no looser than it needs to be. **Lesson**: any
@@ -659,33 +661,30 @@ process-isolation primitives:
   through `contextBridge.exposeInMainWorld` — nothing leaks a raw Node/Electron object
   into the renderer's `window`, and every event-subscription API returns a working
   unsubscribe function rather than leaking a listener that outlives its caller.
-- **`assertTrustedSender`** (`main/validate-ipc-sender.ts`) — a guard every
-  `ipcMain.handle` in the three highest-privilege handler modules
-  (`auth/wire-auth.ts`, `auth/wire-secondary-auth.ts`, `lastfm/wire-track-actions.ts`)
-  calls first, before doing anything else: throws unless the IPC call's `senderFrame`
-  genuinely matches this app's own renderer. Not currently protecting against anything
-  exploitable today — `contextIsolation` is on, `nodeIntegration` is off, and
-  `create-main-window.ts`'s `setWindowOpenHandler` denies every attempt to open a new
-  window/navigate elsewhere (see "external links" above), so untrusted content should
-  never end up sharing this window's IPC surface in normal operation. Electron's own
-  security checklist still lists sender validation as standard practice specifically
-  for the regressions this guards against instead (a dependency accidentally loading
-  remote content, a future feature adding an iframe). Deliberately **not** applied to
-  read-only public Last.fm data (`wire-lastfm-data.ts`), settings, filter validation,
-  or bug reporting — none of those handlers can mutate a signed-in user's account or
-  exfiltrate a credential, and the bug-report relay is explicitly designed to be
-  publicly reachable anyway (its own abuse protection lives in the relay itself — see
-  `docs/modules/bug-report-relay.md`'s length limits and rate limiting).
+- **Every IPC handler checks its sender.** Handlers register through
+  `createTrustedIpc` (`main/ipc/create-trusted-ipc.ts`), a facade over `ipcMain` that
+  runs `assertTrustedSender` (`main/validate-ipc-sender.ts`) before the handler is
+  entered, so a handler that skips the check is impossible to write by accident. This
+  used to be hand-written per handler and only existed in about half the modules —
+  settings writes, the Last.fm data reads, showing the window and triggering an update
+  check accepted calls from any frame. `wireAuth`, `wireSecondaryAuth`,
+  `wireTrackActions` and `wireBugReport` still call `assertTrustedSender` directly; every
+  other `wire*` module takes an `expectedOrigin` option and registers through the
+  facade, and `main/index.ts` passes the same value to all of them (asserted in
+  `tests/main/index.test.ts`). It defends against regressions rather than a known hole —
+  a dependency loading remote content, a future iframe — which is why it is worth having
+  on every handler rather than only the sensitive ones.
 
   The one subtlety worth knowing if you touch this: every `file:` URL serializes to
   the literal origin string `"null"` per RFC 6454 (verified directly:
   `new URL("file:///a").origin === new URL("file:///b").origin === "null"`), so a naive
-  `senderUrl.origin === expectedOrigin` compare would accept a call from *any* local
+  `senderUrl.origin === expectedOrigin` compare would accept a call from _any_ local
   file in a packaged build, not just this app's own `renderer/index.html` — silently
   defeating the whole point of the check. `resolve-expected-renderer-origin.ts`
   resolves a real `file:` URL (not the string `"null"`) as the expected origin
   specifically so `assertTrustedSender` can fall back to a full pathname compare for
   that case instead.
+
 - **`openExternalIfSafe`** (`main/index.ts`) — `wireAuth`'s and `wireSecondaryAuth`'s
   `openUrl` callbacks (used to open the Last.fm/Libre.fm "authorize this app" page) are
   gated through `isSafeExternalUrl` before reaching `shell.openExternal`, matching
@@ -694,19 +693,66 @@ process-isolation primitives:
   auth-flow URL itself was traced and confirmed non-exploitable regardless (always a
   fixed, hardcoded Last.fm/Libre.fm host plus this build's own baked-in `api_key` plus
   an opaque token value the API just returned — never attacker- or renderer-influenced
-  data), so this is regression-proofing against a *future* change to either call site,
+  data), so this is regression-proofing against a _future_ change to either call site,
   the same "defense-in-depth, not a response to a live vulnerability" framing
   `assertTrustedSender` itself uses.
+- **Windows are locked to the app's own page** (`main/security/harden-web-contents.ts`,
+  applied to the main window and the tray popover). `will-navigate` / `will-redirect` to
+  anything but the renderer page is cancelled (a plain link to a web page opens in the
+  real browser instead), new windows are always denied (http/https targets go to the
+  browser), `<webview>` attachment is refused, and every permission request/check is
+  answered "no" — Electron otherwise grants them all.
+- **Settings are validated at both boundaries** (`main/settings/sanitize-settings.ts`).
+  `settings:set` rejects anything that is not an object of known settings with valid
+  types and ranges, and `settings.json` is reduced the same way when read, so a
+  hand-edited file or a hostile patch cannot persist unknown keys, wrong types or
+  absurd window sizes. The key list is a `Record<keyof AppSettings, true>`, so adding a
+  setting without deciding how it is validated fails to compile.
 - **Secrets on disk**: `ElectronSecretStorage` (Electron's `safeStorage`, OS
-  keychain-backed — see "Login UX" above) treats a corrupt or unreadable secrets file
-  (an interrupted write during a crash, disk corruption, manual tampering) as "nothing
-  stored" rather than throwing out of every `get()`/`set()`/`delete()`/`list()` call
-  from then on — the same fallback shape `main/settings/settings-store.ts` already used
-  for a corrupt `settings.json`.
+  keychain-backed — see "Login UX" above) writes through a temp file, `fsync` and an
+  atomic rename, so a crash mid-write leaves the previous complete file instead of a
+  truncated one that reads back as "no accounts". A file that cannot be parsed (or is
+  valid JSON of the wrong shape) is moved aside to `secrets.json.corrupt` rather than
+  treated as empty and overwritten by the next write, entries are held in a
+  null-prototype object holding only strings, and its methods return rejected promises
+  instead of throwing synchronously.
+- **Bug reports** (`bug-report/wire-bug-report.ts`): the relay URL must be `https:` (or
+  `http:` to localhost for development) or reporting is treated as not configured; the
+  relay's reply must carry an `https:` `issueUrl` and a numeric `issueNumber` before it
+  is passed on to the renderer; requests time out after 30 seconds; and an identical
+  report submitted twice while the first is in flight shares its outcome instead of
+  filing two public issues.
 - **No `eval`/`new Function`/`child_process.exec`** anywhere in the main process. No
   `dangerouslySetInnerHTML`/`innerHTML` anywhere in the renderer. No credential value
   (`sessionKey`/`apiSecret`/`apiKey`/a ListenBrainz token) is ever passed to a
   `logger.*` call — verified by grep across every call site, not assumed.
+
+## Concurrency and resource lifecycle
+
+Races and leaks found by audit, and the rule each now follows:
+
+- **One scrobble drain at a time** (`scrobbling/wire-scrobbling.ts`). A drain reads the
+  queue, submits over the network, then removes what was accepted; with a slow network
+  and a 60 s interval a second drain read the same rows and submitted them again
+  (duplicate scrobbles). Concurrent callers now share the in-flight drain. Now-playing
+  updates are also sent one at a time with a single latest-wins slot, so a slow request
+  for an earlier track cannot land after a newer one. A scheduled drain's failure is
+  logged rather than left as an unhandled rejection.
+- **Every network request has a ceiling** (`packages/core` `createTimeoutSignal`, default
+  30 s; 10 s for the relay → GitHub call). A `TimeoutError` is classified as a network
+  error, so offline mode and retries treat it like any other connectivity failure.
+- **Account changes are atomic** (`AccountStore`). Mutations run through one queue, and
+  `connectExclusively` removes the other accounts and activates the new one as a single
+  step — two overlapping Libre.fm/ListenBrainz connects used to both succeed and leave
+  two "exclusive" accounts.
+- **Position polling is single-flight** (`playback/wire-now-playing.ts`), and does not
+  write to a window that was closed while a read was pending.
+- **Shutdown releases what scrobbling holds**: on `will-quit` the drain timer is stopped
+  and the SQLite queue closed.
+- Adapter lifecycles are covered in each adapter's doc: a listener is no longer left
+  registered when starting the helper throws, a dead helper reports "stopped" and forgets
+  its position, and the Linux source discards any step that finishes after its session
+  ended or its player vanished.
 
 ## Responsive layout and window sizing
 
@@ -725,7 +771,7 @@ at narrow widths:
   width — `overflow: "auto"` on its own does nothing about this, since overflow only
   controls what happens to content that doesn't fit, not whether the item itself is
   allowed to become narrower than that content in the first place. Because this was
-  the single flex item wrapping the *entire* active page, any one unshrinkable element
+  the single flex item wrapping the _entire_ active page, any one unshrinkable element
   anywhere in the currently-rendered page's tree could force the whole app wider than
   the actual window — explaining why the symptom looked scattered across unrelated
   pages before the actual root cause was found. Fixed by adding `minWidth: 0` there;
@@ -758,7 +804,7 @@ competes directly with the content it's next to. Implemented with a
 `hasSyncedInitialLoadRef` to distinguish two situations that need different behavior:
 `useSettingsState` always renders with a synchronous, hardcoded-default `AppSettings`
 first and only replaces it with the real persisted settings once an async
-`window.settings.get()` resolves, so the *first* time real settings become available,
+`window.settings.get()` resolves, so the _first_ time real settings become available,
 `collapsed` is synced to match the real aspect ratio in **either** direction (portrait
 → collapse, landscape/square → expand, correcting whatever the hardcoded default
 guessed). After that initial sync, entering portrait later (a live Settings change)
@@ -774,7 +820,7 @@ aspect ratio changes.
 string (`Date.prototype.toLocaleString()`, e.g. `"8/3/2026, 2:45:30 PM"`) and let the
 `Chip`'s own default `text-overflow: ellipsis` silently cut it mid-character whenever
 the row didn't have room — the "Last-resort clipping" bullet above used to be the
-*primary* mechanism for this chip, not the true last resort it's meant to be. It's now
+_primary_ mechanism for this chip, not the true last resort it's meant to be. It's now
 `TimestampLabel`, which steps down through `format-timestamp-candidates.ts`'s
 progressively shorter but always fully-formed candidates via `useShrinkToFitIndex`,
 picking the widest one that actually fits — genuine CSS ellipsis truncation only ever
@@ -795,7 +841,7 @@ Two entirely different candidate sets depending on how long ago the timestamp wa
   absolute-only system below bottomed out at a fixed-width clock time (`"12:22 PM"`)
   with no shorter fallback — a double-digit hour is exactly one character longer than
   a single-digit one, and in a chip sized with essentially zero slack, that one extra
-  character was enough to overflow into ellipsis truncation on *every*
+  character was enough to overflow into ellipsis truncation on _every_
   double-digit-hour scrobble.
 - **A day or older**: the original four-tier absolute date/time breakdown — full
   date+time with seconds, then without seconds, then without the year, then time only.
@@ -816,21 +862,21 @@ either was found:**
    incrementing counter (`resizeTick`) instead of calling `setIndex(0)` directly — a
    counter is never idempotent, so it guarantees a real re-render (and therefore a real
    re-run of the measuring effect) on every resize, even when the index it resets
-   *to* happens to already be the current value.
+   _to_ happens to already be the current value.
 2. **Growing back to a more detailed format often didn't happen at all.** The
    `ResizeObserver` watches the label's own span, which only auto-sizes to its current
    content — nothing stretches it to fill whatever room its ancestor row has. Shrinking
    the ancestor below that auto-size genuinely squeezes the span smaller, which
-   `ResizeObserver` correctly reports (bug 1 aside). But *growing* the ancestor back
+   `ResizeObserver` correctly reports (bug 1 aside). But _growing_ the ancestor back
    doesn't force the span to grow with it if the span was already comfortably sized for
    its current (short) text with slack room to spare — the span's own box never
-   changes size, so `ResizeObserver`, which only fires on the *observed* element's own
+   changes size, so `ResizeObserver`, which only fires on the _observed_ element's own
    size actually changing, never fires, and the label stays stuck on a shorter format
    than the now-available space could fit. Fixed by adding a `window` `resize`
    listener as a second, independent trigger for the same `resizeTick` counter — window
    resizes are the dominant real-world cause of a row's available space changing.
    **Known, accepted gap, not silently swept under the rug**: this still won't catch a
-   *sibling* element's content changing length (e.g. a friend's username loading in
+   _sibling_ element's content changing length (e.g. a friend's username loading in
    shorter than a placeholder) independent of any window resize, while the chip itself
    stays comfortably sized either way. Genuinely covering that would need a
    `ResizeObserver` on each call site's own actual constraining ancestor, which differs
@@ -849,7 +895,7 @@ unconditionally (confirmed directly against jsdom 30.0.1's own `window`) — eve
 existing jsdom-based test of this component, before and after the fix, only ever
 proves "shows the full candidate and doesn't crash," which is exactly the class of gap
 that let the original, subtly-broken implementation ship with every test green. One
-piece *is* genuinely testable in jsdom despite this — `window.dispatchEvent(new
+piece _is_ genuinely testable in jsdom despite this — `window.dispatchEvent(new
 Event("resize"))` exercises real, unstubbed `window` event APIs jsdom fully
 implements — and `tests/renderer/use-shrink-to-fit-index.test.tsx` has a dedicated test
 for exactly that path; the `ResizeObserver`-specific paths there use a hand-written
@@ -858,10 +904,10 @@ real layout.
 
 ### A standard minimum width, not just a shrinking ladder
 
-Shrink-to-fit alone still had a real gap: it only *reacts* to overflow after
+Shrink-to-fit alone still had a real gap: it only _reacts_ to overflow after
 `ResizeObserver` reports it, and this app's actual row layouts
 (`ScrobbleListItem`/`FriendListItem`) deliberately give the column/row holding the chip
-an explicit `minWidth: 0` (so the *artist/track text* absorbs a tight row instead of
+an explicit `minWidth: 0` (so the _artist/track text_ absorbs a tight row instead of
 fighting the chip for space — see those files' own docstrings), which meant the chip
 itself had no guaranteed floor either, and a sufficiently tight row could squeeze it
 below even its shortest candidate before shrink-to-fit had a chance to catch up — a
@@ -869,7 +915,7 @@ real, briefly-visible mid-character CSS `text-overflow: ellipsis` cut, not just 
 lag. Fixed by giving the `Chip` an explicit `minWidth` (`TIMESTAMP_CHIP_MIN_WIDTH_CHARS`
 in `format-timestamp-candidates.ts`, `9ch` — one character of headroom above the widest
 terse candidate this project has measured on its own `en-US` development locale, `8`)
-reserving room for the *terse* (last-resort) candidate up front via ordinary CSS,
+reserving room for the _terse_ (last-resort) candidate up front via ordinary CSS,
 instead of starting at zero width and only reacting after the fact. An explicit
 `min-width` on a flex item always wins over the automatic (`auto`) one during
 flexbox's shrink resolution, so this floor holds regardless of what any ancestor sets
@@ -891,7 +937,7 @@ flex container's own available cross-axis space can still get clamped by an
 even-further-out ancestor's flex-shrink resolution, independent of what a deeply
 nested child asks for. Measured directly: with the floor only on the inner span, that
 span's own `scrollWidth`/`clientWidth` matched each other (it wasn't overflowing
-*itself*), but MUI's own `.MuiChip-label` wrapper — which has `overflow: hidden` as
+_itself_), but MUI's own `.MuiChip-label` wrapper — which has `overflow: hidden` as
 part of its base styles — was being rendered narrower than the inner span needed and
 silently clipping it, exactly the "6 hr a…"-style cut this fix exists to prevent. The
 fix that actually held up under the same live test: the explicit `min-width` has to
@@ -924,6 +970,7 @@ Similar Artists row, via `LastfmClient.getArtistInfo`/`getSimilarArtists` —
 public/unsigned, so this works even logged out).
 
 Two deliberate simplifications, not oversights:
+
 - **No real artwork.** No adapter currently surfaces album art, and Last.fm's API
   mostly returns a generic placeholder image for artist photos now (a rights change
   from years ago) — so Now Playing/Scrobbles/the artist panel all use a styled
@@ -932,14 +979,14 @@ Two deliberate simplifications, not oversights:
   images" section for the exact evidence (same placeholder image hash returned for
   every artist queried).
 - **"Loved" is a local guess, not a fetched value.** There's no wired-up way to ask
-  Last.fm "is the *current* track already loved by this user" (`track.getInfo` with a
+  Last.fm "is the _current_ track already loved by this user" (`track.getInfo` with a
   username would tell you, but isn't wired up) — the heart icon starts unloved for
   every new track and only reflects clicks made this session (see
   `renderer/src/hooks/use-track-actions.ts`).
 
 ## Profile: real avatar photo
 
-Unlike artist images (above), a user's own Last.fm avatar *is* a real, working photo —
+Unlike artist images (above), a user's own Last.fm avatar _is_ a real, working photo —
 confirmed live against the real API for an account with one set, returning a genuine
 ~190KB image, not a placeholder (see `docs/modules/core.md`). `ProfilePage`'s account
 card renders it via `LastfmClient.getUserInfo` → `main/lastfm/wire-lastfm-data.ts` →
@@ -955,6 +1002,7 @@ page intentionally still use letter avatars — see the artist-images limitation
 ## Friends: real avatars + activity
 
 `FriendsPage` renders each friend via `components/FriendListItem.tsx`:
+
 - **Avatar** — `Friend.avatarUrl`, straight from `LastfmClient.getFriends`'s existing
   `user.getFriends` call. No extra per-friend request needed for this part: unlike
   `ProfilePage`'s avatar (a separate `getUserInfo` call), `user.getFriends`' response
@@ -962,7 +1010,7 @@ page intentionally still use letter avatars — see the artist-images limitation
   `pickLargestImageUrl` picking/fallback logic as `UserProfile.avatarUrl`.
 - **Activity** — a "Scrobbling now" chip + track/artist (currently playing), or the
   track/artist with a plain timestamp (most recent past scrobble), or nothing at all
-  (no scrobble history, the fetch failed, or it just hasn't resolved yet). This *does*
+  (no scrobble history, the fetch failed, or it just hasn't resolved yet). This _does_
   need a separate call per friend — `renderer/src/hooks/use-friend-activity.ts` calls
   `getRecentTracks(username, 1)` — since Last.fm has no bulk "recent tracks for these N
   users" endpoint. Each row fetches and fails independently (`Promise` per row, not a
@@ -1008,11 +1056,12 @@ component tests don't all need to be wrapped in a new provider just to render).
 
 **Where it's wired in** (see `renderer/src/hooks/action-result.ts`'s `ActionResult`
 type — every hook action below returns `{success: true} | {success: false, error}`
-rather than a plain boolean specifically so a caller can react to the *exact* outcome
+rather than a plain boolean specifically so a caller can react to the _exact_ outcome
 immediately, without racing a stale closure over the hook's own `error` state — see
 that file's docstring for why that race is real):
+
 - **Now Playing**: love/unlove and add-tags success/failure (`NowPlayingPage.tsx`) —
-  previously *zero* user-visible feedback for either (success was invisible, errors
+  previously _zero_ user-visible feedback for either (success was invisible, errors
   were caught but never rendered anywhere) — the single biggest UI feedback gap found
   when surveying the app for this.
 - **Settings**: login success/failure, log out, switch active account, save/clear
@@ -1039,10 +1088,11 @@ This is specifically for events that happen **unattended**, often with the main
 window hidden (see "Background app" above) — snackbars only make sense with the
 window open, so anything that can legitimately happen while it's hidden needs a
 different mechanism:
+
 - **A scrobble is submitted successfully** (`wire-scrobbling.ts`'s new `onScrobbled`
   callback, wired in `main/index.ts`) — "Scrobbled: {track} — {artist}", or "…and N
   more" for a multi-item batch (catching up after being offline). This was previously
-  the single biggest *silent* background gap in the whole app — no feedback of any
+  the single biggest _silent_ background gap in the whole app — no feedback of any
   kind, not even a log line, for the app's core purpose succeeding.
 - **Scrobble submission keeps failing** (`onScrobbleFailed`) — but only once it's
   failed **3 consecutive** drain cycles in a row, not on every single retry (which
@@ -1075,7 +1125,8 @@ constructor (`tests/main/notifications/show-notification.test.ts` and the releva
 cases in each module's own test file) — the real OS-level rendering isn't.
 
 ## Not yet built (real feature work, tracked here so it isn't lost)
-- *Automatic* crash reporting — an opt-in reporter that auto-fills the bug-report
+
+- _Automatic_ crash reporting — an opt-in reporter that auto-fills the bug-report
   dialog (or reports silently) on an unhandled exception/crash. The manual "Report a
   Bug" button/dialog is built (see "Bug reporting" above); wiring it to fire
   automatically on a crash is not.
