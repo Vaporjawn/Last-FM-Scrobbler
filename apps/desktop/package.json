@@ -2,6 +2,13 @@
   "name": "@lastfm-scrobbler/desktop",
   "version": "0.0.0",
   "private": true,
+  "description": "A native, cross-platform Last.fm scrobbler for macOS, Windows, and Linux.",
+  "homepage": "https://github.com/Vaporjawn/Last-FM-Scrobbler#readme",
+  "author": {
+    "name": "Victor Williams",
+    "email": "victor.williams.dev@gmail.com",
+    "url": "https://github.com/Vaporjawn"
+  },
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
