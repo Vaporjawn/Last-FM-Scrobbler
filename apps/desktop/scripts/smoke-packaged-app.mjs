@@ -20,7 +20,10 @@ if (!executablePath) {
 }
 
 // The Chromium sandbox helper in an unpacked Linux build is not setuid on CI runners.
-const args = process.platform === "linux" ? ["--no-sandbox"] : [];
+const args = [
+  ...(process.platform === "linux" ? ["--no-sandbox"] : []),
+  ...(process.env.SMOKE_EXTRA_ARGS ? process.env.SMOKE_EXTRA_ARGS.split(" ") : []),
+];
 const app = await electron.launch({ executablePath, args, timeout: 60_000 });
 
 try {

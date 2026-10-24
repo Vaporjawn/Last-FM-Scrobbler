@@ -128,10 +128,12 @@ jobs:
         working-directory: apps/desktop
         run: |
           dbus-run-session -- bash -c '
-            set -e
             eval "$(echo "" | gnome-keyring-daemon --unlock --components=secrets)"
-            export GNOME_KEYRING_CONTROL XDG_CURRENT_DESKTOP=GNOME
-            xvfb-run -a node scripts/smoke-packaged-app.mjs
+            export GNOME_KEYRING_CONTROL ELECTRON_ENABLE_LOGGING=1
+            echo "=== attempt A: libsecret chosen by flag ==="
+            SMOKE_EXTRA_ARGS="--password-store=gnome-libsecret" xvfb-run -a node scripts/smoke-packaged-app.mjs && exit 0
+            echo "=== attempt B: libsecret chosen by desktop environment ==="
+            XDG_CURRENT_DESKTOP=GNOME xvfb-run -a node scripts/smoke-packaged-app.mjs
           '
         env:
           SMOKE_EXECUTABLE: ${{ github.workspace }}/apps/desktop/${{ matrix.smoke }}
