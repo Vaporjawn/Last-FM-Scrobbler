@@ -78,6 +78,25 @@ export class NowPlayingStreamParser {
     return () => this.stateListeners.delete(callback);
   }
 
+  /**
+   * Forgets everything learned from the stream so far and reports "stopped". For when the
+   * source of that stream is gone (the helper process died or was shut down): its last
+   * report ("playing", this position) will never be corrected by it again, and leaving it
+   * in place would have consumers keep counting play time — and the next run's first
+   * snapshot suppressed as "unchanged" — for something that is no longer happening.
+   */
+  reset(): void {
+    this.currentPayload = {};
+    this.currentIdentity = undefined;
+    this.hasTrack = false;
+    if (this.state !== "stopped") {
+      this.state = "stopped";
+      for (const listener of this.stateListeners) {
+        listener("stopped");
+      }
+    }
+  }
+
   getPosition(): number {
     const { elapsedTime, timestamp, playbackRate, duration } = this.currentPayload;
     // Same reasoning as `toTrackInfo`'s `durationSec` guard above: a mid-track diff

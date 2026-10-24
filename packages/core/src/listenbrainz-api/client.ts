@@ -1,3 +1,4 @@
+import { createTimeoutSignal, DEFAULT_REQUEST_TIMEOUT_MS } from "../network/request-timeout.js";
 import { ListenBrainzApiError } from "./listenbrainz-error.js";
 import type { ScrobblingClient } from "../scrobbling-client.js";
 import type {
@@ -22,6 +23,8 @@ export interface ListenBrainzClientOptions {
   readonly token: string;
   readonly baseUrl?: string;
   readonly fetchImpl?: typeof fetch;
+  /** Per-request ceiling in milliseconds; defaults to 30 seconds. */
+  readonly timeoutMs?: number;
 }
 
 interface TrackMetadata {
@@ -71,11 +74,13 @@ export class ListenBrainzClient implements ScrobblingClient {
   private readonly token: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(options: ListenBrainzClientOptions) {
     this.token = options.token;
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
   private async request<T>(
@@ -89,6 +94,7 @@ export class ListenBrainzClient implements ScrobblingClient {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: init.method,
       body: init.body,
+      signal: createTimeoutSignal(this.timeoutMs),
       headers: {
         ...init.headers,
         authorization: `Token ${this.token}`,
@@ -168,6 +174,7 @@ export class ListenBrainzClient implements ScrobblingClient {
   async validateToken(token: string): Promise<{ valid: boolean; username?: string }> {
     const response = await this.fetchImpl(
       `${this.baseUrl}/1/validate-token?token=${encodeURIComponent(token)}`,
+      { signal: createTimeoutSignal(this.timeoutMs) },
     );
     const result = (await response.json()) as { valid?: boolean; user_name?: string };
     return {

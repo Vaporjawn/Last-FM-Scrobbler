@@ -236,7 +236,9 @@ describe("NowPlayingStreamParser", () => {
       const parser = new NowPlayingStreamParser();
       parser.handleLine(TRACK_ONE_SNAPSHOT);
 
-      parser.handleLine(JSON.stringify({ type: "data", diff: true, payload: { elapsedTime: null } }));
+      parser.handleLine(
+        JSON.stringify({ type: "data", diff: true, payload: { elapsedTime: null } }),
+      );
 
       expect(parser.getPosition()).toBe(0);
     });
@@ -252,7 +254,9 @@ describe("NowPlayingStreamParser", () => {
         // A duration: null diff must not participate in Math.min(position, duration) —
         // JS coerces null to 0 in that comparison, which used to clamp position to 0
         // even though playback is still genuinely progressing.
-        parser.handleLine(JSON.stringify({ type: "data", diff: true, payload: { duration: null } }));
+        parser.handleLine(
+          JSON.stringify({ type: "data", diff: true, payload: { duration: null } }),
+        );
         vi.setSystemTime(new Date(capturedAt.getTime() + 5000));
 
         expect(parser.getPosition()).toBeCloseTo(5.017, 1);
@@ -293,7 +297,9 @@ describe("NowPlayingStreamParser", () => {
       const onTrackChanged = vi.fn();
       parser.onTrackChanged(onTrackChanged);
 
-      parser.handleLine(JSON.stringify({ type: "data", diff: false, payload: { title: "Untitled" } }));
+      parser.handleLine(
+        JSON.stringify({ type: "data", diff: false, payload: { title: "Untitled" } }),
+      );
 
       expect(onTrackChanged).toHaveBeenCalledWith({
         title: "Untitled",
@@ -367,6 +373,34 @@ describe("NowPlayingStreamParser", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("reset", () => {
+    it("reports stopped once, forgets the track, and is silent when already stopped", () => {
+      const parser = new NowPlayingStreamParser();
+      const onState = vi.fn();
+      parser.onPlaybackStateChanged(onState);
+      parser.handleLine(TRACK_ONE_SNAPSHOT);
+      onState.mockClear();
+
+      parser.reset();
+      parser.reset();
+
+      expect(onState.mock.calls).toEqual([["stopped"]]);
+      expect(parser.getPosition()).toBe(0);
+    });
+
+    it("lets the same track be announced again afterwards", () => {
+      const parser = new NowPlayingStreamParser();
+      const onTrack = vi.fn();
+      parser.onTrackChanged(onTrack);
+      parser.handleLine(TRACK_ONE_SNAPSHOT);
+
+      parser.reset();
+      parser.handleLine(TRACK_ONE_SNAPSHOT);
+
+      expect(onTrack).toHaveBeenCalledTimes(2);
     });
   });
 });

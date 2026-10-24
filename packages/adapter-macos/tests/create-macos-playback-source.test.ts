@@ -240,4 +240,91 @@ describe("createMacosPlaybackSource lifecycle", () => {
     expect(states).toEqual(["paused"]);
     await expect(source.getPosition()).resolves.toBe(12);
   });
+
+  describe("lifecycle races and leaks", () => {
+    const PLAYING = JSON.stringify({
+      type: "data",
+      diff: false,
+      payload: { title: "T", artist: "A", elapsedTime: 50, playing: true },
+    });
+
+    it("does not keep a listener registered when spawning the helper throws", async () => {
+      mockFrameworkBuilt();
+      const { createMacosPlaybackSource } = await import("../src/index.js");
+      const child = createFakeChild();
+      let failToSpawn = true;
+      const spawnImpl = vi.fn().mockImplementation(() => {
+        if (failToSpawn) {
+          throw new Error("spawn refused");
+        }
+        return child;
+      });
+      const source = createMacosPlaybackSource({ spawnImpl });
+      const abandoned = vi.fn();
+      const abandonedState = vi.fn();
+
+      expect(() => source.onTrackChanged(abandoned)).toThrow("spawn refused");
+      expect(() => source.onPlaybackStateChanged(abandonedState)).toThrow("spawn refused");
+
+      failToSpawn = false;
+      source.onTrackChanged(() => undefined);
+      child.stdout.write(`${PLAYING}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(abandoned).not.toHaveBeenCalled();
+      expect(abandonedState).not.toHaveBeenCalled();
+    });
+
+    it("reports playback as stopped, and forgets the position, when the helper dies", async () => {
+      mockFrameworkBuilt();
+      const { createMacosPlaybackSource } = await import("../src/index.js");
+      const child = createFakeChild();
+      const source = createMacosPlaybackSource({ spawnImpl: vi.fn().mockReturnValue(child) });
+      const states: string[] = [];
+      source.onPlaybackStateChanged((state) => states.push(state));
+      child.stdout.write(`${PLAYING}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(states).toEqual(["playing"]);
+
+      child.emit("exit", 1, null);
+
+      expect(states).toEqual(["playing", "stopped"]);
+      await expect(source.getPosition()).resolves.toBe(0);
+    });
+
+    it("re-announces the same track after the helper was restarted", async () => {
+      mockFrameworkBuilt();
+      const { createMacosPlaybackSource } = await import("../src/index.js");
+      const first = createFakeChild();
+      const second = createFakeChild();
+      const spawnImpl = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+      const source = createMacosPlaybackSource({ spawnImpl });
+      const tracks: unknown[] = [];
+      source.onTrackChanged((track) => tracks.push(track));
+      first.stdout.write(`${PLAYING}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      first.emit("exit", 1, null);
+      source.onPlaybackStateChanged(() => undefined); // respawns
+      second.stdout.write(`${PLAYING}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(tracks).toHaveLength(2);
+    });
+
+    it("forgets the last position once everyone has unsubscribed", async () => {
+      mockFrameworkBuilt();
+      const { createMacosPlaybackSource } = await import("../src/index.js");
+      const child = createFakeChild();
+      const source = createMacosPlaybackSource({ spawnImpl: vi.fn().mockReturnValue(child) });
+      const unsubscribe = source.onTrackChanged(() => undefined);
+      child.stdout.write(`${PLAYING.replace('"playing":true', '"playing":false')}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+      await expect(source.getPosition()).resolves.toBe(50);
+
+      unsubscribe();
+
+      await expect(source.getPosition()).resolves.toBe(0);
+    });
+  });
 });

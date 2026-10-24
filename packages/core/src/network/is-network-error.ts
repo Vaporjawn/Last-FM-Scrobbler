@@ -40,6 +40,11 @@ export function isNetworkError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
+  // `AbortSignal.timeout()` rejects with a `TimeoutError`: the request never completed,
+  // exactly like an unreachable host, so it belongs with the other connectivity failures.
+  if (error.name === "TimeoutError") {
+    return true;
+  }
   const code = findErrorCode(error);
   if (code !== undefined) {
     return NETWORK_ERROR_CODES.has(code);

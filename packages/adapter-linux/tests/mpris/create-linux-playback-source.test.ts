@@ -14,13 +14,20 @@ function createFakeBus() {
     ListNames: () => Promise<string[]>;
   };
   let names: string[] = [];
-  dbusIface.ListNames = vi.fn(() => Promise.resolve(names));
+  /** When set, `ListNames` stays pending until the test calls the stored release. */
+  let listNamesGate: Promise<void> | undefined;
+  dbusIface.ListNames = vi.fn(async () => {
+    await listNamesGate;
+    return names;
+  });
 
   const playerProperties = new Map<
     string,
     EventEmitter & { GetAll: () => Promise<unknown>; Get: () => Promise<unknown> }
   >();
   const unreachable = new Set<string>();
+  /** Per bus name: `getProxyObject` stays pending until the matching gate opens. */
+  const proxyGates = new Map<string, { gate: Promise<void>; skip: number }>();
   let position = 0n;
 
   function propsFor(busName: string) {
@@ -46,14 +53,22 @@ function createFakeBus() {
   // simulate a connection-level failure via `emitError` below.
   const emitter = new EventEmitter();
   const bus = Object.assign(emitter, {
-    getProxyObject: vi.fn((name: string, path: string) => {
+    getProxyObject: vi.fn(async (name: string, path: string) => {
+      const held = proxyGates.get(name);
+      if (held) {
+        if (held.skip > 0) {
+          held.skip -= 1;
+        } else {
+          await held.gate;
+        }
+      }
       if (unreachable.has(name)) {
-        return Promise.reject(new Error(`${name} is unreachable`));
+        throw new Error(`${name} is unreachable`);
       }
       if (path === "/org/freedesktop/DBus") {
-        return Promise.resolve({ getInterface: () => dbusIface });
+        return { getInterface: () => dbusIface };
       }
-      return Promise.resolve({ getInterface: () => propsFor(name) });
+      return { getInterface: () => propsFor(name) };
     }),
     disconnect,
   }) as unknown as MessageBus;
@@ -67,6 +82,29 @@ function createFakeBus() {
     makeUnreachable(busName: string) {
       unreachable.add(busName);
     },
+    /** Holds `getProxyObject(busName)` open once `skip` earlier calls have gone through;
+     * the returned function lets the held call (and any later one) through. */
+    holdProxy(busName: string, skip = 0): () => void {
+      let release: () => void = () => undefined;
+      proxyGates.set(busName, {
+        gate: new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+        skip,
+      });
+      return release;
+    },
+    /** Holds `ListNames` open; the returned function lets it through. */
+    holdListNames(): () => void {
+      let release: () => void = () => undefined;
+      listNamesGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
+    },
+    propertyListenerCount: (busName: string) =>
+      propsFor(busName).listenerCount("PropertiesChanged"),
+    lifecycleListenerCount: () => dbusIface.listenerCount("NameOwnerChanged"),
     setPosition(micros: bigint) {
       position = micros;
     },
@@ -113,7 +151,9 @@ describe("createLinuxPlaybackSource", () => {
     source.onPlaybackStateChanged((s) => states.push(s));
     await flush();
 
-    expect(tracks).toEqual([{ title: "Song", artist: "Artist", sourceApp: "vlc", isStream: false }]);
+    expect(tracks).toEqual([
+      { title: "Song", artist: "Artist", sourceApp: "vlc", isStream: false },
+    ]);
     expect(states).toEqual(["playing"]);
   });
 
@@ -257,11 +297,7 @@ describe("createLinuxPlaybackSource", () => {
     // argument, silently dropping such an update.
     const fake = createFakeBus();
     fake.setInitialNames(["org.mpris.MediaPlayer2.vlc"]);
-    fake.setPlayerState(
-      "org.mpris.MediaPlayer2.vlc",
-      { "xesam:title": "Song A" },
-      "Playing",
-    );
+    fake.setPlayerState("org.mpris.MediaPlayer2.vlc", { "xesam:title": "Song A" }, "Playing");
 
     const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
     const tracks: unknown[] = [];
@@ -270,11 +306,7 @@ describe("createLinuxPlaybackSource", () => {
 
     // The player updates its state on the bus (what GetAll will now return) but
     // signals the change via invalidation rather than inlining the new value.
-    fake.setPlayerState(
-      "org.mpris.MediaPlayer2.vlc",
-      { "xesam:title": "Song B" },
-      "Playing",
-    );
+    fake.setPlayerState("org.mpris.MediaPlayer2.vlc", { "xesam:title": "Song B" }, "Playing");
     fake.firePropertiesChanged("org.mpris.MediaPlayer2.vlc", {}, ["Metadata"]);
     await flush();
 
@@ -381,5 +413,135 @@ describe("createLinuxPlaybackSource", () => {
     await flush();
 
     expect(tracks).toHaveLength(1);
+  });
+
+  describe("races between starting, stopping and players coming and going", () => {
+    const VLC = "org.mpris.MediaPlayer2.vlc";
+
+    it("does not keep watching a player that disappeared while its watch was still starting", async () => {
+      const fake = createFakeBus();
+      fake.setInitialNames([]);
+      fake.setPlayerState(VLC, { "xesam:title": "Ghost" }, "Playing");
+      const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+      const tracks: unknown[] = [];
+      source.onTrackChanged((track) => tracks.push(track));
+      await flush();
+
+      const release = fake.holdProxy(VLC);
+      fake.fireNameOwnerChanged(VLC, "", ":1.7"); // starts watching
+      fake.fireNameOwnerChanged(VLC, ":1.7", ""); // gone before the watch finished
+      release();
+      await flush();
+
+      expect(tracks).toEqual([]);
+      expect(fake.propertyListenerCount(VLC)).toBe(0);
+    });
+
+    it("does not report an error for a player that vanished before its watch failed", async () => {
+      const fake = createFakeBus();
+      fake.setInitialNames([]);
+      const onError = vi.fn();
+      const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus, onError });
+      source.onTrackChanged(() => undefined);
+      await flush();
+
+      const release = fake.holdProxy(VLC);
+      fake.makeUnreachable(VLC);
+      fake.fireNameOwnerChanged(VLC, "", ":1.7");
+      fake.fireNameOwnerChanged(VLC, ":1.7", "");
+      release();
+      await flush();
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it("ends up with a single watcher when the same player appears twice", async () => {
+      const fake = createFakeBus();
+      fake.setInitialNames([]);
+      fake.setPlayerState(VLC, { "xesam:title": "Song" }, "Playing");
+      const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+      source.onTrackChanged(() => undefined);
+      await flush();
+
+      fake.fireNameOwnerChanged(VLC, "", ":1.7");
+      await flush();
+      fake.fireNameOwnerChanged(VLC, "", ":1.8");
+      await flush();
+
+      expect(fake.propertyListenerCount(VLC)).toBe(1);
+    });
+
+    it("leaves nothing subscribed when the last listener leaves while the source is still starting", async () => {
+      const fake = createFakeBus();
+      fake.setInitialNames([VLC]);
+      fake.setPlayerState(VLC, { "xesam:title": "Song" }, "Playing");
+      const release = fake.holdListNames();
+      const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+
+      const unsubscribe = source.onTrackChanged(() => undefined);
+      unsubscribe(); // before ListNames has answered
+      release();
+      await flush();
+      await flush();
+
+      expect(fake.disconnect).toHaveBeenCalledTimes(1);
+      expect(fake.lifecycleListenerCount()).toBe(0);
+      expect(fake.propertyListenerCount(VLC)).toBe(0);
+    });
+
+    it("drops a lifecycle watcher that finishes starting after the source was stopped", async () => {
+      const fake = createFakeBus();
+      fake.setInitialNames([]);
+      // The first DBus proxy is for listing player names; hold the second, the lifecycle one.
+      const releaseLifecycle = fake.holdProxy("org.freedesktop.DBus", 1);
+      const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+
+      const unsubscribe = source.onTrackChanged(() => undefined);
+      await flush();
+      unsubscribe(); // while the lifecycle watcher is still being set up
+      releaseLifecycle();
+      await flush();
+      await flush();
+
+      expect(fake.lifecycleListenerCount()).toBe(0);
+    });
+
+    it("drops player watches that finish after the source was stopped", async () => {
+      const fake = createFakeBus();
+      fake.setInitialNames([VLC]);
+      fake.setPlayerState(VLC, { "xesam:title": "Song" }, "Playing");
+      const releasePlayer = fake.holdProxy(VLC);
+      const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+
+      const unsubscribe = source.onTrackChanged(() => undefined);
+      await flush();
+      unsubscribe(); // while the initial player watch is still opening
+      releasePlayer();
+      await flush();
+      await flush();
+
+      expect(fake.propertyListenerCount(VLC)).toBe(0);
+      expect(fake.lifecycleListenerCount()).toBe(0);
+    });
+
+    it("forgets players from a previous run when the source is started again", async () => {
+      const SPOTIFY = "org.mpris.MediaPlayer2.spotify";
+      const fake = createFakeBus();
+      fake.setInitialNames([VLC]);
+      fake.setPlayerState(VLC, { "xesam:title": "Old session" }, "Playing");
+      const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+      const first = source.onPlaybackStateChanged(() => undefined);
+      await flush();
+      first();
+
+      fake.setInitialNames([SPOTIFY]);
+      fake.setPlayerState(SPOTIFY, { "xesam:title": "New session" }, "Paused");
+      const states: unknown[] = [];
+      source.onPlaybackStateChanged((state) => states.push(state));
+      await flush();
+
+      // A stale "playing" VLC left over from the first run would win over this paused one.
+      expect(states).toEqual(["paused"]);
+    });
   });
 });

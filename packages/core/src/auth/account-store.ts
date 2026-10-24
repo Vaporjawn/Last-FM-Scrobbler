@@ -33,6 +33,7 @@ const ACTIVE_ACCOUNT_KEY = "__active_account__";
 export class AccountStore {
   private readonly storage: SecretStorage;
   private readonly namespace: string;
+  private pending: Promise<void> = Promise.resolve();
 
   constructor(storage: SecretStorage, options: AccountStoreOptions = {}) {
     this.storage = storage;
@@ -47,7 +48,50 @@ export class AccountStore {
     return `${this.namespace}${ACTIVE_ACCOUNT_KEY}`;
   }
 
-  async addAccount(account: StoredAccount): Promise<void> {
+  /**
+   * Runs `operation` after every earlier mutation has finished. Each mutation below is a
+   * read-then-write sequence spread across several awaits (list, then set; delete, then
+   * re-pick the active account), so two overlapping calls used to interleave and leave
+   * the store inconsistent — two "exclusive" accounts, or an active account pointing at
+   * one that had just been removed. Funnelling them through one queue makes each whole
+   * sequence atomic with respect to the others.
+   */
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.pending.then(operation, operation);
+    this.pending = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  addAccount(account: StoredAccount): Promise<void> {
+    return this.serialize(() => this.addAccountUnlocked(account));
+  }
+
+  removeAccount(username: string): Promise<void> {
+    return this.serialize(() => this.removeAccountUnlocked(username));
+  }
+
+  /**
+   * Makes `account` the one and only stored account and the active one, removing every
+   * other — as a single atomic step. For services where this app allows at most one
+   * connected account (Libre.fm, ListenBrainz): doing this as separate list/remove/add
+   * calls let two overlapping connects each see an empty store and both add themselves.
+   */
+  connectExclusively(account: StoredAccount): Promise<void> {
+    return this.serialize(async () => {
+      for (const stored of await this.listAccounts()) {
+        if (stored.username !== account.username) {
+          await this.removeAccountUnlocked(stored.username);
+        }
+      }
+      await this.addAccountUnlocked(account);
+      await this.storage.set(this.activeAccountKey, account.username);
+    });
+  }
+
+  private async addAccountUnlocked(account: StoredAccount): Promise<void> {
     const existing = await this.listAccounts();
     await this.storage.set(this.accountKey(account.username), JSON.stringify(account));
 
@@ -56,7 +100,7 @@ export class AccountStore {
     }
   }
 
-  async removeAccount(username: string): Promise<void> {
+  private async removeAccountUnlocked(username: string): Promise<void> {
     await this.storage.delete(this.accountKey(username));
 
     const activeUsername = await this.storage.get(this.activeAccountKey);
@@ -95,11 +139,13 @@ export class AccountStore {
     return raw ? (JSON.parse(raw) as StoredAccount) : undefined;
   }
 
-  async setActiveAccount(username: string): Promise<void> {
-    const raw = await this.storage.get(this.accountKey(username));
-    if (!raw) {
-      throw new Error(`AccountStore: no stored account named "${username}"`);
-    }
-    await this.storage.set(this.activeAccountKey, username);
+  setActiveAccount(username: string): Promise<void> {
+    return this.serialize(async () => {
+      const raw = await this.storage.get(this.accountKey(username));
+      if (!raw) {
+        throw new Error(`AccountStore: no stored account named "${username}"`);
+      }
+      await this.storage.set(this.activeAccountKey, username);
+    });
   }
 }

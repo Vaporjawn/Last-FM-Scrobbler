@@ -74,6 +74,14 @@ export function createLinuxPlaybackSource(
   let lifecycleUnsubscribe: Unsubscribe | undefined;
   let lastEmitted: ActiveSnapshot = { track: null, state: "stopped" };
   let starting: Promise<void> | undefined;
+  // Every asynchronous step below (listing players, opening a player's proxy, setting up
+  // the lifecycle watcher) can finish after the situation that started it has changed:
+  // the last listener left, or the player already vanished. `epoch` changes on every
+  // teardown, and `watchTokens` holds the one watch attempt per bus name that is still
+  // wanted; a step whose epoch or token is no longer current cleans up after itself
+  // instead of re-registering something nobody will ever release.
+  let epoch = 0;
+  const watchTokens = new Map<string, symbol>();
 
   function emitIfChanged(): void {
     const active = registry.getActive();
@@ -91,28 +99,50 @@ export function createLinuxPlaybackSource(
     lastEmitted = active;
   }
 
-  async function watchPlayer(busName: string, activeBus: MessageBus): Promise<void> {
+  async function watchPlayer(
+    busName: string,
+    activeBus: MessageBus,
+    sessionEpoch: number,
+  ): Promise<void> {
+    // A repeated "appeared" for a name we already watch replaces the old watcher.
+    playerWatchers.get(busName)?.();
+    playerWatchers.delete(busName);
+
+    const token = Symbol(busName);
+    watchTokens.set(busName, token);
+    const isCurrent = (): boolean => sessionEpoch === epoch && watchTokens.get(busName) === token;
+
     try {
       const unsubscribe = await watchMprisPlayer(activeBus, busName, (track, state) => {
+        if (!isCurrent()) {
+          return;
+        }
         registry.update(busName, track, state);
         emitIfChanged();
       });
+      if (!isCurrent()) {
+        unsubscribe();
+        return;
+      }
       playerWatchers.set(busName, unsubscribe);
     } catch (error) {
       // A player can vanish between being discovered and being watched (real desktop
       // player lifecycle is racy) — not a fatal adapter error, just skip it.
-      options.onError?.(error);
+      if (isCurrent()) {
+        options.onError?.(error);
+      }
     }
   }
 
   function unwatchPlayer(busName: string): void {
+    watchTokens.delete(busName);
     playerWatchers.get(busName)?.();
     playerWatchers.delete(busName);
     registry.remove(busName);
     emitIfChanged();
   }
 
-  async function start(): Promise<void> {
+  async function start(sessionEpoch: number): Promise<void> {
     const activeBus = getSessionBus();
     bus = activeBus;
     // `getSessionBus()` returns synchronously, but the underlying connection/`Hello`
@@ -127,22 +157,33 @@ export function createLinuxPlaybackSource(
     });
 
     const initialNames = await listMprisPlayerBusNames(activeBus);
-    await Promise.all(initialNames.map((name) => watchPlayer(name, activeBus)));
+    if (sessionEpoch !== epoch) {
+      return;
+    }
+    await Promise.all(initialNames.map((name) => watchPlayer(name, activeBus, sessionEpoch)));
+    if (sessionEpoch !== epoch) {
+      return;
+    }
 
-    lifecycleUnsubscribe = await watchMprisPlayerLifecycle(activeBus, (change) => {
+    const unsubscribeLifecycle = await watchMprisPlayerLifecycle(activeBus, (change) => {
       if (change.appeared) {
-        void watchPlayer(change.busName, activeBus);
+        void watchPlayer(change.busName, activeBus, sessionEpoch);
       } else {
         unwatchPlayer(change.busName);
       }
     });
+    if (sessionEpoch !== epoch) {
+      unsubscribeLifecycle();
+      return;
+    }
+    lifecycleUnsubscribe = unsubscribeLifecycle;
   }
 
   function ensureStarted(): void {
     if (starting) {
       return;
     }
-    starting = start().catch((error: unknown) => {
+    starting = start(epoch).catch((error: unknown) => {
       options.onError?.(error);
     });
   }
@@ -151,12 +192,15 @@ export function createLinuxPlaybackSource(
     if (trackListeners.size > 0 || stateListeners.size > 0) {
       return;
     }
+    epoch += 1;
     lifecycleUnsubscribe?.();
     lifecycleUnsubscribe = undefined;
     for (const unsubscribe of playerWatchers.values()) {
       unsubscribe();
     }
     playerWatchers.clear();
+    watchTokens.clear();
+    registry.clear();
     bus?.disconnect();
     bus = undefined;
     starting = undefined;

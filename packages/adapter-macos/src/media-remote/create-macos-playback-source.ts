@@ -2,10 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import {
-  spawn as nodeSpawn,
-  type ChildProcessWithoutNullStreams,
-} from "node:child_process";
+import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
   PlaybackSource,
   PlaybackState,
@@ -103,9 +100,12 @@ export function createMacosPlaybackSource(
     spawned.on("exit", (code, signal) => {
       if (child === spawned) {
         child = undefined;
+        parser.reset();
       }
       if (code !== 0 && code !== null) {
-        onError(new Error(`mediaremote-adapter exited with code ${code} (signal: ${signal ?? "none"})`));
+        onError(
+          new Error(`mediaremote-adapter exited with code ${code} (signal: ${signal ?? "none"})`),
+        );
       }
     });
 
@@ -119,30 +119,36 @@ export function createMacosPlaybackSource(
     if (subscriberCount === 0 && child) {
       child.kill();
       child = undefined;
+      parser.reset();
     }
+  }
+
+  /** Counts a new subscriber and starts the helper for it. If starting throws, the caller
+   * never receives an unsubscribe function, so the listener it just registered would stay
+   * in the parser forever — it is removed again before rethrowing. */
+  function register(unsubscribeFromParser: Unsubscribe): Unsubscribe {
+    subscriberCount += 1;
+    try {
+      ensureStarted();
+    } catch (error) {
+      unsubscribeFromParser();
+      subscriberCount -= 1;
+      throw error;
+    }
+    return () => {
+      unsubscribeFromParser();
+      subscriberCount -= 1;
+      stopIfNoSubscribers();
+    };
   }
 
   return {
     onTrackChanged(callback: (track: TrackInfo) => void): Unsubscribe {
-      const unsubscribeFromParser = parser.onTrackChanged(callback);
-      subscriberCount += 1;
-      ensureStarted();
-      return () => {
-        unsubscribeFromParser();
-        subscriberCount -= 1;
-        stopIfNoSubscribers();
-      };
+      return register(parser.onTrackChanged(callback));
     },
 
     onPlaybackStateChanged(callback: (state: PlaybackState) => void): Unsubscribe {
-      const unsubscribeFromParser = parser.onPlaybackStateChanged(callback);
-      subscriberCount += 1;
-      ensureStarted();
-      return () => {
-        unsubscribeFromParser();
-        subscriberCount -= 1;
-        stopIfNoSubscribers();
-      };
+      return register(parser.onPlaybackStateChanged(callback));
     },
 
     getPosition(): Promise<number> {

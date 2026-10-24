@@ -126,6 +126,11 @@ export function createWindowsPlaybackSource(
       onExit: () => {
         if (helperHandle === handle) {
           helperHandle = undefined;
+          // The helper's last report ("playing", this position) will never be corrected
+          // by it again. Left as is, a subscriber such as the scrobble tracker would keep
+          // counting play time for something that stopped when the process died.
+          lastEmittedTrack = undefined;
+          handleEvent(null);
         }
       },
       ...(options.spawnImpl ? { spawnImpl: options.spawnImpl } : {}),
@@ -135,10 +140,23 @@ export function createWindowsPlaybackSource(
     helperHandle = handle;
   }
 
+  /** Starts the helper for a new subscriber. If that throws (helper not built, spawn
+   * refused), the caller never receives an unsubscribe function, so the listener it just
+   * registered would stay in the set forever — `forget` removes it before rethrowing. */
+  function startOrForget(forget: () => void): void {
+    try {
+      ensureStarted();
+    } catch (error) {
+      forget();
+      throw error;
+    }
+  }
+
   function stopIfNoSubscribers(): void {
     if (trackListeners.size === 0 && stateListeners.size === 0) {
       helperHandle?.stop();
       helperHandle = undefined;
+      latestPayload = null;
       // Clear the dedup baseline too, so a later restart doesn't skip re-emitting the
       // first track/state it sees just because it happens to match whatever was last
       // reported before the previous stop.
@@ -150,7 +168,7 @@ export function createWindowsPlaybackSource(
   return {
     onTrackChanged(callback: (track: TrackInfo) => void): Unsubscribe {
       trackListeners.add(callback);
-      ensureStarted();
+      startOrForget(() => trackListeners.delete(callback));
       return () => {
         trackListeners.delete(callback);
         stopIfNoSubscribers();
@@ -159,7 +177,7 @@ export function createWindowsPlaybackSource(
 
     onPlaybackStateChanged(callback: (state: PlaybackState) => void): Unsubscribe {
       stateListeners.add(callback);
-      ensureStarted();
+      startOrForget(() => stateListeners.delete(callback));
       return () => {
         stateListeners.delete(callback);
         stopIfNoSubscribers();

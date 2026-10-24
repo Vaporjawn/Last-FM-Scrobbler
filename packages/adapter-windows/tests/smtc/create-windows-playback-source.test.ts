@@ -339,4 +339,113 @@ describe("createWindowsPlaybackSource", () => {
 
     expect(onStderr).toHaveBeenCalledWith("SmtcHelper: warning");
   });
+
+  describe("lifecycle races and leaks", () => {
+    it("does not keep a listener registered when starting the helper throws", async () => {
+      let helperBuilt = false;
+      const child = createFakeChild();
+      const source = createWindowsPlaybackSource({
+        resolveHelperPathImpl: () => ({ helperPath: "C:\\SmtcHelper.exe", helperBuilt }),
+        spawnImpl: vi.fn().mockReturnValue(child),
+      });
+      const abandoned = vi.fn();
+      const abandonedState = vi.fn();
+
+      expect(() => source.onTrackChanged(abandoned)).toThrow(SmtcHelperNotBuiltError);
+      expect(() => source.onPlaybackStateChanged(abandonedState)).toThrow(SmtcHelperNotBuiltError);
+
+      // The helper is built after all; a fresh subscription now starts it.
+      helperBuilt = true;
+      source.onTrackChanged(() => undefined);
+      writeLine(child, {
+        title: "T",
+        artist: "A",
+        playbackStatus: "Playing",
+        sourceAppUserModelId: "Spotify.exe",
+      });
+      await flush();
+
+      expect(abandoned).not.toHaveBeenCalled();
+      expect(abandonedState).not.toHaveBeenCalled();
+    });
+
+    it("reports playback as stopped, and forgets the position, when the helper dies", async () => {
+      const first = createFakeChild();
+      const second = createFakeChild();
+      const spawnImpl = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+      const source = createWindowsPlaybackSource({
+        resolveHelperPathImpl: fakeResolveHelperPath(true),
+        spawnImpl,
+      });
+      const states: string[] = [];
+      source.onPlaybackStateChanged((state) => states.push(state));
+      writeLine(first, {
+        title: "T",
+        artist: "A",
+        playbackStatus: "Playing",
+        sourceAppUserModelId: "Spotify.exe",
+        elapsedSec: 42,
+      });
+      await flush();
+      expect(states).toEqual(["playing"]);
+
+      first.emit("exit", 1, null);
+
+      expect(states).toEqual(["playing", "stopped"]);
+      await expect(source.getPosition()).resolves.toBe(0);
+    });
+
+    it("re-announces the same track after the helper was restarted", async () => {
+      const first = createFakeChild();
+      const second = createFakeChild();
+      const spawnImpl = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+      const source = createWindowsPlaybackSource({
+        resolveHelperPathImpl: fakeResolveHelperPath(true),
+        spawnImpl,
+      });
+      const tracks: unknown[] = [];
+      source.onTrackChanged((track) => tracks.push(track));
+      writeLine(first, {
+        title: "T",
+        artist: "A",
+        playbackStatus: "Playing",
+        sourceAppUserModelId: "Spotify.exe",
+      });
+      await flush();
+
+      first.emit("exit", 1, null);
+      source.onPlaybackStateChanged(() => undefined); // respawns
+      writeLine(second, {
+        title: "T",
+        artist: "A",
+        playbackStatus: "Playing",
+        sourceAppUserModelId: "Spotify.exe",
+      });
+      await flush();
+
+      expect(tracks).toHaveLength(2);
+    });
+
+    it("forgets the last position once everyone has unsubscribed", async () => {
+      const child = createFakeChild();
+      const source = createWindowsPlaybackSource({
+        resolveHelperPathImpl: fakeResolveHelperPath(true),
+        spawnImpl: vi.fn().mockReturnValue(child),
+      });
+      const unsubscribe = source.onTrackChanged(() => undefined);
+      writeLine(child, {
+        title: "T",
+        artist: "A",
+        playbackStatus: "Playing",
+        sourceAppUserModelId: "Spotify.exe",
+        elapsedSec: 99,
+      });
+      await flush();
+      await expect(source.getPosition()).resolves.toBe(99);
+
+      unsubscribe();
+
+      await expect(source.getPosition()).resolves.toBe(0);
+    });
+  });
 });

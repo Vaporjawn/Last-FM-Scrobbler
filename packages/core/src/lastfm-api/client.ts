@@ -1,3 +1,4 @@
+import { createTimeoutSignal, DEFAULT_REQUEST_TIMEOUT_MS } from "../network/request-timeout.js";
 import { isRetryableScrobbleIgnoreCode } from "./is-retryable-scrobble-ignore-code.js";
 import { LastfmApiError } from "./lastfm-error.js";
 import { signRequest } from "./sign-request.js";
@@ -51,6 +52,8 @@ export interface LastfmClientOptions {
    * and wasn't confirmed against Libre.fm's real service. */
   readonly authUrl?: string;
   readonly fetchImpl?: typeof fetch;
+  /** Per-request ceiling in milliseconds; defaults to 30 seconds. */
+  readonly timeoutMs?: number;
 }
 
 interface RequestOptions {
@@ -84,6 +87,7 @@ export class LastfmClient {
   private readonly baseUrl: string;
   private readonly authUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(options: LastfmClientOptions) {
     this.apiKey = options.apiKey;
@@ -92,6 +96,7 @@ export class LastfmClient {
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     this.authUrl = options.authUrl ?? DEFAULT_AUTH_URL;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
   private async request<T>(
@@ -116,12 +121,15 @@ export class LastfmClient {
       for (const [key, value] of Object.entries(params)) {
         url.searchParams.set(key, value);
       }
-      response = await this.fetchImpl(url.toString());
+      response = await this.fetchImpl(url.toString(), {
+        signal: createTimeoutSignal(this.timeoutMs),
+      });
     } else {
       response = await this.fetchImpl(this.baseUrl, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams(params).toString(),
+        signal: createTimeoutSignal(this.timeoutMs),
       });
     }
 

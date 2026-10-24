@@ -1,3 +1,4 @@
+import { createTimeoutSignal, DEFAULT_REQUEST_TIMEOUT_MS } from "../network/request-timeout.js";
 const DEEZER_SEARCH_URL = "https://api.deezer.com/search/artist";
 
 /**
@@ -59,13 +60,14 @@ function pickRealPhotoUrl(artist: DeezerArtistJson): string | undefined {
 export async function fetchArtistImageUrl(
   artistName: string,
   fetchImpl: typeof fetch = fetch,
+  timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
 ): Promise<string | undefined> {
   const url = new URL(DEEZER_SEARCH_URL);
   url.searchParams.set("q", artistName);
   url.searchParams.set("limit", String(SEARCH_RESULT_LIMIT));
 
   try {
-    const response = await fetchImpl(url.toString());
+    const response = await fetchImpl(url.toString(), { signal: createTimeoutSignal(timeoutMs) });
     if (!response.ok) {
       return undefined;
     }

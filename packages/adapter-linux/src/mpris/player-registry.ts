@@ -93,6 +93,11 @@ export class PlayerRegistry {
     this.players.delete(busName);
   }
 
+  /** Forgets every player — for when the whole source is torn down. */
+  clear(): void {
+    this.players.clear();
+  }
+
   getActive(): ActiveSnapshot {
     const best = this.findActiveEntry();
     if (!best) {
