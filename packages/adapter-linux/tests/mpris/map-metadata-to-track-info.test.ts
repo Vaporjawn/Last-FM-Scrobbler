@@ -55,6 +55,15 @@ describe("mapMetadataToTrackInfo", () => {
     expect(track?.artist).toBe("Artist One, Artist Two");
   });
 
+  it("falls back to an empty artist when xesam:artist is an array containing a non-string", () => {
+    const track = mapMetadataToTrackInfo(
+      metadata({ "xesam:title": "Song", "xesam:artist": ["Good", 42] }),
+      "vlc",
+    );
+
+    expect(track?.artist).toBe("");
+  });
+
   it("falls back to an empty string artist when xesam:artist is absent", () => {
     const track = mapMetadataToTrackInfo(
       metadata({ "xesam:title": new Variant("s", "Solo") }),

@@ -7,6 +7,7 @@
 /* eslint-disable @typescript-eslint/no-deprecated */
 import { SELF } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import worker from "../src/index.js";
 
 /** Intercepts the relay's outbound call to GitHub's API — no real network request is
  * ever made in these tests. See fixtures/vitest-pool-workers-examples/request-mocking
@@ -193,5 +194,90 @@ describe("bug-report-relay fetch handler", () => {
     });
 
     expect(response.status).toBe(201);
+  });
+
+  it("returns 502 when the request to GitHub fails outright (not a GitHub error response)", async () => {
+    mockGitHubApi(() => {
+      throw new TypeError("network down");
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await postReport("203.0.113.30", { title: "Crash", body: "Details here." });
+
+    expect(response.status).toBe(502);
+  });
+
+  it("treats a request with no client IP header as one shared 'unknown' client", async () => {
+    const response = await SELF.fetch("https://relay.example/report", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 503 when the GITHUB_PAT secret is not configured", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const request = new Request("https://relay.example/report", {
+      method: "POST",
+      headers: { "cf-connecting-ip": "203.0.113.31" },
+      body: JSON.stringify({ title: "Crash", body: "Details here." }),
+    });
+
+    const response = await worker.fetch(request, { GITHUB_PAT: "" });
+
+    expect(response.status).toBe(503);
+    expect(errorSpy).toHaveBeenCalledWith("bug-report-relay: GITHUB_PAT is not configured");
+  });
+
+  it("answers 400 with a generic message when parsing rejects with a non-Error value", async () => {
+    const request = {
+      method: "POST",
+      headers: new Headers({ "cf-connecting-ip": "203.0.113.32" }),
+      // Deliberately not an Error: the handler's message extraction must cope with
+      // whatever a rejected `request.json()` hands it.
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      json: () => Promise.reject("not an Error instance"),
+    } as unknown as Request;
+
+    const response = await worker.fetch(request, { GITHUB_PAT: "test" });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid request body" });
+  });
+
+  describe("housekeeping of the in-memory rate-limit log", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("forgets idle clients and prunes stale timestamps without losing fresh ones", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      const start = new Date("2026-01-01T00:00:00Z").getTime();
+      const minutes = (count: number): number => count * 60 * 1000;
+
+      // Client A makes one request and goes quiet; client B makes one now and another
+      // six minutes later.
+      vi.setSystemTime(start);
+      await postReport("198.51.100.1", {});
+      await postReport("198.51.100.2", {});
+      vi.setSystemTime(start + minutes(6));
+      await postReport("198.51.100.2", {});
+
+      // Eleven minutes in: A's request and B's first have aged out of the 10-minute
+      // window, B's second has not. Enough traffic from other clients to guarantee that
+      // at least one periodic sweep runs while A and B are in that state.
+      vi.setSystemTime(start + minutes(11));
+      for (let i = 0; i < 100; i++) {
+        await postReport(`198.51.101.${i}`, {});
+      }
+
+      // B's surviving timestamp must have been kept: four more requests make five in
+      // the window, so the next one is rate limited.
+      for (let i = 0; i < 4; i++) {
+        expect((await postReport("198.51.100.2", {})).status).toBe(400);
+      }
+      expect((await postReport("198.51.100.2", {})).status).toBe(429);
+    });
   });
 });

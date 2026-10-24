@@ -305,4 +305,38 @@ describe("createWindowsPlaybackSource", () => {
 
     expect(spawnImpl).toHaveBeenCalledTimes(2);
   });
+
+  it("ignores a late exit notification from a helper that was already replaced", () => {
+    const firstChild = createFakeChild();
+    const secondChild = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValueOnce(firstChild).mockReturnValueOnce(secondChild);
+    const source = createWindowsPlaybackSource({
+      resolveHelperPathImpl: fakeResolveHelperPath(true),
+      spawnImpl,
+    });
+
+    const unsubscribe = source.onTrackChanged(() => undefined);
+    unsubscribe(); // stops `firstChild`
+    source.onTrackChanged(() => undefined); // starts `secondChild`
+    firstChild.emit("exit", 0, null); // stale: must not clear the new handle
+    source.onPlaybackStateChanged(() => undefined);
+
+    expect(spawnImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("forwards helper stderr lines to onStderr", async () => {
+    const fakeChild = createFakeChild();
+    const onStderr = vi.fn();
+    const source = createWindowsPlaybackSource({
+      resolveHelperPathImpl: fakeResolveHelperPath(true),
+      spawnImpl: vi.fn().mockReturnValue(fakeChild),
+      onStderr,
+    });
+
+    source.onTrackChanged(() => undefined);
+    fakeChild.stderr.write("SmtcHelper: warning\n");
+    await flush();
+
+    expect(onStderr).toHaveBeenCalledWith("SmtcHelper: warning");
+  });
 });

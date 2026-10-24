@@ -151,4 +151,73 @@ describe("PlayerRegistry", () => {
 
     expect(registry.getActive()).toEqual({ track: track("Spotify Song"), state: "paused" });
   });
+
+  it("treats a repeated update with the very same track object as a no-op", () => {
+    let now = 0;
+    const registry = new PlayerRegistry({ now: () => now });
+    const same = track("Song");
+
+    now = 1;
+    registry.update("org.mpris.MediaPlayer2.vlc", same, "paused");
+    now = 2;
+    registry.update("org.mpris.MediaPlayer2.spotify", track("Other"), "paused");
+    now = 3;
+    registry.update("org.mpris.MediaPlayer2.vlc", same, "paused");
+
+    expect(registry.getActiveBusName()).toBe("org.mpris.MediaPlayer2.spotify");
+  });
+
+  it("registers a change from no track to a track (and back) as a real update", () => {
+    let now = 0;
+    const registry = new PlayerRegistry({ now: () => now });
+
+    now = 1;
+    registry.update("org.mpris.MediaPlayer2.vlc", null, "paused");
+    now = 2;
+    registry.update("org.mpris.MediaPlayer2.spotify", track("Other"), "paused");
+    now = 3;
+    registry.update("org.mpris.MediaPlayer2.vlc", track("Song"), "paused");
+
+    expect(registry.getActive()).toEqual({ track: track("Song"), state: "paused" });
+
+    now = 4;
+    registry.update("org.mpris.MediaPlayer2.vlc", null, "paused");
+    expect(registry.getActive()).toEqual({ track: null, state: "paused" });
+  });
+
+  it("keeps the earlier-changed player out of the way when a later one is already active", () => {
+    let now = 0;
+    const registry = new PlayerRegistry({ now: () => now });
+
+    now = 5;
+    registry.update("org.mpris.MediaPlayer2.vlc", track("Newer"), "paused");
+    now = 1;
+    registry.update("org.mpris.MediaPlayer2.spotify", track("Older"), "paused");
+
+    expect(registry.getActiveBusName()).toBe("org.mpris.MediaPlayer2.vlc");
+  });
+
+  it("keeps an already-playing player active when a paused one is seen after it", () => {
+    let now = 0;
+    const registry = new PlayerRegistry({ now: () => now });
+
+    now = 1;
+    registry.update("org.mpris.MediaPlayer2.vlc", track("Playing"), "playing");
+    now = 2;
+    registry.update("org.mpris.MediaPlayer2.spotify", track("Paused"), "paused");
+
+    expect(registry.getActiveBusName()).toBe("org.mpris.MediaPlayer2.vlc");
+  });
+
+  it("keeps the earlier-started player when a later-iterated player started playing before it", () => {
+    let now = 0;
+    const registry = new PlayerRegistry({ now: () => now });
+
+    now = 5;
+    registry.update("org.mpris.MediaPlayer2.vlc", track("Late"), "playing");
+    now = 1;
+    registry.update("org.mpris.MediaPlayer2.spotify", track("Early"), "playing");
+
+    expect(registry.getActiveBusName()).toBe("org.mpris.MediaPlayer2.vlc");
+  });
 });

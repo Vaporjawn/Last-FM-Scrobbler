@@ -853,4 +853,130 @@ describe("LastfmClient", () => {
       expect(result.imageUrl).toBeUndefined();
     });
   });
+
+  describe("coverage of optional fields and alternate response shapes", () => {
+    it("refuses a signed write when the client has no session key", async () => {
+      const anonymous = new LastfmClient({
+        apiKey: API_KEY,
+        apiSecret: API_SECRET,
+        fetchImpl: fetchMock,
+      });
+
+      await expect(anonymous.updateNowPlaying({ artist: "A", track: "B" })).rejects.toThrow(
+        "requires a session key",
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("sends every optional track.updateNowPlaying field when provided", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ nowplaying: {} }));
+
+      await client.updateNowPlaying({
+        artist: "Radiohead",
+        track: "Idioteque",
+        album: "Kid A",
+        albumArtist: "Radiohead (album artist)",
+        durationSec: 309,
+        trackNumber: 8,
+        mbid: "mbid-1",
+      });
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = new URLSearchParams(init.body as string);
+      expect(body.get("album")).toBe("Kid A");
+      expect(body.get("albumArtist")).toBe("Radiohead (album artist)");
+      expect(body.get("duration")).toBe("309");
+      expect(body.get("trackNumber")).toBe("8");
+      expect(body.get("mbid")).toBe("mbid-1");
+    });
+
+    it("sends every optional track.scrobble field when provided", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          scrobbles: {
+            "@attr": { accepted: 1, ignored: 0 },
+            scrobble: [{ track: { "#text": "Idioteque" }, ignoredMessage: { code: "0" } }],
+          },
+        }),
+      );
+
+      await client.scrobble([
+        {
+          artist: "Radiohead",
+          track: "Idioteque",
+          timestamp: 1_700_000_000,
+          album: "Kid A",
+          albumArtist: "Radiohead (album artist)",
+          durationSec: 309,
+          trackNumber: 8,
+          mbid: "mbid-1",
+        },
+      ]);
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = new URLSearchParams(init.body as string);
+      expect(body.get("album[0]")).toBe("Kid A");
+      expect(body.get("albumArtist[0]")).toBe("Radiohead (album artist)");
+      expect(body.get("duration[0]")).toBe("309");
+      expect(body.get("trackNumber[0]")).toBe("8");
+      expect(body.get("mbid[0]")).toBe("mbid-1");
+    });
+
+    it("normalizes a single bare user.getRecentTracks track, falling back to an empty artist and no album", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          recenttracks: {
+            track: { artist: {}, name: "Untitled", date: { uts: "1700000000" } },
+          },
+        }),
+      );
+
+      const result = await client.getRecentTracks({ user: "someuser" });
+
+      expect(result).toEqual([
+        { artist: "", track: "Untitled", nowPlaying: false, timestamp: 1_700_000_000, loved: false },
+      ]);
+    });
+
+    it("forwards limit for user.getTopArtists and omits period/limit when not given", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ topartists: { artist: [] } }));
+      await client.getTopArtists({ user: "someuser", limit: 5 });
+      const withLimit = new URL((fetchMock.mock.calls[0] as [string])[0]).searchParams;
+      expect(withLimit.get("limit")).toBe("5");
+      expect(withLimit.has("period")).toBe(false);
+
+      fetchMock.mockResolvedValueOnce(jsonResponse({ topartists: { artist: [] } }));
+      await client.getTopArtists({ user: "someuser" });
+      const without = new URL((fetchMock.mock.calls[1] as [string])[0]).searchParams;
+      expect(without.has("limit")).toBe(false);
+    });
+
+    it("normalizes a single bare user.getTopArtists artist into an array", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ topartists: { artist: { name: "Radiohead", playcount: "42" } } }),
+      );
+      expect(await client.getTopArtists({ user: "someuser" })).toEqual([
+        { name: "Radiohead", playCount: 42 },
+      ]);
+    });
+
+    it("normalizes a single bare user.getFriends user into an array", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ friends: { user: { name: "afriend" } } }));
+      expect(await client.getFriends({ user: "someuser" })).toEqual([
+        { username: "afriend", isSubscriber: false },
+      ]);
+    });
+
+    it("forwards limit for artist.getSimilar and normalizes a single bare artist", async () => {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({ similarartists: { artist: { name: "Thom Yorke", match: "0.5" } } }),
+      );
+
+      const result = await client.getSimilarArtists({ artist: "Radiohead", limit: 3 });
+
+      expect(result).toEqual([{ name: "Thom Yorke", match: 0.5 }]);
+      const [url] = fetchMock.mock.calls[0] as [string];
+      expect(new URL(url).searchParams.get("limit")).toBe("3");
+    });
+  });
 });

@@ -26,9 +26,6 @@ export interface CreateWindowsPlaybackSourceOptions {
 }
 
 function trackInfoEqual(a: TrackInfo | undefined, b: TrackInfo | undefined): boolean {
-  if (a === b) {
-    return true;
-  }
   if (!a || !b) {
     return false;
   }

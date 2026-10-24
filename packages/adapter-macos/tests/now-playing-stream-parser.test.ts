@@ -286,4 +286,87 @@ describe("NowPlayingStreamParser", () => {
     expect(track.durationSec).toBeUndefined();
     expect("durationSec" in track).toBe(false);
   });
+
+  describe("defaults for fields the adapter leaves out", () => {
+    it("defaults a missing artist to '', a missing bundle id to 'unknown', and omits a missing album", () => {
+      const parser = new NowPlayingStreamParser();
+      const onTrackChanged = vi.fn();
+      parser.onTrackChanged(onTrackChanged);
+
+      parser.handleLine(JSON.stringify({ type: "data", diff: false, payload: { title: "Untitled" } }));
+
+      expect(onTrackChanged).toHaveBeenCalledWith({
+        title: "Untitled",
+        artist: "",
+        sourceApp: "unknown",
+        isStream: false,
+      });
+    });
+
+    it("flags a radio station (by identifier or by hash) as a stream", () => {
+      const parser = new NowPlayingStreamParser();
+      const onTrackChanged = vi.fn();
+      parser.onTrackChanged(onTrackChanged);
+
+      parser.handleLine(
+        JSON.stringify({
+          type: "data",
+          diff: false,
+          payload: { title: "Live", radioStationHash: "abc" },
+        }),
+      );
+
+      expect(onTrackChanged.mock.calls[0]?.[0]).toMatchObject({ isStream: true });
+    });
+
+    it("treats a snapshot with a null payload as empty (nothing playing)", () => {
+      const parser = new NowPlayingStreamParser();
+      const onTrackChanged = vi.fn();
+      parser.onTrackChanged(onTrackChanged);
+      parser.handleLine(TRACK_ONE_SNAPSHOT);
+
+      parser.handleLine(JSON.stringify({ type: "data", diff: false, payload: null }));
+      parser.handleLine(TRACK_ONE_SNAPSHOT);
+
+      expect(onTrackChanged).toHaveBeenCalledTimes(2);
+    });
+
+    it("treats a diff with a null payload as 'no change'", () => {
+      const parser = new NowPlayingStreamParser();
+      const onTrackChanged = vi.fn();
+      parser.handleLine(TRACK_ONE_SNAPSHOT);
+      parser.onTrackChanged(onTrackChanged);
+
+      parser.handleLine(JSON.stringify({ type: "data", diff: true, payload: null }));
+
+      expect(onTrackChanged).not.toHaveBeenCalled();
+    });
+
+    it("assumes a playback rate of 1 when the payload has none", () => {
+      vi.useFakeTimers();
+      try {
+        const capturedAt = new Date("2026-08-02T02:36:08Z");
+        vi.setSystemTime(capturedAt);
+        const parser = new NowPlayingStreamParser();
+        parser.handleLine(
+          JSON.stringify({
+            type: "data",
+            diff: false,
+            payload: {
+              title: "Song",
+              playing: true,
+              elapsedTime: 10,
+              timestamp: "2026-08-02T02:36:08Z",
+            },
+          }),
+        );
+
+        vi.setSystemTime(new Date(capturedAt.getTime() + 4000));
+
+        expect(parser.getPosition()).toBeCloseTo(14, 1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

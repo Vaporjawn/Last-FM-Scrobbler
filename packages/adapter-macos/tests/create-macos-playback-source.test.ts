@@ -143,4 +143,101 @@ describe("createMacosPlaybackSource lifecycle", () => {
 
     expect(spawnImpl).toHaveBeenCalledTimes(2);
   });
+
+  it("reports a non-zero exit through onError, including the signal when there is one", async () => {
+    mockFrameworkBuilt();
+    const { createMacosPlaybackSource } = await import("../src/index.js");
+    const child = createFakeChild();
+    const onError = vi.fn();
+    const source = createMacosPlaybackSource({
+      spawnImpl: vi.fn().mockReturnValue(child),
+      onError,
+    });
+
+    source.onTrackChanged(() => undefined);
+    child.emit("exit", 9, "SIGKILL");
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect((onError.mock.calls[0]?.[0] as Error).message).toBe(
+      "mediaremote-adapter exited with code 9 (signal: SIGKILL)",
+    );
+  });
+
+  it("reports a non-zero exit without a signal as 'none'", async () => {
+    mockFrameworkBuilt();
+    const { createMacosPlaybackSource } = await import("../src/index.js");
+    const child = createFakeChild();
+    const onError = vi.fn();
+    const source = createMacosPlaybackSource({
+      spawnImpl: vi.fn().mockReturnValue(child),
+      onError,
+    });
+
+    source.onTrackChanged(() => undefined);
+    child.emit("exit", 2, null);
+
+    expect((onError.mock.calls[0]?.[0] as Error).message).toBe(
+      "mediaremote-adapter exited with code 2 (signal: none)",
+    );
+  });
+
+  it("does not report a clean exit (code 0) or a signal-only exit (null code) as an error", async () => {
+    mockFrameworkBuilt();
+    const { createMacosPlaybackSource } = await import("../src/index.js");
+    const first = createFakeChild();
+    const second = createFakeChild();
+    const onError = vi.fn();
+    const source = createMacosPlaybackSource({
+      spawnImpl: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second),
+      onError,
+    });
+
+    source.onTrackChanged(() => undefined);
+    first.emit("exit", 0, null);
+    source.onTrackChanged(() => undefined);
+    second.emit("exit", null, "SIGTERM");
+
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("ignores a late exit notification from a process that was already replaced", async () => {
+    mockFrameworkBuilt();
+    const { createMacosPlaybackSource } = await import("../src/index.js");
+    const first = createFakeChild();
+    const second = createFakeChild();
+    const spawnImpl = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const source = createMacosPlaybackSource({ spawnImpl });
+
+    const unsubscribe = source.onTrackChanged(() => undefined);
+    unsubscribe(); // kills `first` and forgets it
+    source.onTrackChanged(() => undefined); // spawns `second`
+    first.emit("exit", 0, null); // stale: must not clear `second`
+    source.onPlaybackStateChanged(() => undefined);
+
+    expect(spawnImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("feeds the child's stdout lines through the parser and reports its position", async () => {
+    mockFrameworkBuilt();
+    const { createMacosPlaybackSource } = await import("../src/index.js");
+    const child = createFakeChild();
+    const source = createMacosPlaybackSource({ spawnImpl: vi.fn().mockReturnValue(child) });
+    const tracks: unknown[] = [];
+    const states: unknown[] = [];
+    source.onTrackChanged((track) => tracks.push(track));
+    source.onPlaybackStateChanged((state) => states.push(state));
+
+    child.stdout.write(
+      JSON.stringify({
+        type: "data",
+        diff: false,
+        payload: { title: "Be Mine", artist: "Alabama Shakes", elapsedTime: 12, playing: false },
+      }) + "\n",
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(tracks).toHaveLength(1);
+    expect(states).toEqual(["paused"]);
+    await expect(source.getPosition()).resolves.toBe(12);
+  });
 });

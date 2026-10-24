@@ -100,6 +100,48 @@ describe("ListenBrainzClient", () => {
       ).rejects.toBeInstanceOf(ListenBrainzApiError);
     });
 
+    it("falls back to the body's message field when there is no error field", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ message: "Rate limited" }, 429));
+
+      await expect(
+        client.scrobble([{ artist: "A", track: "B", timestamp: 1 }]),
+      ).rejects.toMatchObject({ code: 429, message: "Rate limited" });
+    });
+
+    it("falls back to a generic message when the failure body is JSON without error or message", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse({}, 500));
+
+      await expect(
+        client.scrobble([{ artist: "A", track: "B", timestamp: 1 }]),
+      ).rejects.toMatchObject({
+        code: 500,
+        message: "ListenBrainz request failed with status 500",
+      });
+    });
+
+    it("falls back to a generic message when the failure body is not JSON at all", async () => {
+      fetchMock.mockResolvedValueOnce(new Response("<html>Bad gateway</html>", { status: 502 }));
+
+      await expect(
+        client.scrobble([{ artist: "A", track: "B", timestamp: 1 }]),
+      ).rejects.toMatchObject({
+        code: 502,
+        message: "ListenBrainz request failed with status 502",
+      });
+    });
+
+    it("uses the global fetch when no fetchImpl is supplied", async () => {
+      const globalFetch = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ status: "ok" }));
+      vi.stubGlobal("fetch", globalFetch);
+      try {
+        const defaultClient = new ListenBrainzClient({ token: TOKEN });
+        await defaultClient.updateNowPlaying({ artist: "A", track: "B" });
+        expect(globalFetch).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it("rejects a batch larger than ListenBrainz's documented per-request limit", async () => {
       const oversized = Array.from({ length: 1001 }, (_, i) => ({
         artist: "A",

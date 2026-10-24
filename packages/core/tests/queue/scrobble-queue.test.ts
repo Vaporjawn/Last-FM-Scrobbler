@@ -89,6 +89,14 @@ describe("ScrobbleQueue", () => {
     expect(queue.dequeueBatch(10)[0]?.id).not.toBe(first.id);
   });
 
+  it("treats removing an empty id list as a no-op", () => {
+    queue.enqueue(makeScrobble({ timestamp: 100 }));
+
+    queue.remove([]);
+
+    expect(queue.count()).toBe(1);
+  });
+
   it("keeps a retryable failure in the queue and increments its retry count", () => {
     const queued = queue.enqueue(makeScrobble());
 

@@ -83,12 +83,12 @@ export class ListenBrainzClient implements ScrobblingClient {
     init: {
       readonly method: string;
       readonly headers?: Record<string, string>;
-      readonly body?: string;
+      readonly body: string;
     },
   ): Promise<T> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method: init.method,
-      ...(init.body !== undefined ? { body: init.body } : {}),
+      body: init.body,
       headers: {
         ...init.headers,
         authorization: `Token ${this.token}`,

@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { createLinuxPlaybackSource } from "../../src/mpris/create-linux-playback-source.js";
-import type { MessageBus } from "dbus-next";
+import { Variant, type MessageBus } from "dbus-next";
 
 /**
  * A minimal fake dbus-next `MessageBus` covering exactly the surface
@@ -16,13 +16,22 @@ function createFakeBus() {
   let names: string[] = [];
   dbusIface.ListNames = vi.fn(() => Promise.resolve(names));
 
-  const playerProperties = new Map<string, EventEmitter & { GetAll: () => Promise<unknown> }>();
+  const playerProperties = new Map<
+    string,
+    EventEmitter & { GetAll: () => Promise<unknown>; Get: () => Promise<unknown> }
+  >();
+  const unreachable = new Set<string>();
+  let position = 0n;
 
   function propsFor(busName: string) {
     let iface = playerProperties.get(busName);
     if (!iface) {
-      iface = new EventEmitter() as EventEmitter & { GetAll: () => Promise<unknown> };
+      iface = new EventEmitter() as EventEmitter & {
+        GetAll: () => Promise<unknown>;
+        Get: () => Promise<unknown>;
+      };
       iface.GetAll = () => Promise.resolve(state.get(busName) ?? {});
+      iface.Get = () => Promise.resolve(new Variant("x", position));
       playerProperties.set(busName, iface);
     }
     return iface;
@@ -38,6 +47,9 @@ function createFakeBus() {
   const emitter = new EventEmitter();
   const bus = Object.assign(emitter, {
     getProxyObject: vi.fn((name: string, path: string) => {
+      if (unreachable.has(name)) {
+        return Promise.reject(new Error(`${name} is unreachable`));
+      }
       if (path === "/org/freedesktop/DBus") {
         return Promise.resolve({ getInterface: () => dbusIface });
       }
@@ -51,6 +63,12 @@ function createFakeBus() {
     disconnect,
     setInitialNames(newNames: string[]) {
       names = newNames;
+    },
+    makeUnreachable(busName: string) {
+      unreachable.add(busName);
+    },
+    setPosition(micros: bigint) {
+      position = micros;
     },
     setPlayerState(busName: string, metadata: Record<string, unknown>, playbackStatus: string) {
       state.set(busName, { Metadata: metadata, PlaybackStatus: playbackStatus });
@@ -261,5 +279,107 @@ describe("createLinuxPlaybackSource", () => {
     await flush();
 
     expect(tracks.map((t) => (t as { title: string }).title)).toEqual(["Song A", "Song B"]);
+  });
+
+  it("reports a player that cannot be reached through onError and keeps working with the rest", async () => {
+    const fake = createFakeBus();
+    fake.setInitialNames(["org.mpris.MediaPlayer2.gone", "org.mpris.MediaPlayer2.vlc"]);
+    fake.makeUnreachable("org.mpris.MediaPlayer2.gone");
+    fake.setPlayerState("org.mpris.MediaPlayer2.vlc", { "xesam:title": "Song" }, "Playing");
+    const onError = vi.fn();
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus, onError });
+    const tracks: unknown[] = [];
+    source.onTrackChanged((t) => tracks.push(t));
+    await flush();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(tracks).toHaveLength(1);
+  });
+
+  it("tolerates an unreachable player when no onError is supplied", async () => {
+    const fake = createFakeBus();
+    fake.setInitialNames(["org.mpris.MediaPlayer2.gone"]);
+    fake.makeUnreachable("org.mpris.MediaPlayer2.gone");
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+    source.onTrackChanged(() => undefined);
+
+    await expect(flush()).resolves.toBeUndefined();
+  });
+
+  it("reports a failure to start (cannot enumerate bus names) through onError", async () => {
+    const fake = createFakeBus();
+    fake.makeUnreachable("org.freedesktop.DBus");
+    const onError = vi.fn();
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus, onError });
+    source.onPlaybackStateChanged(() => undefined);
+    await flush();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("swallows a failure to start when no onError is supplied", async () => {
+    const fake = createFakeBus();
+    fake.makeUnreachable("org.freedesktop.DBus");
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+    source.onPlaybackStateChanged(() => undefined);
+
+    await expect(flush()).resolves.toBeUndefined();
+  });
+
+  it("ignores a bus-level error when no onError is supplied", async () => {
+    const fake = createFakeBus();
+    fake.setInitialNames([]);
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+    source.onTrackChanged(() => undefined);
+    await flush();
+
+    expect(() => {
+      fake.emitError(new Error("ECONNREFUSED"));
+    }).not.toThrow();
+  });
+
+  it("getPosition() queries the active player's position in seconds", async () => {
+    const fake = createFakeBus();
+    fake.setInitialNames(["org.mpris.MediaPlayer2.vlc"]);
+    fake.setPlayerState("org.mpris.MediaPlayer2.vlc", { "xesam:title": "Song" }, "Playing");
+    fake.setPosition(42_500_000n);
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+    source.onTrackChanged(() => undefined);
+    await flush();
+
+    await expect(source.getPosition()).resolves.toBe(42.5);
+  });
+
+  it("getPosition() resolves 0 once connected but with no player running", async () => {
+    const fake = createFakeBus();
+    fake.setInitialNames([]);
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+    source.onTrackChanged(() => undefined);
+    await flush();
+
+    await expect(source.getPosition()).resolves.toBe(0);
+  });
+
+  it("does not repeat a track notification when the same track is reported again", async () => {
+    const fake = createFakeBus();
+    fake.setInitialNames(["org.mpris.MediaPlayer2.vlc"]);
+    fake.setPlayerState("org.mpris.MediaPlayer2.vlc", { "xesam:title": "Song" }, "Playing");
+
+    const source = createLinuxPlaybackSource({ sessionBus: () => fake.bus });
+    const tracks: unknown[] = [];
+    source.onTrackChanged((t) => tracks.push(t));
+    await flush();
+
+    // A status change re-emits the unchanged track; it must not notify a second time.
+    fake.firePropertiesChanged("org.mpris.MediaPlayer2.vlc", { PlaybackStatus: "Paused" });
+    await flush();
+
+    expect(tracks).toHaveLength(1);
   });
 });

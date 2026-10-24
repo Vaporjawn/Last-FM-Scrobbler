@@ -9,13 +9,30 @@ export interface PlayerRegistryOptions {
   readonly now?: () => number;
 }
 
-interface PlayerEntry {
-  track: TrackInfo | null;
-  state: PlaybackState;
+interface PlayerEntryBase {
+  readonly track: TrackInfo | null;
   /** Timestamp of the most recent genuine change to this player's track/state. */
-  lastChangedAt: number;
-  /** Timestamp this player most recently transitioned into "playing"; undefined if never, or not currently playing. */
-  startedPlayingAt: number | undefined;
+  readonly lastChangedAt: number;
+}
+
+/** A discriminated union, so "currently playing" statically implies a known start time. */
+type PlayerEntry =
+  | (PlayerEntryBase & {
+      readonly state: "playing";
+      /** Timestamp this player most recently transitioned into "playing". */
+      readonly startedPlayingAt: number;
+    })
+  | (PlayerEntryBase & { readonly state: Exclude<PlaybackState, "playing"> });
+
+/** Whether `entry` should replace `incumbent` as the active player (see ADR 0005). */
+function isPreferred(entry: PlayerEntry, incumbent: PlayerEntry): boolean {
+  if (entry.state === "playing") {
+    return incumbent.state !== "playing" || entry.startedPlayingAt > incumbent.startedPlayingAt;
+  }
+  if (incumbent.state === "playing") {
+    return false;
+  }
+  return entry.lastChangedAt > incumbent.lastChangedAt;
 }
 
 function tracksEqual(a: TrackInfo | null, b: TrackInfo | null): boolean {
@@ -60,15 +77,16 @@ export class PlayerRegistry {
       return;
     }
 
-    const startedPlayingAt =
-      state === "playing" && existing?.state !== "playing" ? nowSec : existing?.startedPlayingAt;
-
-    this.players.set(busName, {
-      track,
-      state,
-      lastChangedAt: nowSec,
-      startedPlayingAt: state === "playing" ? startedPlayingAt : undefined,
-    });
+    if (state === "playing") {
+      this.players.set(busName, {
+        track,
+        state,
+        lastChangedAt: nowSec,
+        startedPlayingAt: existing?.state === "playing" ? existing.startedPlayingAt : nowSec,
+      });
+    } else {
+      this.players.set(busName, { track, state, lastChangedAt: nowSec });
+    }
   }
 
   remove(busName: string): void {
@@ -90,32 +108,9 @@ export class PlayerRegistry {
 
   private findActiveEntry(): [string, PlayerEntry] | undefined {
     let best: [string, PlayerEntry] | undefined;
-    let bestIsPlaying = false;
 
     for (const candidate of this.players.entries()) {
-      const entry = candidate[1];
-      const entryIsPlaying = entry.state === "playing";
-
-      if (best === undefined) {
-        best = candidate;
-        bestIsPlaying = entryIsPlaying;
-        continue;
-      }
-
-      if (entryIsPlaying && !bestIsPlaying) {
-        best = candidate;
-        bestIsPlaying = true;
-        continue;
-      }
-      if (!entryIsPlaying && bestIsPlaying) {
-        continue;
-      }
-
-      if (entryIsPlaying && bestIsPlaying) {
-        if ((entry.startedPlayingAt ?? 0) > (best[1].startedPlayingAt ?? 0)) {
-          best = candidate;
-        }
-      } else if (entry.lastChangedAt > best[1].lastChangedAt) {
+      if (best === undefined || isPreferred(candidate[1], best[1])) {
         best = candidate;
       }
     }

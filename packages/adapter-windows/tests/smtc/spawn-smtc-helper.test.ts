@@ -142,4 +142,20 @@ describe("spawnSmtcHelper", () => {
 
     expect(onStderr).toHaveBeenCalledWith("SmtcHelper: System.Exception: boom");
   });
+
+  it("tolerates a child process that has no stdout pipe", () => {
+    const fakeChild = new EventEmitter() as EventEmitter & { kill: () => boolean };
+    fakeChild.kill = vi.fn(() => true);
+    const onEvent = vi.fn();
+
+    const handle = spawnSmtcHelper({
+      helperPath: "C:\\SmtcHelper.exe",
+      onEvent,
+      spawnImpl: vi.fn().mockReturnValue(fakeChild),
+    });
+    handle.stop();
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(fakeChild.kill).toHaveBeenCalled();
+  });
 });

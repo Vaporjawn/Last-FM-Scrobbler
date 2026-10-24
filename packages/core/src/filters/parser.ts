@@ -164,13 +164,14 @@ class Parser {
 
   private peek(): Token {
     const token = this.tokens[this.position];
-    // v8 ignore next 3 -- defensive: `tokenize` always appends a trailing "eof"
-    // token, and `advance()` never increments `position` past it, so `this.position`
-    // can never index past the end of `this.tokens`; `token` is always defined here.
+    /* v8 ignore start -- @preserve
+     * Defensive: `tokenize` always appends a trailing "eof" token and `advance()`
+     * never moves `position` past it, so `token` is always defined here. The guard
+     * exists only to satisfy `noUncheckedIndexedAccess`. */
     if (!token) {
-      // v8 ignore next -- see the ignore comment above this if-statement.
       throw new FilterSyntaxError("unexpected end of expression");
     }
+    /* v8 ignore stop -- @preserve */
     return token;
   }
 

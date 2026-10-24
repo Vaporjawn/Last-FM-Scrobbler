@@ -214,4 +214,63 @@ describe("Tracker", () => {
 
     expect(onTrackChanged).not.toHaveBeenCalled();
   });
+
+  it("uses the wall clock (in whole seconds) when no now() is injected", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-01-01T00:00:10.900Z"));
+      const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+      const onTrackChanged = vi.fn();
+      const tracker = new Tracker({ source, events: { onTrackChanged } });
+      tracker.start();
+
+      emitPlaybackStateChanged("playing");
+      emitTrackChanged(track());
+
+      expect(onTrackChanged).toHaveBeenCalledWith({
+        track: track(),
+        startedAt: Math.floor(new Date("2026-01-01T00:00:10.900Z").getTime() / 1000),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the accumulated time untouched when playback goes from paused to stopped", () => {
+    const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+    let nowSec = 1_700_000_000;
+    const onScrobbleEligible = vi.fn();
+    const tracker = new Tracker({ source, events: { onScrobbleEligible }, now: () => nowSec });
+    tracker.start();
+
+    emitPlaybackStateChanged("playing");
+    emitTrackChanged(track({ durationSec: 300 }));
+    nowSec += 100;
+    emitPlaybackStateChanged("paused");
+    nowSec += 500; // time spent paused must never count
+    emitPlaybackStateChanged("stopped");
+    tracker.tick();
+
+    expect(onScrobbleEligible).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the 240s cap when the track has no known duration", () => {
+    const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+    let nowSec = 1_700_000_000;
+    const onScrobbleEligible = vi.fn();
+    const tracker = new Tracker({ source, events: { onScrobbleEligible }, now: () => nowSec });
+    tracker.start();
+
+    const { durationSec: _unknownDuration, ...trackWithoutDuration } = track();
+    emitPlaybackStateChanged("playing");
+    emitTrackChanged(trackWithoutDuration);
+
+    nowSec += 239;
+    tracker.tick();
+    expect(onScrobbleEligible).not.toHaveBeenCalled();
+
+    nowSec += 1;
+    tracker.tick();
+    expect(onScrobbleEligible).toHaveBeenCalledTimes(1);
+  });
 });

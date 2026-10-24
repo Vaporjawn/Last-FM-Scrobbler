@@ -13,5 +13,13 @@ export default defineConfig({
   ],
   test: {
     include: ["tests/**/*.test.ts"],
+    coverage: {
+      // Istanbul, not V8: the Workers runtime (workerd) cannot host V8's native
+      // coverage collector, so Cloudflare's Vitest integration only supports
+      // instrumented coverage.
+      provider: "istanbul",
+      include: ["src/**/*.ts"],
+      thresholds: { statements: 100, branches: 100, functions: 100, lines: 100 },
+    },
   },
 });
