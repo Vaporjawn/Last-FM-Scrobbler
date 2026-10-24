@@ -1,4 +1,3 @@
-import "./restore-util-is-error.js";
 import type { MessageBus } from "dbus-next";
 import { createDefaultSessionBus } from "./create-default-session-bus.js";
 import { listMprisPlayerBusNames } from "./list-mpris-player-bus-names.js";
