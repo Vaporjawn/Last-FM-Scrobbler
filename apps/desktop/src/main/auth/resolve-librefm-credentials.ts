@@ -1,8 +1,12 @@
 import type { AppCredentials, AppCredentialsStore } from "@lastfm-scrobbler/core";
+import { readBakedLibrefmCredentials } from "./read-baked-librefm-credentials.js";
 
 export interface ResolveLibrefmCredentialsOptions {
   /** Injectable for testing; defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** Injectable for testing; defaults to the pair `electron.vite.config.ts` inlined at
+   * build time (see `read-baked-librefm-credentials.ts`). */
+  readonly baked?: AppCredentials | undefined;
   readonly librefmAppCredentialsStore?: AppCredentialsStore | undefined;
 }
 
@@ -16,7 +20,8 @@ export interface ResolvedLibrefmCredentials extends AppCredentials {
 /**
  * Resolves the Libre.fm API key/secret this app run should use — `LIBREFM_API_KEY` /
  * `LIBREFM_API_SECRET` environment variables take precedence when both are set,
- * falling back to a key the end user saved themselves via Settings → Accounts. Exact
+ * then the pair baked into this build, then a key the end user saved themselves via
+ * Settings → Accounts. Exact
  * mirror of `resolve-lastfm-credentials.ts`'s `resolveLastfmCredentials`, just for
  * Libre.fm — see that function's docstring for the full reasoning, which applies here
  * unchanged. Kept as a separate function/file (not a shared, service-parameterized
@@ -34,6 +39,11 @@ export async function resolveLibrefmCredentials(
       apiSecret: env.LIBREFM_API_SECRET,
       source: "environment",
     };
+  }
+
+  const baked = "baked" in options ? options.baked : readBakedLibrefmCredentials();
+  if (baked) {
+    return { ...baked, source: "environment" };
   }
 
   const stored = await options.librefmAppCredentialsStore?.get();

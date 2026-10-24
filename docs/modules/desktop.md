@@ -17,9 +17,16 @@ a background app by default — see "Background app (tray / menu bar)" below.
   below) — either path works, and both are available in the same build
   simultaneously. Without *either* source configured, the app still launches, but
   login and all Last.fm data views report "not configured" rather than throwing.
-  **The "bake into the build pipeline" half is currently aspirational, not actually
-  true for a packaged build** — see "Bug reporting" below for why (a real, distinct
-  bug, found and only partially fixed while verifying `BUG_REPORT_RELAY_URL`).
+  **Baking works for a packaged build**: `apps/desktop/electron.vite.config.ts`
+  `define`-inlines the CI job's `LASTFM_API_KEY`/`LASTFM_API_SECRET` into the compiled
+  main bundle as `process.env.BAKED_LASTFM_API_KEY`/`..._SECRET` at `electron-vite
+  build` time, and `main/lastfm/read-baked-lastfm-credentials.ts` reads them (see
+  "Bug reporting" below for the history). Verified by building with marker values and
+  finding them in `out/main/index.js` only (not the renderer or preload bundles), and
+  by an absent-secret control build that bakes nothing. Because the secret ships
+  inside the binary it is extractable by anyone who unpacks the app; that is inherent to
+  a desktop Last.fm client, so treat the pair as non-confidential application
+  credentials (rotate it on Last.fm's API account page if it is ever abused).
 - `LIBREFM_API_KEY` / `LIBREFM_API_SECRET` — the same idea as `LASTFM_API_KEY`/
   `LASTFM_API_SECRET` above, but for Libre.fm (an additional, optional scrobbling
   destination connected *alongside* Last.fm, not instead of it — see "Additional
@@ -34,9 +41,9 @@ a background app by default — see "Background app (tray / menu bar)" below.
   `https://lastfm-scrobbler-bug-report-relay.<your-subdomain>.workers.dev/report`),
   set once that Worker is deployed with its own `GITHUB_PAT` secret (see
   docs/modules/bug-report-relay.md). Without it, the "Report a Bug" button still
-  appears but reports "not configured" instead of submitting. Unlike
-  `LASTFM_API_KEY`/`LASTFM_API_SECRET` above, this one really does get baked into a
-  packaged build correctly — see "Bug reporting" below.
+  appears but reports "not configured" instead of submitting. Like
+  `LASTFM_API_KEY`/`LASTFM_API_SECRET` above, this one gets baked into a packaged
+  build — see "Bug reporting" below.
 
 **For local dev**, create `apps/desktop/.env` (git-ignored — see the repo's root
 `.gitignore`) instead of exporting these in your shell every time:
@@ -170,7 +177,8 @@ Logging in needs an *application*-level Last.fm API key/secret pair to exist fir
 ways to supply one, and both are available in the same build at once:
 
 1. **Baked in by whoever built this instance** — `LASTFM_API_KEY`/`LASTFM_API_SECRET`
-   environment variables (see above). Takes precedence when set.
+   (see above), either set as runtime environment variables (which win) or inlined
+   into the build as `BAKED_LASTFM_API_*`. Takes precedence over the user's own key.
 2. **Supplied by the end user** — an "API key" / "Shared secret" form in
    Settings → Accounts, shown directly (no gate in front of it) whenever no
    environment-baked key is active, with a link to
@@ -371,17 +379,13 @@ for that CI job's own process, not the binary it produces. Fixed by having
 `apps/desktop/electron.vite.config.ts` `define`-inline `process.env.BUG_REPORT_RELAY_URL`
 into the compiled main bundle at `electron-vite build` time (verified by grepping a real
 build's output for the injected value) — dev mode (`npm run dev`/`start`) is untouched
-and still reads a real `apps/desktop/.env` at runtime, same as before. **Known, separate,
-still-open gap this did not fix**: `LASTFM_API_KEY`/`LASTFM_API_SECRET` have the exact
-same "CI secret alone doesn't reach the packaged binary" problem, but aren't fixed by
-this — they're read through `resolve-lastfm-credentials.ts`'s injectable-for-testing
-`env` indirection (`const env = options.env ?? process.env`), which a build-time
-`define` can't see through since it only matches the literal source expression
-`process.env.X`, not an aliased local variable. Until that's addressed separately, the
-"baked into the packaged app" claim for the Last.fm API key above is aspirational, not
-actually true for a real distributed build — a packaged app currently falls through to
-"Bring your own key" regardless of what `LASTFM_API_KEY`/`LASTFM_API_SECRET` repo
-secrets are set.
+and still reads a real `apps/desktop/.env` at runtime, same as before. **The same gap
+for `LASTFM_API_KEY`/`LASTFM_API_SECRET` and `LIBREFM_API_KEY`/`LIBREFM_API_SECRET` is
+now fixed too**: those go through an injectable `env` indirection that a `define`
+cannot see through, so `electron.vite.config.ts` additionally inlines them under
+`BAKED_*` names that `read-baked-lastfm-credentials.ts` /
+`read-baked-librefm-credentials.ts` read as literal `process.env.BAKED_*` expressions.
+Precedence is runtime env, then baked, then the end user's own saved key.
 
 ## Packaging & distribution
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AppCredentialsStore } from "@lastfm-scrobbler/core";
 import { resolveLibrefmCredentials } from "../../../src/main/auth/resolve-librefm-credentials.js";
 import type { SecretStorage } from "@lastfm-scrobbler/core";
@@ -24,6 +24,34 @@ function createInMemoryStorage(): SecretStorage {
 }
 
 describe("resolveLibrefmCredentials", () => {
+  it("uses credentials baked into the build when no environment variables are set", async () => {
+    const librefmAppCredentialsStore = new AppCredentialsStore(createInMemoryStorage());
+    await librefmAppCredentialsStore.set({ apiKey: "user-key", apiSecret: "user-secret" });
+
+    const resolved = await resolveLibrefmCredentials({
+      env: {},
+      baked: { apiKey: "baked-key", apiSecret: "baked-secret" },
+      librefmAppCredentialsStore,
+    });
+
+    expect(resolved).toEqual({
+      apiKey: "baked-key",
+      apiSecret: "baked-secret",
+      source: "environment",
+    });
+  });
+
+  it("reads the baked pair from the BAKED_* variables a production build inlines", async () => {
+    vi.stubEnv("BAKED_LIBREFM_API_KEY", "inlined-key");
+    vi.stubEnv("BAKED_LIBREFM_API_SECRET", "inlined-secret");
+    try {
+      const resolved = await resolveLibrefmCredentials({ env: {} });
+      expect(resolved?.apiKey).toBe("inlined-key");
+      expect(resolved?.source).toBe("environment");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it("prefers environment variables when both are set", async () => {
     const librefmAppCredentialsStore = new AppCredentialsStore(createInMemoryStorage());
     await librefmAppCredentialsStore.set({ apiKey: "user-key", apiSecret: "user-secret" });

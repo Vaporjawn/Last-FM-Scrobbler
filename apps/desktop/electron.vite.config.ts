@@ -41,6 +41,26 @@ export default defineConfig(({ command }) => ({
               // `undefined`.
               loadEnv("production", undefined, "").BUG_REPORT_RELAY_URL ?? "",
             ),
+            // The Last.fm / Libre.fm pairs get the same treatment, under BAKED_* names:
+            // `resolve-*-credentials.ts` reads `env.LASTFM_API_KEY` through an injectable
+            // `env` variable, which a `define` cannot see through (it only matches the
+            // literal source text `process.env.X`), so a CI secret never reached the
+            // packaged binary and every release fell through to "bring your own key".
+            // The dedicated `read-baked-*-credentials.ts` modules read these literal
+            // names instead; at runtime in dev/tests nothing is inlined and they are
+            // simply undefined. Baked as `""` when the CI secret is absent.
+            "process.env.BAKED_LASTFM_API_KEY": JSON.stringify(
+              loadEnv("production", undefined, "").LASTFM_API_KEY ?? "",
+            ),
+            "process.env.BAKED_LASTFM_API_SECRET": JSON.stringify(
+              loadEnv("production", undefined, "").LASTFM_API_SECRET ?? "",
+            ),
+            "process.env.BAKED_LIBREFM_API_KEY": JSON.stringify(
+              loadEnv("production", undefined, "").LIBREFM_API_KEY ?? "",
+            ),
+            "process.env.BAKED_LIBREFM_API_SECRET": JSON.stringify(
+              loadEnv("production", undefined, "").LIBREFM_API_SECRET ?? "",
+            ),
           },
         }
       : {}),

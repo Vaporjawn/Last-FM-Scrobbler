@@ -1,8 +1,12 @@
 import type { AppCredentials, AppCredentialsStore } from "@lastfm-scrobbler/core";
+import { readBakedLastfmCredentials } from "./read-baked-lastfm-credentials.js";
 
 export interface ResolveLastfmCredentialsOptions {
   /** Injectable for testing; defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** Injectable for testing; defaults to the pair `electron.vite.config.ts` inlined at
+   * build time (see `read-baked-lastfm-credentials.ts`). */
+  readonly baked?: AppCredentials | undefined;
   readonly appCredentialsStore?: AppCredentialsStore | undefined;
 }
 
@@ -16,8 +20,8 @@ export interface ResolvedLastfmCredentials extends AppCredentials {
 /**
  * Resolves the Last.fm API key/secret this app run should use. `LASTFM_API_KEY` /
  * `LASTFM_API_SECRET` environment variables take precedence when both are set — an
- * explicit choice by whoever built/launched this instance — falling back to a key the
- * end user saved themselves via Settings → Accounts (see `AppCredentialsStore`,
+ * explicit choice by whoever launched this instance — then the pair baked into this
+ * build at package time, then a key the end user saved themselves via Settings → Accounts (see `AppCredentialsStore`,
  * `main/auth/wire-auth.ts`). Returns `undefined` if neither source has a usable pair,
  * same as `create-lastfm-client.ts`'s env-only `createLastfmClient` did before this
  * existed.
@@ -32,6 +36,11 @@ export async function resolveLastfmCredentials(
       apiSecret: env.LASTFM_API_SECRET,
       source: "environment",
     };
+  }
+
+  const baked = "baked" in options ? options.baked : readBakedLastfmCredentials();
+  if (baked) {
+    return { ...baked, source: "environment" };
   }
 
   const stored = await options.appCredentialsStore?.get();
