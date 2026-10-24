@@ -396,6 +396,24 @@ first, then run `electron-builder` to produce a `.dmg`/`.zip` (macOS), `.exe`
 NSIS installer + portable `.exe` (Windows), or `.AppImage`/`.deb` (Linux) into
 `apps/desktop/release/`.
 
+**Verified by a real dry run.** `release.yml` can be run by hand (`workflow_dispatch`,
+which packages but never publishes). It had never run before, and getting it to pass
+on all three platforms exposed: Electron pinned as a range (electron-builder needs an
+exact version), a duplicated `--publish` flag, empty-string signing secrets being read
+as a certificate path, a Linux executable name derived from the scoped package name,
+missing `homepage`/`description` for the deb, and the job lacking pnpm (electron-builder
+follows the root `packageManager: pnpm@...` and runs `pnpm list`). After packaging, the
+workflow launches the real executable on each platform (`scripts/smoke-packaged-app.mjs`,
+under `xvfb` plus an unlocked `gnome-keyring` on Linux), waits for the Now Playing view,
+and, when the Last.fm secret is set, opens Settings and requires "Log in with Last.fm",
+which only renders if the baked key reached the shipped binary. That step is what found
+the Linux launch crash described in `docs/adr/0012-keep-dbus-next-off-the-usocket-addon.md`.
+
+**Linux needs a system keyring to log in.** The app stores the Last.fm session key with
+Electron's `safeStorage`, which on Linux requires a running secret service
+(gnome-keyring, KWallet). Without one, login is turned off and Settings says so rather
+than asking for an API key the build already has.
+
 A few things worth knowing if you touch this config:
 
 - **`asar: true` with a targeted `asarUnpack`, not `asar: false`.** Three things need

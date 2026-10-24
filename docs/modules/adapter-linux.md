@@ -131,8 +131,12 @@ interface — no private-API workarounds needed.
 ## Dependencies
 
 - `@lastfm-scrobbler/shared-types` (the `PlaybackSource` type).
-- `dbus-next` (pure JS + one native helper, `usocket`, for the raw D-Bus socket —
-  approved in `pnpm-workspace.yaml`'s `allowBuilds`).
+- `dbus-next` (pure JS; it also installs a native helper, `usocket`, as an optional
+  dependency, approved in `pnpm-workspace.yaml`'s `allowBuilds`). **That helper is
+  deliberately never loaded**: it crashed the packaged Electron app at launch under a
+  real session bus. `normalizeDbusAddress` rewrites `unix:path=`/`unix:abstract=` to
+  `unix:socket=` so `dbus-next` uses Node's own `net`. See
+  `docs/adr/0012-keep-dbus-next-off-the-usocket-addon.md`.
 - `dbus-daemon` at test time only, for the real-pipeline smoke test (see Status).
 
 `dbus-next`'s own dependency tree is the reason the root `package.json`/

@@ -85,27 +85,32 @@ integration required.
 
 ## Status
 
-Feature-complete, pre-release — no tagged releases or downloads yet, but every planned
-piece above is implemented and tested, and packaging (`electron-builder`, all three
-platforms) plus a GitHub Actions release workflow are built too. See each package's
-linked doc below for exactly what's live-verified versus code-complete-but-unverified
-in this environment (mainly: real Windows/Linux hardware, a real code-signing
-certificate, and a real Cloudflare deployment, none of which were available during
-development). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and
+Feature-complete, pre-release: no tagged releases or downloads yet. Every planned
+piece above is implemented and tested, and `.github/workflows/release.yml` has been run
+by hand for all three platforms: it packages, then launches each packaged app and
+checks it renders and offers login (see the "Packaging & distribution" section of
+[docs/modules/desktop.md](docs/modules/desktop.md)). See each package's linked doc below
+for exactly what is live-verified versus code-complete but unverified in this
+environment. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design and
 [docs/adr/](docs/adr/) for the reasoning behind the major decisions, or the
 [project website](https://vaporjawn.dev/Last-FM-Scrobbler/) for a lighter-weight
 overview.
 
-Still needed before a first _real_ tagged release: pushing a `v*` tag to actually run
-[the release workflow](.github/workflows/release.yml) for the first time, a real code
-signing certificate + Apple notarization credentials for a properly signed/notarized
-build (see [docs/modules/desktop.md](docs/modules/desktop.md)'s "Packaging &
-distribution" section — unsigned builds work locally but won't pass Gatekeeper/
-SmartScreen for other people), and deploying
-[`services/bug-report-relay`](docs/modules/bug-report-relay.md) (now automated via
-[a workflow](.github/workflows/deploy-bug-report-relay.yml) — just needs Cloudflare
-secrets configured once). None of this project's own credentials are ever included —
-see each linked doc for exactly what to supply yourself.
+Still needed before a first real tagged release:
+
+- **Code signing and notarization credentials** (an Apple Developer ID certificate plus
+  notarization login, and a Windows signing certificate). Unsigned builds work locally
+  but Gatekeeper and SmartScreen reject them for other people, and macOS auto-update
+  needs a signed app.
+- **Deploying [`services/bug-report-relay`](docs/modules/bug-report-relay.md)** (a
+  [workflow](.github/workflows/deploy-bug-report-relay.yml) automates it once the
+  Cloudflare secrets are configured) and rotating its `GITHUB_PAT` to a fine-grained,
+  repo-scoped token (issue #10).
+- **A run on real hardware**: the Windows SMTC adapter and live Last.fm login and
+  scrobble have only been exercised against mocks and in CI, not by a person.
+
+None of this project's own credentials are ever included; see each linked doc for
+exactly what to supply yourself.
 
 ## Quick start
 
