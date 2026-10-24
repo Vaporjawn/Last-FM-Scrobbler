@@ -29,10 +29,13 @@ jobs:
         include:
           - os: macos-latest
             script: package:mac
+            smoke: release/mac-arm64/Last.fm Scrobbler.app/Contents/MacOS/Last.fm Scrobbler
           - os: windows-latest
             script: package:win
+            smoke: release/win-unpacked/Last.fm Scrobbler.exe
           - os: ubuntu-latest
             script: package:linux
+            smoke: release/linux-unpacked/lastfm-scrobbler
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -108,6 +111,26 @@ jobs:
           # Windows code signing — same reasoning, same optionality.
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+      # Launch the artifact we just built. Unit tests and a green build can both pass
+      # while the packaged app is dead (missing unpacked native module, asar path, a
+      # key that never got inlined); only starting it shows that. Linux needs a virtual
+      # display. Login is only expected when the Last.fm secret is configured.
+      - name: Smoke test the packaged app (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: apps/desktop
+        run: xvfb-run -a node scripts/smoke-packaged-app.mjs
+        env:
+          SMOKE_EXECUTABLE: ${{ github.workspace }}/apps/desktop/${{ matrix.smoke }}
+          SMOKE_EXPECT_LASTFM_LOGIN: ${{ secrets.LASTFM_API_KEY != '' && '1' || '0' }}
+
+      - name: Smoke test the packaged app (macOS / Windows)
+        if: matrix.os != 'ubuntu-latest'
+        working-directory: apps/desktop
+        run: node scripts/smoke-packaged-app.mjs
+        env:
+          SMOKE_EXECUTABLE: ${{ github.workspace }}/apps/desktop/${{ matrix.smoke }}
+          SMOKE_EXPECT_LASTFM_LOGIN: ${{ secrets.LASTFM_API_KEY != '' && '1' || '0' }}
 
       # Manual (workflow_dispatch) runs don't publish — upload as a normal workflow
       # artifact instead, so a dry run is still inspectable without touching Releases.
