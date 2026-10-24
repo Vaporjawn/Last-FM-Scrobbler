@@ -13,6 +13,7 @@
     "src/shared/**/*",
     "tests/setup.ts",
     "tests/check-a11y.ts",
+    "tests/vitest-axe.d.ts",
     "tests/renderer/**/*",
     "vitest.config.ts"
   ]
