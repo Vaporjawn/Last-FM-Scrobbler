@@ -15,13 +15,18 @@
 // this does nothing extra: electron-builder uses the real identity as normal, and
 // real, Developer-ID-signed + notarized builds don't need the ad-hoc fallback.
 import { spawnSync } from "node:child_process";
+import { resolvePackageArgs } from "./resolve-package-args.mjs";
 
 const hasRealCertificate = Boolean(process.env.CSC_LINK);
 const extraArgs = hasRealCertificate ? [] : ["--config.mac.identity=-"];
 
-const result = spawnSync("electron-builder", [...extraArgs, ...process.argv.slice(2)], {
-  stdio: "inherit",
-  shell: process.platform === "win32",
-});
+const result = spawnSync(
+  "electron-builder",
+  [...extraArgs, ...resolvePackageArgs(process.argv.slice(2))],
+  {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  },
+);
 
 process.exit(result.status ?? 1);
