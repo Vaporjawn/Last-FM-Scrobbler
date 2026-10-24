@@ -11,6 +11,11 @@ export function topoSort(packages) {
   const visited = new Set();
   const sorted = [];
 
+  /**
+   * Depth-first visit: recurses into each workspace dependency (runtime or dev) before
+   * appending the package itself, so dependencies land earlier in `sorted`. The `visited`
+   * set is marked before recursing, which also keeps a dependency cycle from looping.
+   */
   function visit(pkg) {
     if (visited.has(pkg.name)) return;
     visited.add(pkg.name);

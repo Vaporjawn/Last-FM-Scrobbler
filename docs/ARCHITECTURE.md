@@ -82,7 +82,8 @@ packages/
 services/
   bug-report-relay/  Cloudflare Worker: anonymous bug report -> GitHub issue
 scripts/
-  run-workspaces.mjs  Package-manager-agnostic "run this script in every workspace"
+  run-workspaces.mjs  Package-manager-agnostic "run this script in every workspace" (entry; logic in scripts/workspaces/)
+eslint-rules/  Local lint plugin: one-function-per-file and require-tsdoc (ADR 0013)
 docs/
   ARCHITECTURE.md, CONTRIBUTING.md, TESTING.md  Cross-cutting docs (this file included)
   adr/      Numbered Architecture Decision Records — the *why* behind non-obvious choices
@@ -201,3 +202,6 @@ See [docs/adr/](adr/) for the full reasoning behind each of these:
 8. [macOS MediaRemote access via a `perl`-hosted helper framework](adr/0008-macos-mediaremote-entitlement.md)
 9. [Windows SMTC integration via a compiled WinRT helper process](adr/0009-windows-smtc-integration.md)
 10. [`dbus-next` transitive vulnerability audit](adr/0010-dbus-next-transitive-vulnerability-audit.md)
+11. [Network status detection](adr/0011-network-status-detection.md)
+12. [Keep `dbus-next` off the native `usocket` addon](adr/0012-keep-dbus-next-off-the-usocket-addon.md)
+13. [One function per file, and TSDoc on every declaration](adr/0013-one-function-per-file-and-tsdoc.md)

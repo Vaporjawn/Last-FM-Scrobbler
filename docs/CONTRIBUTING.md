@@ -59,6 +59,28 @@ Run a script in every package: `<pm> run build` / `test` / `lint` / `typecheck` 
 `pnpm build` etc. — pnpm alone also accepts the shorter form without `run`).
 Run a script in one package directly: `cd packages/core && <pm> run test`.
 
+## Code structure rules
+
+Two lint rules shape every source file (full reasoning in
+[ADR 0013](adr/0013-one-function-per-file-and-tsdoc.md)); `<pm> run lint` and CI fail on a
+breach.
+
+- **One function per file** (`structure/one-function-per-file`). A file declares at most
+  one top-level function, React component or class. Types, interfaces and constants may sit
+  beside it; a type shared by several units gets its own file. Name the file after the
+  thing: kebab-case for functions (`format-duration.ts`), PascalCase for components and
+  classes (`SidebarButton.tsx`). Put it in the feature folder it belongs to, next to its
+  siblings, and import it with the `.js` extension where the package already does.
+- **TSDoc on every declaration** (`structure/require-tsdoc`). Functions, classes, methods,
+  interfaces, type aliases, enums, exported constants and named closures inside functions
+  each need a `/** ... */` block with a real description: what it does, and why where the
+  reason is not obvious. A comment that only restates the name fails.
+- **Exempt**: test files (`*.test.ts(x)`), `tests/`, `e2e/`, `*.d.ts` and build/config
+  files. Anonymous callbacks and object-literal methods need no comment.
+
+The rules live in `eslint-rules/` and have their own tests (`<pm> run test:lint-rules`).
+Add a case there when you change one.
+
 ## Testing cadence
 
 While working on a change, run targeted tests for the package you're touching

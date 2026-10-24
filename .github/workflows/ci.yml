@@ -93,6 +93,11 @@ jobs:
       - name: Lint
         run: ${{ matrix.pm }} run lint
 
+      # The one-function-per-file and require-tsdoc rules are our own code (eslint-rules/);
+      # their tests make sure a rule that stops rejecting bad code fails here, not silently.
+      - name: Lint rule tests
+        run: ${{ matrix.pm }} run test:lint-rules
+
       # Runs every package's suite with coverage; each package's vitest config fails
       # the run below 100% statements, branches, functions and lines.
       - name: Test

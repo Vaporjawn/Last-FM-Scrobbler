@@ -6,6 +6,13 @@ Electron + React + MUI desktop shell. Five destinations: Now Playing, Scrobbles
 (history), Profile (top artists), Friends, and Settings (General/Accounts). Runs as
 a background app by default — see "Background app (tray / menu bar)" below.
 
+`src/main/index.ts` is only the entry: it resolves the renderer origin, builds the logger and
+playback source, and calls `startApplication` (`main/startup/start-application.ts`). Everything
+the app wires at launch is a small function in `main/startup/` (`create-*` builds a service,
+`wire-*` registers its IPC handlers and events), each in its own file, with the state that must
+live for the whole run (main window, tray, quitting flag) owned by `startApplication` and passed
+down as accessors. See [ADR 0013](../adr/0013-one-function-per-file-and-tsdoc.md).
+
 ## Required environment variables
 
 - `LASTFM_API_KEY` / `LASTFM_API_SECRET` — credentials for _this application_ as
@@ -56,7 +63,7 @@ LIBREFM_API_SECRET=
 BUG_REPORT_RELAY_URL=
 ```
 
-`main/index.ts` loads it automatically on startup via the built-in
+`main/startup/load-development-env-file.ts` loads it automatically on startup via the built-in
 `process.loadEnvFile()` (stable since Node 22.21/24.10, available since 20.12 — no
 extra dependency), skipped entirely in a packaged build (`app.isPackaged`), since a
 distributed app has no reason to read a loose text file for secrets — see that file's
@@ -116,7 +123,7 @@ a guaranteed handoff — and the UI (`SettingsPage.tsx`) says so explicitly whil
 actually promise rather than what a nicer-looking notification implies it can.
 `wire-auth.ts` covers both outcomes of that wait:
 
-- **`onLoginSuccess`** (wired in `main/index.ts`) runs right after the session is
+- **`onLoginSuccess`** (`main/startup/announce-login-success.ts`, wired by `wire-login-services.ts`) runs right after the session is
   stored, with two independent, best-effort mechanisms:
   1. `main/window/bring-app-to-foreground.ts`'s `bringAppToForeground()` — extracted
      into its own module specifically so its exact behavior is unit-tested (see
@@ -140,7 +147,7 @@ actually promise rather than what a nicer-looking notification implies it can.
      actually guaranteed to appear regardless of focus, Do Not Disturb, or window
      manager — clicking it re-runs `bringAppToForeground()` in case the window still
      isn't visible. Even this has one caveat, see below.
-- **`onLoginFailed`** (also wired in `main/index.ts`) runs when `AuthFlow.authenticate()`
+- **`onLoginFailed`** (`main/startup/announce-login-failure.ts`, wired the same way) runs when `AuthFlow.authenticate()`
   throws — most commonly `AuthTimeoutError` after the default 5-minute poll window
   elapses with no approval. Before this existed, a failure here was **completely
   silent** unless the user happened to still be looking at the window when it
@@ -265,14 +272,14 @@ this off; the real-quit paths (the tray's "Quit" item, Cmd+Q, `app.quit()`) all 
 through one `isQuitting` flag so they aren't re-intercepted as a hide.
 
 The very first time the window is actually hidden this way — across the whole
-install's lifetime, not just this run — `main/index.ts`'s `handleTrayHide()` shows a
+install's lifetime, not just this run — `main/startup/create-tray-hide-handler.ts`'s handler shows a
 one-time native "Still running" notification explaining where the app went (see
 "Native notifications" below). Tracked via `AppSettings.hasShownTrayHint` (not a
 Settings toggle — this is bookkeeping, not something to choose a value for) so it
 never repeats after that first time. `wire-close-to-tray.ts` itself stays a pure
 "hide instead of close" policy module — it just calls an optional `onHide` callback
 every time it actually hides the window; the one-time/persisted-flag decision lives
-in `main/index.ts`, not there.
+in that handler, not there.
 
 Tray icon assets are hand-built minimal PNGs (see the git history for the generator
 script) rather than real artwork — there's no image-editing tool in this environment.
@@ -300,7 +307,7 @@ package time — nothing in this app's own runtime code touches it. In dev mode
 `apps/desktop/resources/app-icon.png` (a 512×512 copy of the same source, shipped
 alongside the tray icons via the same `extraResources` mechanism) is set explicitly:
 `create-main-window.ts`'s `BrowserWindow` `icon` option (Windows/Linux window/taskbar
-icon) and `main/index.ts`'s `app.dock.setIcon(...)` call (macOS Dock icon
+icon) and `main/startup/resolve-startup-resources.ts`'s `app.dock.setIcon(...)` call (macOS Dock icon
 specifically — `BrowserWindow`'s `icon` option doesn't affect that on macOS).
 `resolve-app-icon-path.ts` resolves the right path for dev vs. packaged the same way
 `resolve-tray-icon-path.ts` does (see above) — both now share one `resolve-resource-path.ts`
@@ -606,8 +613,8 @@ every `<a target="_blank">` in the renderer (the "Get your Last.fm API key" link
 artist bio's "Read more on Last.fm" link, etc.) opened in a brand-new _Electron_
 window — this app's own window, with none of the user's actual browser
 logins/extensions/history — rather than their real default browser. `AuthFlow`'s own
-browser step (`main/index.ts`'s `wireAuth({ openUrl: (url) => shell.openExternal(url)
-})`) was never affected, since it already called `shell.openExternal` directly instead
+browser step (`main/startup/wire-login-services.ts`'s `wireAuth({ openUrl: ... })`, via
+`openExternalIfSafe`) was never affected, since it already called `shell.openExternal` directly instead
 of relying on a plain link — this only affected links rendered as ordinary JSX
 `<Link>`/`<a>` elements. Found by actually clicking a link in the running app, not
 from a typecheck or unit test (component tests never trigger real window-open
@@ -663,14 +670,14 @@ process-isolation primitives:
   unsubscribe function rather than leaking a listener that outlives its caller.
 - **Every IPC handler checks its sender.** Handlers register through
   `createTrustedIpc` (`main/ipc/create-trusted-ipc.ts`), a facade over `ipcMain` that
-  runs `assertTrustedSender` (`main/validate-ipc-sender.ts`) before the handler is
+  runs `assertTrustedSender` (`main/security/assert-trusted-sender.ts`, with `main/security/is-trusted-url.ts`) before the handler is
   entered, so a handler that skips the check is impossible to write by accident. This
   used to be hand-written per handler and only existed in about half the modules —
   settings writes, the Last.fm data reads, showing the window and triggering an update
   check accepted calls from any frame. `wireAuth`, `wireSecondaryAuth`,
   `wireTrackActions` and `wireBugReport` still call `assertTrustedSender` directly; every
   other `wire*` module takes an `expectedOrigin` option and registers through the
-  facade, and `main/index.ts` passes the same value to all of them (asserted in
+  facade, and `main/startup/` passes the same value to all of them (asserted in
   `tests/main/index.test.ts`). It defends against regressions rather than a known hole —
   a dependency loading remote content, a future iframe — which is why it is worth having
   on every handler rather than only the sensitive ones.
@@ -685,7 +692,7 @@ process-isolation primitives:
   specifically so `assertTrustedSender` can fall back to a full pathname compare for
   that case instead.
 
-- **`openExternalIfSafe`** (`main/index.ts`) — `wireAuth`'s and `wireSecondaryAuth`'s
+- **`openExternalIfSafe`** (`main/startup/open-external-if-safe.ts`) — `wireAuth`'s and `wireSecondaryAuth`'s
   `openUrl` callbacks (used to open the Last.fm/Libre.fm "authorize this app" page) are
   gated through `isSafeExternalUrl` before reaching `shell.openExternal`, matching
   every other `shell.openExternal` call site in this app (`create-main-window.ts`'s
@@ -1011,7 +1018,7 @@ page intentionally still use letter avatars — see the artist-images limitation
 - **Activity** — a "Scrobbling now" chip + track/artist (currently playing), or the
   track/artist with a plain timestamp (most recent past scrobble), or nothing at all
   (no scrobble history, the fetch failed, or it just hasn't resolved yet). This _does_
-  need a separate call per friend — `renderer/src/hooks/use-friend-activity.ts` calls
+  need a separate call per friend — `renderer/src/hooks/use-friends-activity.ts` calls
   `getRecentTracks(username, 1)` — since Last.fm has no bulk "recent tracks for these N
   users" endpoint. Each row fetches and fails independently (`Promise` per row, not a
   single `Promise.all` gating the whole list), so one friend's empty/failing history
@@ -1090,7 +1097,7 @@ window open, so anything that can legitimately happen while it's hidden needs a
 different mechanism:
 
 - **A scrobble is submitted successfully** (`wire-scrobbling.ts`'s new `onScrobbled`
-  callback, wired in `main/index.ts`) — "Scrobbled: {track} — {artist}", or "…and N
+  callback, built by `main/startup/create-scrobbled-notifier.ts`) — "Scrobbled: {track} — {artist}", or "…and N
   more" for a multi-item batch (catching up after being offline). This was previously
   the single biggest _silent_ background gap in the whole app — no feedback of any
   kind, not even a log line, for the app's core purpose succeeding.
@@ -1146,7 +1153,7 @@ cases in each module's own test file) — the real OS-level rendering isn't.
   handler) lets a user author a `packages/core` filter-DSL expression, validates it
   live against `main/filters/wire-filter-validation.ts`'s IPC handler as they type and
   again on save, and persists it into `AppSettings.filterExpression` — which
-  `main/index.ts` compiles into the `CompiledFilter` the `Tracker` is constructed with
+  `main/startup/compile-filter-expression.ts` compiles into the `CompiledFilter` the `Tracker` is constructed with
   (see "Scrobbling pipeline" above).
 - Custom, original application icon artwork — the app now has a real, working icon
   (see "App icon" above), just one derived from Last.fm's own branding rather than

@@ -98,7 +98,7 @@ fields (`artist`, `title`, `album`, `albumArtist`, `sourceApp`) support `==`, `!
   them — deliberate, since "exclude" composability means each filter is an independent
   reason to drop a track (AND semantics would make each additional exclusion rule
   exclude *less*, backwards from what turning on more exclusion rules should do). Used
-  by `apps/desktop/src/main/index.ts`'s `compileFilterExpression` to merge the user's
+  by `apps/desktop/src/main/startup/compile-filter-expression.ts` to merge the user's
   Settings → Filter expression with the built-in `isLikelyNonMusicVideo` heuristic into
   one filter `Tracker` checks. Returns a filter matching nothing when `filters` is
   empty.

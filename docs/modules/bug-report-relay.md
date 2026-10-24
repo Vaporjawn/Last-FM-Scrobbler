@@ -108,8 +108,8 @@ configured (correctly validates requests, responds `503`).
   code block per diagnostic, only rendered when at least one diagnostic is present),
   and the fixed no-linked-account disclaimer.
 - `github-issue-creation-error.ts` — `GitHubIssueCreationError`, carrying the HTTP
-  `status` GitHub responded with alongside the message — lets `index.ts`'s `fetch`
-  handler distinguish a transient `5xx`/`429` (reported to the caller as `502`) from a
+  `status` GitHub responded with alongside the message — lets `status-for-issue-creation-failure.ts`
+  (used by `index.ts`'s `fetch` handler) distinguish a transient `5xx`/`429` (reported to the caller as `502`) from a
   permanent `4xx` (reported as `500`).
 - `create-github-issue.ts` — `createGitHubIssue(report, githubPat, fetchImpl?)`. Posts
   to `https://api.github.com/repos/Vaporjawn/Last-FM-Scrobbler/issues` with
@@ -118,9 +118,15 @@ configured (correctly validates requests, responds `503`).
   API version rather than whatever's currently default). Title is prefixed
   `[BUG]: ` to match this project's issue-title convention (see
   `docs/CONTRIBUTING.md`'s commit/issue/branch table).
-- `index.ts` — the Worker's `fetch` handler (default export) and the rate limiter (see
-  "Rate limiting" below); ties `parseBugReportRequest` → `createGitHubIssue` together
-  with the HTTP status mapping listed above.
+- `index.ts` — the Worker's `fetch` handler (default export); ties
+  `parseBugReportRequest` → `createGitHubIssue` together with the HTTP status mapping
+  listed above. The pieces it uses are one file each: `read-body-within-limit.ts`,
+  `json-response.ts`, `status-for-issue-creation-failure.ts`, and the rate limiter
+  (see "Rate limiting" below).
+- Rate limiter, one function per file: `is-rate-limited.ts` (the check),
+  `sweep-stale-entries.ts` and `make-room-for-new-client.ts` (keeping the map bounded),
+  `rate-limit-settings.ts` (window, limit, cap) and `rate-limit-state.ts` (the shared
+  request log and sweep counter).
 
 ## Rate limiting
 

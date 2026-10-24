@@ -3,6 +3,8 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+import structure from "./eslint-rules/index.js";
+
 export default tseslint.config(
   {
     ignores: [
@@ -49,6 +51,25 @@ export default tseslint.config(
     },
   },
   eslintConfigPrettier,
+  {
+    // Source-structure rules (docs/CONTRIBUTING.md "Code structure rules", ADR 0013): every
+    // source file holds one function, component or class, and every declaration carries a
+    // TSDoc description. Tests, end-to-end specs, build/config files and type-declaration
+    // files are exempt: a test file legitimately groups many small helpers and cases.
+    files: [
+      "apps/*/src/**/*.{ts,tsx}",
+      "apps/*/scripts/**/*.mjs",
+      "packages/*/src/**/*.{ts,tsx}",
+      "services/*/src/**/*.{ts,tsx}",
+      "scripts/**/*.mjs",
+    ],
+    ignores: ["**/*.test.{ts,tsx}", "**/*.d.ts", "**/tests/**", "**/e2e/**"],
+    plugins: { structure },
+    rules: {
+      "structure/one-function-per-file": "error",
+      "structure/require-tsdoc": "error",
+    },
+  },
   {
     // Root-level tooling scripts and config files run directly under Node, not
     // bundled by Vite/tsup like package source does — they need Node's globals
