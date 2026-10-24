@@ -93,5 +93,7 @@ jobs:
       - name: Lint
         run: ${{ matrix.pm }} run lint
 
+      # Runs every package's suite with coverage; each package's vitest config fails
+      # the run below 100% statements, branches, functions and lines.
       - name: Test
-        run: ${{ matrix.pm }} run test
+        run: ${{ matrix.pm }} run test:coverage
