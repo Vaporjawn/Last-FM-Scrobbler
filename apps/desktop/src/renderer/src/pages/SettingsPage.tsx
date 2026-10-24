@@ -1023,6 +1023,18 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                         </Button>
                       ) : null}
                     </>
+                  ) : credentialsSource === "environment" ? (
+                    // This build already has a key, yet nothing is configured: the only
+                    // other precondition for login is a place to store the session key
+                    // securely, so that is what is missing (on Linux, no system keyring
+                    // such as gnome-keyring or KWallet is running). Telling this person
+                    // to supply an API key would send them after the wrong problem.
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                      Logging in is turned off because secure storage isn't available on this
+                      system, so your Last.fm session couldn't be saved safely. On Linux this
+                      usually means no system keyring (such as gnome-keyring or KWallet) is
+                      running — start one, then restart the app.
+                    </Alert>
                   ) : (
                     <Alert severity="info" sx={{ mb: 2 }}>
                       Logging in needs a Last.fm API key first — either baked into the build

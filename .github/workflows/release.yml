@@ -116,10 +116,23 @@ jobs:
       # while the packaged app is dead (missing unpacked native module, asar path, a
       # key that never got inlined); only starting it shows that. Linux needs a virtual
       # display. Login is only expected when the Last.fm secret is configured.
+      # A desktop Linux session has a keyring; a bare CI runner does not. Without one the
+      # app (correctly) turns login off because it cannot store a session key securely,
+      # which would hide the very thing this step is checking. Give it one.
+      - name: Install a system keyring (Linux smoke test)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gnome-keyring libsecret-1-0 dbus-x11
+
       - name: Smoke test the packaged app (Linux)
         if: matrix.os == 'ubuntu-latest'
         working-directory: apps/desktop
-        run: xvfb-run -a node scripts/smoke-packaged-app.mjs
+        run: |
+          dbus-run-session -- bash -c '
+            set -e
+            eval "$(echo "" | gnome-keyring-daemon --unlock --components=secrets)"
+            export GNOME_KEYRING_CONTROL XDG_CURRENT_DESKTOP=GNOME
+            xvfb-run -a node scripts/smoke-packaged-app.mjs
+          '
         env:
           SMOKE_EXECUTABLE: ${{ github.workspace }}/apps/desktop/${{ matrix.smoke }}
           SMOKE_EXPECT_LASTFM_LOGIN: ${{ secrets.LASTFM_API_KEY != '' && '1' || '0' }}

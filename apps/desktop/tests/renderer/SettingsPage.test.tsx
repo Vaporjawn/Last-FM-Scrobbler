@@ -413,6 +413,35 @@ describe("SettingsPage", () => {
     expect(await screen.findByText("Not available right now.")).toBeInTheDocument();
   });
 
+  describe("secure storage unavailable", () => {
+    it("explains that a missing system keyring is why login is off when the build already has a key", async () => {
+      installFakeAuthApi({
+        isConfigured: vi.fn().mockResolvedValue(false),
+        credentialsSource: vi.fn().mockResolvedValue("environment"),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByText(/secure storage isn't available/i)).toBeInTheDocument();
+      expect(screen.getByText(/keyring/i)).toBeInTheDocument();
+      // The old text told the user to supply an API key, which this build already has.
+      expect(screen.queryByText(/logging in needs a last\.fm api key first/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /log in with last\.fm/i })).not.toBeInTheDocument();
+    });
+
+    it("keeps the API-key explanation when no key is configured at all", async () => {
+      installFakeAuthApi({
+        isConfigured: vi.fn().mockResolvedValue(false),
+        credentialsSource: vi.fn().mockResolvedValue("none"),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByText(/logging in needs a last\.fm api key first/i)).toBeInTheDocument();
+      expect(screen.queryByText(/secure storage isn't available/i)).not.toBeInTheDocument();
+    });
+  });
+
   describe("bring your own key", () => {
     it("hides the API key form when this build has credentials baked in via the environment", async () => {
       installFakeAuthApi({ credentialsSource: vi.fn().mockResolvedValue("environment") });
