@@ -917,4 +917,15 @@ describe("NowPlayingPage", () => {
       expect(screen.queryByRole("button", { name: "Refresh track info" })).not.toBeInTheDocument();
     });
   });
+
+  it("omits the album line when the track has none", async () => {
+    const { album: _album, ...trackWithoutAlbum } = TRACK;
+    installFakeNowPlayingApi({ track: trackWithoutAlbum, state: "playing" });
+    installFakeLastfmApi();
+
+    render(<NowPlayingPage />);
+
+    await screen.findByText("Weights");
+    expect(screen.queryByText(/^from /)).not.toBeInTheDocument();
+  });
 });

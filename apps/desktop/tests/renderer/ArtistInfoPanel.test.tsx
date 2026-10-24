@@ -50,4 +50,51 @@ describe("ArtistInfoPanel", () => {
 
     expect(onRetry).toHaveBeenCalledOnce();
   });
+
+  it("shows the error without a retry button when no onRetry is given", () => {
+    installFakeArtistImageApi();
+    render(
+      <ArtistInfoPanel
+        artistName="Radiohead"
+        info={undefined}
+        similarArtists={[]}
+        loading={false}
+        error="Can't reach Last.fm"
+      />,
+    );
+
+    expect(screen.getByText("Can't reach Last.fm")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it("explains there is nothing to show when loaded with no info and no error", () => {
+    installFakeArtistImageApi();
+    render(
+      <ArtistInfoPanel
+        artistName="Radiohead"
+        info={undefined}
+        similarArtists={[]}
+        loading={false}
+        error={undefined}
+      />,
+    );
+
+    expect(screen.getByText("No additional artist info available.")).toBeInTheDocument();
+  });
+
+  it("omits the similar-artists section when there are none", () => {
+    installFakeArtistImageApi();
+    render(
+      <ArtistInfoPanel
+        artistName="Radiohead"
+        info={{ name: "Radiohead", bioSummary: "A band.", listeners: 100, playCount: 200 }}
+        similarArtists={[]}
+        loading={false}
+        error={undefined}
+      />,
+    );
+
+    expect(screen.getByText("A band.")).toBeInTheDocument();
+    expect(screen.queryByText(/similar artists/i)).not.toBeInTheDocument();
+  });
 });

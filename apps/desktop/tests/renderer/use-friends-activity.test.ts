@@ -306,4 +306,17 @@ describe("useFriendsActivity", () => {
 
     expect(getRecentTracks).toHaveBeenCalledTimes(1);
   });
+
+  it("describes a non-Error lookup failure by its string form", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+     
+    installFakeLastfmApi(vi.fn().mockRejectedValue("plain failure"));
+
+    const { result } = renderHook(() => useFriendsActivity(["alice"]));
+
+    await waitFor(() => {
+      expect(result.current.activityByUsername.alice?.error).toBe("plain failure");
+    });
+    warnSpy.mockRestore();
+  });
 });

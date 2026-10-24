@@ -68,4 +68,18 @@ describe("wireFilterValidation", () => {
 
     expect(ipcMainHandlers.has(IPC_CHANNELS.filterValidate)).toBe(false);
   });
+
+  it("reports an unexpected (non-syntax) failure as an invalid expression instead of throwing", async () => {
+    wireFilterValidation();
+
+    // Nesting deep enough to overflow the recursive-descent parser's call stack, which
+    // surfaces as a RangeError rather than a FilterSyntaxError.
+    const result = (await invoke(
+      IPC_CHANNELS.filterValidate,
+      `${"(".repeat(200_000)}title == "x"${")".repeat(200_000)}`,
+    )) as { valid: boolean; error?: string };
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("RangeError");
+  });
 });

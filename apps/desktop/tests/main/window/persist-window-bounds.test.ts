@@ -132,4 +132,15 @@ describe("persistWindowBounds", () => {
     vi.advanceTimersByTime(1);
     expect(settingsStore.set).toHaveBeenCalledOnce();
   });
+
+  it("stopping before any resize or move is a harmless no-op", () => {
+    const window = fakeWindow();
+    const store = fakeSettingsStore();
+
+    const stop = persistWindowBounds({ window, settingsStore: store });
+
+    expect(() => {
+      stop();
+    }).not.toThrow();
+  });
 });

@@ -470,4 +470,32 @@ describe("ProfilePage", () => {
       expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
     });
   });
+
+  describe("partial account stats", () => {
+    it("omits the member-since line when Last.fm has stats but no registration date", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice", totalScrobbles: 42 }),
+        lovedTracksCount: vi.fn().mockResolvedValue(7),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByText("42")).toBeInTheDocument();
+      expect(screen.queryByText(/member since/i)).not.toBeInTheDocument();
+    });
+
+    it("shows only the member-since line when it is the only thing Last.fm has on file", async () => {
+      installFakeApis({
+        activeAccount: "alice",
+        userInfo: vi.fn().mockResolvedValue({ username: "alice", registeredAt: 1_037_793_040 }),
+        lovedTracksCount: vi.fn().mockResolvedValue(undefined),
+      });
+
+      render(<ProfilePage onNavigateToSettings={vi.fn()} />);
+
+      expect(await screen.findByText("Member since November 2002")).toBeInTheDocument();
+      expect(screen.queryByText("Scrobbles")).not.toBeInTheDocument();
+    });
+  });
 });

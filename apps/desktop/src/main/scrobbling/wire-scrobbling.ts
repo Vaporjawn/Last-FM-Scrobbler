@@ -304,14 +304,15 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     // consecutive-failure counter below — one service blipping while the others are
     // reachable isn't the "can't scrobble at all" condition onScrobbleFailed exists to
     // report.
-    const anyServiceReachable = outcomes.some((outcome) => outcome.ok);
+    const failedOutcomes = outcomes.filter(
+      (outcome): outcome is Extract<(typeof outcomes)[number], { ok: false }> => !outcome.ok,
+    );
+    const anyServiceReachable = failedOutcomes.length < outcomes.length;
     if (anyServiceReachable) {
       networkStatus?.reportSuccess();
     } else {
-      for (const outcome of outcomes) {
-        if (!outcome.ok) {
-          networkStatus?.reportFailure(outcome.cause);
-        }
+      for (const outcome of failedOutcomes) {
+        networkStatus?.reportFailure(outcome.cause);
       }
     }
 
@@ -359,10 +360,7 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     } else {
       consecutiveFailures += 1;
       if (consecutiveFailures === FAILURE_NOTIFICATION_THRESHOLD) {
-        const reason = outcomes
-          .filter(
-            (outcome): outcome is Extract<(typeof outcomes)[number], { ok: false }> => !outcome.ok,
-          )
+        const reason = failedOutcomes
           .map((outcome) => `${outcome.id}: ${outcome.reason}`)
           .join("; ");
         onScrobbleFailed?.(reason);

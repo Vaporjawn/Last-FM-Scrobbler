@@ -728,4 +728,141 @@ describe("wireScrobbling", () => {
     stop();
     queue.close();
   });
+
+  describe("optional fields and non-Error failures", () => {
+    const ACCEPTED_ONE = {
+      accepted: 1,
+      ignored: 0,
+      results: [{ track: "Untitled", ignoredCode: 0, retryable: false }],
+    };
+
+    it("submits only the optional fields a track actually has", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const scrobble = vi.fn().mockResolvedValue(ACCEPTED_ONE);
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble }) as never,
+      });
+      const { album: _album, durationSec: _duration, ...sparse } = TRACK;
+
+      onScrobbleEligible({
+        track: { ...sparse, title: "Untitled", albumArtist: "Various Artists" },
+        startedAt: 1_700_000_000,
+      });
+      await drainOnce();
+
+      expect(scrobble).toHaveBeenCalledWith([
+        {
+          artist: "Everything Everything",
+          track: "Untitled",
+          timestamp: 1_700_000_000,
+          albumArtist: "Various Artists",
+        },
+      ]);
+      stop();
+      queue.close();
+    });
+
+    it("does nothing when a connected account has nothing queued", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const scrobble = vi.fn();
+      const { drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble }) as never,
+      });
+
+      await drainOnce();
+
+      expect(scrobble).not.toHaveBeenCalled();
+      stop();
+      queue.close();
+    });
+
+    it("describes a non-Error failure to look up connected accounts by its string form", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const failingStorage: SecretStorage = {
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        get: () => Promise.reject("keychain locked"),
+        set: () => Promise.resolve(),
+        delete: () => Promise.resolve(),
+        list: () => Promise.resolve([]),
+      };
+      const onScrobbleFailed = vi.fn();
+      const { drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore: new AccountStore(failingStorage),
+        createSessionClient: vi.fn(),
+        onScrobbleFailed,
+      });
+
+      await drainOnce();
+      await drainOnce();
+      await drainOnce();
+
+      expect(onScrobbleFailed).toHaveBeenCalledWith(
+        "Unable to check connected accounts: keychain locked",
+      );
+      stop();
+      queue.close();
+    });
+
+    it("describes a non-Error submission failure by its string form", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+       
+      const scrobble = vi.fn().mockRejectedValue("socket hang up");
+      const onScrobbleFailed = vi.fn();
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble }) as never,
+        onScrobbleFailed,
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      await drainOnce();
+      await drainOnce();
+      await drainOnce();
+
+      expect(onScrobbleFailed).toHaveBeenCalledWith(expect.stringContaining("socket hang up"));
+      stop();
+      queue.close();
+    });
+
+    it("drains on its own schedule", async () => {
+      vi.useFakeTimers();
+      try {
+        const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+        const accountStore = new AccountStore(inMemoryStorage());
+        await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+        const scrobble = vi.fn().mockResolvedValue({
+          accepted: 1,
+          ignored: 0,
+          results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+        });
+        const { onScrobbleEligible, stop } = wireScrobbling({
+          queue,
+          accountStore,
+          createSessionClient: () => ({ scrobble }) as never,
+          drainIntervalMs: 1000,
+        });
+        onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(scrobble).toHaveBeenCalledTimes(1);
+        stop();
+        queue.close();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

@@ -113,4 +113,203 @@ describe("useLastfmFetch", () => {
 
     expect(call).toHaveBeenCalledTimes(1);
   });
+
+  describe("edge cases", () => {
+    function deferred<T>(): {
+      promise: Promise<T>;
+      resolve: (value: T) => void;
+      reject: (reason: unknown) => void;
+    } {
+      let resolve!: (value: T) => void;
+      let reject!: (reason: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+
+    it("resets to the empty data when there is nothing to fetch", async () => {
+      const { result, rerender } = renderHook(
+        ({ call }: { call: (() => Promise<string>) | undefined }) =>
+          useLastfmFetch("empty", call, [call]),
+        { initialProps: { call: vi.fn().mockResolvedValue("ok") as (() => Promise<string>) | undefined } },
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(result.current.data).toBe("ok");
+
+      rerender({ call: undefined });
+
+      expect(result.current).toMatchObject({ data: "empty", loading: false, error: undefined });
+    });
+
+    it("drops a result and an error that arrive after the inputs changed", async () => {
+      const slowSuccess = deferred<string>();
+      const slowFailure = deferred<string>();
+      const { result, rerender } = renderHook(
+        ({ call }: { call: () => Promise<string> }) => useLastfmFetch("empty", call, [call]),
+        { initialProps: { call: () => slowSuccess.promise } },
+      );
+      rerender({ call: () => slowFailure.promise });
+      rerender({ call: () => Promise.resolve("fresh") });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      slowSuccess.resolve("stale");
+      slowFailure.reject(new Error("stale failure"));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.data).toBe("fresh");
+      expect(result.current.error).toBeUndefined();
+    });
+
+    it("describes a non-Error failure by its string form", async () => {
+       
+      const call = vi.fn().mockRejectedValue("plain failure");
+      const { result } = renderHook(() => useLastfmFetch("empty", call, []));
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.error).toBe("plain failure");
+    });
+
+    it("refetch refreshes the data in place and ignores a second click while in flight", async () => {
+      const second = deferred<string>();
+      const call = vi.fn().mockResolvedValueOnce("first").mockReturnValueOnce(second.promise);
+      const { result } = renderHook(() => useLastfmFetch("empty", call, []));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.refetch();
+        result.current.refetch();
+      });
+      expect(result.current.refreshing).toBe(true);
+
+      second.resolve("second");
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(call).toHaveBeenCalledTimes(2);
+      expect(result.current).toMatchObject({ data: "second", refreshing: false });
+    });
+
+    it("refetch keeps the old data and reports the error when it fails", async () => {
+      const call = vi.fn().mockResolvedValueOnce("first").mockRejectedValueOnce(new Error("later"));
+      const { result } = renderHook(() => useLastfmFetch("empty", call, []));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.refetch();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current).toMatchObject({ data: "first", error: "later", refreshing: false });
+    });
+
+    it("refetch describes a non-Error failure by its string form", async () => {
+      const call = vi
+        .fn()
+        .mockResolvedValueOnce("first")
+         
+        .mockRejectedValueOnce("plain failure");
+      const { result } = renderHook(() => useLastfmFetch("empty", call, []));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        result.current.refetch();
+      });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.error).toBe("plain failure");
+    });
+
+    it("refetch does nothing when there is no call", () => {
+      const { result } = renderHook(() => useLastfmFetch("empty", undefined, []));
+
+      act(() => {
+        result.current.refetch();
+      });
+
+      expect(result.current).toMatchObject({ data: "empty", refreshing: false });
+    });
+
+    it("drops a refetch result that arrives after the inputs changed", async () => {
+      const slow = deferred<string>();
+      const { result, rerender } = renderHook(
+        ({ call }: { call: () => Promise<string> }) => useLastfmFetch("empty", call, [call]),
+        {
+          initialProps: {
+            call: vi.fn().mockResolvedValueOnce("one").mockReturnValueOnce(slow.promise) as () => Promise<string>,
+          },
+        },
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      act(() => {
+        result.current.refetch();
+      });
+      rerender({ call: () => Promise.resolve("two") });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      slow.resolve("stale");
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.data).toBe("two");
+    });
+
+    it("drops a refetch failure that arrives after the inputs changed", async () => {
+      const slow = deferred<string>();
+      const { result, rerender } = renderHook(
+        ({ call }: { call: () => Promise<string> }) => useLastfmFetch("empty", call, [call]),
+        {
+          initialProps: {
+            call: vi.fn().mockResolvedValueOnce("one").mockReturnValueOnce(slow.promise) as () => Promise<string>,
+          },
+        },
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      act(() => {
+        result.current.refetch();
+      });
+      rerender({ call: () => Promise.resolve("two") });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      slow.reject(new Error("stale failure"));
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.error).toBeUndefined();
+    });
+  });
 });

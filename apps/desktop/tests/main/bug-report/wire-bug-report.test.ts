@@ -150,4 +150,21 @@ describe("wireBugReport", () => {
       ).rejects.toThrow(/no senderFrame/i);
     });
   });
+
+  it("still reports the status when the relay's error body cannot be read", async () => {
+    const unreadable = {
+      ok: false,
+      status: 500,
+      text: () => Promise.reject(new Error("stream failed")),
+    } as unknown as Response;
+    wireBugReport({
+      expectedOrigin: EXPECTED_ORIGIN,
+      relayUrl: "https://relay.example/report",
+      fetchImpl: vi.fn().mockResolvedValue(unreadable),
+    });
+
+    await expect(invoke(IPC_CHANNELS.bugReportSubmit, "Title", "Body")).rejects.toThrow(
+      "Bug report relay returned 500: ",
+    );
+  });
 });

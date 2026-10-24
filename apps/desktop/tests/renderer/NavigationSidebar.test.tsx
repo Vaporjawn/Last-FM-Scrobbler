@@ -248,4 +248,13 @@ describe("NavigationSidebar", () => {
       }
     },
   );
+
+  it("calls onSelectView with settings when the Settings destination is clicked", () => {
+    const onSelectView = vi.fn();
+    renderSidebar({ activeView: "now-playing", onSelectView });
+
+    fireEvent.click(screen.getByText("Settings"));
+
+    expect(onSelectView).toHaveBeenCalledWith("settings");
+  });
 });

@@ -150,4 +150,36 @@ describe("wireNetworkStatus", () => {
     expect(mainWindow.webContents.send).not.toHaveBeenCalled();
     queue.close();
   });
+
+  it("answers the renderer's status query from the monitor", () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const monitor = new NetworkStatusMonitor({ queue });
+    const { stop } = wireNetworkStatus({
+      monitor,
+      getMainWindow: () => undefined,
+      getTray: () => undefined,
+    });
+
+    const handler = ipcMainHandlers.get(IPC_CHANNELS.networkStatusGetStatus);
+
+    expect(handler?.({})).toEqual(monitor.getStatus());
+    stop();
+    queue.close();
+  });
+
+  it("syncTrayTooltip does nothing while there is no tray", () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const monitor = new NetworkStatusMonitor({ queue });
+    const { syncTrayTooltip, stop } = wireNetworkStatus({
+      monitor,
+      getMainWindow: () => undefined,
+      getTray: () => undefined,
+    });
+
+    expect(() => {
+      syncTrayTooltip();
+    }).not.toThrow();
+    stop();
+    queue.close();
+  });
 });

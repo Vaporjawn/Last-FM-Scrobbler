@@ -1553,4 +1553,378 @@ describe("SettingsPage", () => {
       expect(await screen.findByText("disk full")).toBeInTheDocument();
     });
   });
+
+  describe("less common branches", () => {
+    function installFakeUpdatesApi(
+      status: unknown,
+      checkNow: () => Promise<void> = () => Promise.resolve(),
+    ): void {
+      Object.defineProperty(window, "updates", {
+        value: {
+          getStatus: vi.fn().mockResolvedValue(status),
+          checkNow: vi.fn(checkNow),
+          onStatusChanged: vi.fn(() => () => undefined),
+        },
+        configurable: true,
+      });
+    }
+
+    afterEach(() => {
+      Reflect.deleteProperty(window, "updates");
+    });
+
+    it("says so when the search matches nothing", async () => {
+      installFakeAuthApi();
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.change(await screen.findByPlaceholderText("Search settings…"), {
+        target: { value: "zzzqqq" },
+      });
+
+      expect(await screen.findByText('No settings match "zzzqqq"')).toBeInTheDocument();
+    });
+
+    it.each([
+      [{ phase: "checking" }, "Checking for updates…"],
+      [{ phase: "available", version: "2.0.0" }, "Update 2.0.0 found — downloading…"],
+      [{ phase: "not-available" }, "You're up to date."],
+      [{ phase: "downloading", percent: 41.6 }, "Downloading update… 42%"],
+      [{ phase: "downloaded", version: "2.0.0" }, "Update 2.0.0 downloaded — restart to install it."],
+      [{ phase: "error", message: "offline" }, "Couldn't check for updates: offline"],
+    ])("describes the %j update status", async (status, text) => {
+      installFakeAuthApi();
+      installFakeUpdatesApi(status);
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByText(text)).toBeInTheDocument();
+    });
+
+    it("disables the update check button while a check is running", async () => {
+      installFakeAuthApi();
+      installFakeUpdatesApi({ phase: "checking" });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByRole("button", { name: "Checking…" })).toBeDisabled();
+    });
+
+    it("reports a successful manual update check", async () => {
+      installFakeAuthApi();
+      installFakeUpdatesApi({ phase: "idle" });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.click(await screen.findByRole("button", { name: /check for updates now/i }));
+
+      expect(await screen.findByText("Checked for updates.")).toBeInTheDocument();
+    });
+
+    it("switches dark mode back on from light", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) =>
+        Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }),
+      );
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, themeMode: "light" }),
+        set,
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.click(await screen.findByRole("switch", { name: /dark mode/i }));
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ themeMode: "dark" });
+      });
+    });
+
+    it("toggles closing to the tray and automatic update checks", async () => {
+      installFakeAuthApi();
+      const set = vi.fn((patch: Partial<AppSettings>) =>
+        Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }),
+      );
+      installFakeSettingsApi({ set });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+      fireEvent.click(await screen.findByRole("switch", { name: /keep running in the tray when the window is closed/i }));
+      fireEvent.click(await screen.findByRole("switch", { name: "Automatically check for updates" }));
+
+      await waitFor(() => {
+        expect(set).toHaveBeenCalledWith({ closeToTray: !DEFAULT_APP_SETTINGS.closeToTray });
+        expect(set).toHaveBeenCalledWith({
+          autoUpdateEnabled: !DEFAULT_APP_SETTINGS.autoUpdateEnabled,
+        });
+      });
+    });
+
+    it("calls the login-item tray 'menu bar' on macOS", async () => {
+      Object.defineProperty(window, "platform", { value: "darwin", configurable: true });
+      installFakeAuthApi();
+      installFakeSettingsApi({
+        get: vi.fn().mockResolvedValue({ ...DEFAULT_APP_SETTINGS, launchAtLogin: true }),
+      });
+
+      renderSettingsPage({ onNavigateToSettings: vi.fn() });
+
+      expect(await screen.findByText(/from the menu bar icon/i)).toBeInTheDocument();
+    });
+
+    describe("Last.fm accounts and API key", () => {
+      it("reports a failure to save an API key", async () => {
+        installFakeAuthApi({
+          isConfigured: vi.fn().mockResolvedValue(false),
+          credentialsSource: vi.fn().mockResolvedValue("none"),
+          setAppCredentials: vi.fn().mockRejectedValue(new Error("keychain locked")),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.change(await screen.findByLabelText(/api key/i), { target: { value: "k" } });
+        fireEvent.change(screen.getByLabelText(/shared secret/i), { target: { value: "s" } });
+        fireEvent.click(screen.getByRole("button", { name: /save api key/i }));
+
+        expect((await screen.findAllByText("keychain locked")).length).toBeGreaterThan(0);
+      });
+
+      it("reports a failure to remove a saved API key", async () => {
+        installFakeAuthApi({
+          credentialsSource: vi.fn().mockResolvedValue("user-supplied"),
+          clearAppCredentials: vi.fn().mockRejectedValue(new Error("cannot clear")),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.click(await screen.findByRole("button", { name: /remove saved api key/i }));
+
+        expect((await screen.findAllByText("cannot clear")).length).toBeGreaterThan(0);
+      });
+
+      it("reports a failure to log out", async () => {
+        installFakeAuthApi({
+          listAccounts: vi.fn().mockResolvedValue(["alice"]),
+          getActiveAccount: vi.fn().mockResolvedValue("alice"),
+          logout: vi.fn().mockRejectedValue(new Error("logout boom")),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.click(await screen.findByRole("button", { name: /log out/i }));
+
+        expect((await screen.findAllByText("logout boom")).length).toBeGreaterThan(0);
+      });
+
+      it("switches the active account, and reports a failure to", async () => {
+        const setActiveAccount = vi
+          .fn()
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(new Error("switch boom"));
+        installFakeAuthApi({
+          listAccounts: vi.fn().mockResolvedValue(["alice", "bob"]),
+          getActiveAccount: vi.fn().mockResolvedValue("alice"),
+          setActiveAccount,
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.click(await screen.findByLabelText("Use bob as the active account"));
+        expect(await screen.findByText("Switched to bob.")).toBeInTheDocument();
+
+        fireEvent.click(screen.getByLabelText("Use bob as the active account"));
+        expect((await screen.findAllByText("switch boom")).length).toBeGreaterThan(0);
+        expect(screen.getAllByText("Active account")).toHaveLength(1);
+      });
+    });
+
+    describe("Libre.fm and ListenBrainz failures", () => {
+      it("reports a failure to save the Libre.fm key, without trying to log in", async () => {
+        const login = vi.fn();
+        installFakeAuthApi();
+        installFakeLibrefmApi({
+          setCredentials: vi.fn().mockRejectedValue(new Error("save boom")),
+          login,
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.change(await screen.findByLabelText(/^key$/i), { target: { value: "k" } });
+        fireEvent.change(screen.getByLabelText(/^secret$/i), { target: { value: "s" } });
+        fireEvent.click(screen.getByRole("button", { name: /connect to libre\.fm/i }));
+
+        expect((await screen.findAllByText("save boom")).length).toBeGreaterThan(0);
+        expect(login).not.toHaveBeenCalled();
+      });
+
+      it("reports a failed Libre.fm login after the key was saved", async () => {
+        installFakeAuthApi();
+        installFakeLibrefmApi({ login: vi.fn().mockRejectedValue(new Error("login boom")) });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.change(await screen.findByLabelText(/^key$/i), { target: { value: "k" } });
+        fireEvent.change(screen.getByLabelText(/^secret$/i), { target: { value: "s" } });
+        fireEvent.click(screen.getByRole("button", { name: /connect to libre\.fm/i }));
+
+        expect((await screen.findAllByText("login boom")).length).toBeGreaterThan(0);
+      });
+
+      it("shows progress on the Libre.fm connect button while saving and while waiting for approval", async () => {
+        let finishSave: () => void = () => undefined;
+        let finishLogin: (value: { username: string }) => void = () => undefined;
+        installFakeAuthApi();
+        installFakeLibrefmApi({
+          setCredentials: vi.fn(() => new Promise<void>((resolve) => (finishSave = resolve))),
+          login: vi.fn(() => new Promise<{ username: string }>((resolve) => (finishLogin = resolve))),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.change(await screen.findByLabelText(/^key$/i), { target: { value: "k" } });
+        fireEvent.change(screen.getByLabelText(/^secret$/i), { target: { value: "s" } });
+        fireEvent.click(screen.getByRole("button", { name: /connect to libre\.fm/i }));
+        expect(await screen.findByRole("button", { name: "Saving…" })).toBeDisabled();
+
+        await act(async () => {
+          finishSave();
+          await Promise.resolve();
+        });
+        expect(
+          await screen.findByRole("button", { name: "Waiting for approval on Libre.fm…" }),
+        ).toBeDisabled();
+        await act(async () => {
+          finishLogin({ username: "alice" });
+          await Promise.resolve();
+        });
+      });
+
+      it("reports a failed Libre.fm login, logout and key removal", async () => {
+        installFakeAuthApi();
+        installFakeLibrefmApi({
+          isConfigured: vi.fn().mockResolvedValue(true),
+          credentialsSource: vi.fn().mockResolvedValue("user-supplied"),
+          login: vi.fn().mockRejectedValue(new Error("login boom")),
+          clearCredentials: vi.fn().mockRejectedValue(new Error("clear boom")),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.click(await screen.findByRole("button", { name: /^log in with libre\.fm$/i }));
+        expect((await screen.findAllByText("login boom")).length).toBeGreaterThan(0);
+
+        fireEvent.click(screen.getByRole("button", { name: /remove saved key/i }));
+        expect((await screen.findAllByText("clear boom")).length).toBeGreaterThan(0);
+      });
+
+      it("reports a failed Libre.fm disconnect", async () => {
+        installFakeAuthApi();
+        installFakeLibrefmApi({
+          getActiveAccount: vi.fn().mockResolvedValue("alice"),
+          logout: vi.fn().mockRejectedValue(new Error("disconnect boom")),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+
+        expect((await screen.findAllByText("disconnect boom")).length).toBeGreaterThan(0);
+      });
+
+      it("reports a failed ListenBrainz disconnect", async () => {
+        installFakeAuthApi();
+        installFakeListenBrainzApi({
+          getActiveAccount: vi.fn().mockResolvedValue("alice"),
+          disconnect: vi.fn().mockRejectedValue(new Error("lb disconnect boom")),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.click(await screen.findByRole("button", { name: /disconnect/i }));
+
+        expect((await screen.findAllByText("lb disconnect boom")).length).toBeGreaterThan(0);
+      });
+    });
+
+    describe("filter expression", () => {
+      it("does nothing on blur or save without a filter API, and ignores a blank blur", async () => {
+        installFakeAuthApi();
+        installFakeSettingsApi();
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        const field = await screen.findByLabelText("Filter expression");
+
+        fireEvent.blur(field);
+        fireEvent.change(field, { target: { value: 'sourceApp == "x"' } });
+        fireEvent.blur(field);
+        fireEvent.click(await screen.findByRole("button", { name: "Save filter" }));
+
+        expect(screen.queryByText(/restart the app for the filter/i)).not.toBeInTheDocument();
+      });
+
+      it("shows the compile error when saving an invalid expression directly", async () => {
+        installFakeAuthApi();
+        installFakeSettingsApi();
+        installFakeFilterApi({
+          validate: vi.fn(() =>
+            Promise.resolve<FilterValidationResult>({ valid: false, error: "unexpected token" }),
+          ),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.change(await screen.findByLabelText("Filter expression"), {
+          target: { value: "((" },
+        });
+        fireEvent.click(await screen.findByRole("button", { name: "Save filter" }));
+
+        expect(await screen.findByText(/unexpected token/)).toBeInTheDocument();
+      });
+
+      it("ignores a save validation that is superseded by a newer one", async () => {
+        installFakeAuthApi();
+        const set = vi.fn((patch: Partial<AppSettings>) =>
+          Promise.resolve({ ...DEFAULT_APP_SETTINGS, ...patch }),
+        );
+        installFakeSettingsApi({ set });
+        const resolvers: ((result: FilterValidationResult) => void)[] = [];
+        installFakeFilterApi({
+          validate: vi.fn(
+            () =>
+              new Promise<FilterValidationResult>((resolve) => {
+                resolvers.push(resolve);
+              }),
+          ),
+        });
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.change(await screen.findByLabelText("Filter expression"), {
+          target: { value: 'sourceApp == "x"' },
+        });
+        const save = await screen.findByRole("button", { name: "Save filter" });
+        fireEvent.click(save);
+        fireEvent.click(save);
+        await waitFor(() => {
+          expect(resolvers).toHaveLength(2);
+        });
+
+        await act(async () => {
+          resolvers[0]?.({ valid: true });
+          await Promise.resolve();
+        });
+        expect(set).not.toHaveBeenCalled();
+
+        await act(async () => {
+          resolvers[1]?.({ valid: true });
+          await Promise.resolve();
+        });
+        await waitFor(() => {
+          expect(set).toHaveBeenCalledTimes(1);
+        });
+      });
+
+      it("offers to restart the app right after saving a filter", async () => {
+        const relaunch = vi.fn().mockResolvedValue(undefined);
+        installFakeAuthApi({ relaunch });
+        installFakeSettingsApi();
+        installFakeFilterApi();
+
+        renderSettingsPage({ onNavigateToSettings: vi.fn() });
+        fireEvent.change(await screen.findByLabelText("Filter expression"), {
+          target: { value: 'sourceApp == "x"' },
+        });
+        fireEvent.click(await screen.findByRole("button", { name: "Save filter" }));
+        fireEvent.click(await screen.findByRole("button", { name: /restart now/i }));
+
+        await waitFor(() => {
+          expect(relaunch).toHaveBeenCalled();
+        });
+      });
+    });
+  });
 });

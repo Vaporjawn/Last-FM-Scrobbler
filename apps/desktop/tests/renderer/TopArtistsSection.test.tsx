@@ -100,4 +100,19 @@ describe("TopArtistsSection", () => {
     // Rank numbers only exist in the list view's TopArtistListItem.
     expect(screen.queryByText("1")).not.toBeInTheDocument();
   });
+
+  it("shows grid-shaped placeholders while loading in tiles view", () => {
+    const { container } = render(
+      <TopArtistsSection
+        title="Top Artists This Week"
+        artists={[]}
+        loading={true}
+        error={undefined}
+        viewMode="tiles"
+        emptyMessage="No scrobbles this week."
+      />,
+    );
+
+    expect(container.querySelectorAll(".MuiSkeleton-root").length).toBeGreaterThan(0);
+  });
 });

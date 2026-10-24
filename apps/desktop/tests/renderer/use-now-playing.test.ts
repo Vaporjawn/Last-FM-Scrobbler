@@ -157,4 +157,28 @@ describe("useNowPlaying", () => {
 
     expect(result.current.positionSec).toBe(0);
   });
+
+  it("logs, rather than throws, when the initial snapshot fetch fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failure = new Error("ipc down");
+    Object.defineProperty(window, "nowPlaying", {
+      value: {
+        getCurrent: () => Promise.reject(failure),
+        onTrackChanged: () => () => undefined,
+        onPlaybackStateChanged: () => () => undefined,
+        onPositionChanged: () => () => undefined,
+      } satisfies NowPlayingApi,
+      configurable: true,
+    });
+
+    renderHook(() => useNowPlaying());
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to fetch the current now-playing snapshot:",
+        failure,
+      );
+    });
+    errorSpy.mockRestore();
+  });
 });

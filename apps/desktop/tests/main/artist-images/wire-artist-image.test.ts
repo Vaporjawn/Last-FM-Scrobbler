@@ -115,4 +115,23 @@ describe("wireArtistImage", () => {
       expect(result).toBe("https://deezer.example.com/real.jpg");
     });
   });
+
+  it("uses the global fetch when no fetchImpl is supplied", async () => {
+    const globalFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        jsonResponse({ data: [{ name: "Radiohead", picture_xl: "https://example.com/r.jpg" }] }),
+      );
+    vi.stubGlobal("fetch", globalFetch);
+    try {
+      wireArtistImage();
+
+      const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Radiohead");
+
+      expect(result).toBe("https://example.com/r.jpg");
+      expect(globalFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

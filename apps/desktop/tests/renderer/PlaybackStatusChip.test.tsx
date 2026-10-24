@@ -24,4 +24,17 @@ describe("PlaybackStatusChip", () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  it("accepts an array-form sx override alongside its own timestamp styles", () => {
+    render(
+      <PlaybackStatusChip
+        nowPlaying={false}
+        timestamp={1_700_000_000}
+        nowPlayingLabel="Now Playing"
+        sx={[{ ml: 1 }]}
+      />,
+    );
+
+    expect(screen.getByText(new Date(1_700_000_000 * 1000).toLocaleString())).toBeInTheDocument();
+  });
 });

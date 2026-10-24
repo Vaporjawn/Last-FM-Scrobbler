@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useShrinkToFitIndex } from "../../src/renderer/src/hooks/use-shrink-to-fit-index.js";
 
@@ -177,5 +177,11 @@ describe("useShrinkToFitIndex", () => {
     });
 
     expect(screen.getByTestId("harness")).toHaveTextContent("x".repeat(200));
+  });
+
+  it("does nothing while its container ref is not attached to an element", () => {
+    const { result } = renderHook(() => useShrinkToFitIndex(3));
+
+    expect(result.current.index).toBe(0);
   });
 });

@@ -145,4 +145,30 @@ describe("useUpdates", () => {
 
     expect(result.current.error).toBe("network error");
   });
+
+  it("checkNow succeeds and clears any earlier error", async () => {
+    installFakeUpdatesApi(() => Promise.resolve({ phase: "idle" }));
+    const { result } = renderHook(() => useUpdates());
+
+    await act(async () => {
+      await expect(result.current.checkNow()).resolves.toEqual({ success: true });
+    });
+
+    expect(result.current.error).toBeUndefined();
+  });
+
+  it("ignores an initial-status failure that arrives after unmount", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const pending = deferred<UpdateStatus>();
+    installFakeUpdatesApi(() => pending.promise);
+    const { result, unmount } = renderHook(() => useUpdates());
+
+    unmount();
+    pending.reject(new Error("late failure"));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(result.current.error).toBeUndefined();
+    errorSpy.mockRestore();
+  });
 });

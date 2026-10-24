@@ -366,4 +366,59 @@ describe("wireUpdates", () => {
     vi.advanceTimersByTime(10_000);
     expect(client.checkForUpdates).not.toHaveBeenCalled();
   });
+
+  describe("less common update events", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function wired(overrides: Record<string, unknown> = {}) {
+      const client = fakeUpdaterClient();
+      const mainWindow = fakeMainWindow();
+      const stop = wireUpdates({
+        client,
+        getMainWindow: () => mainWindow as never,
+        isAutoCheckEnabled: () => true,
+        promptToRestart: () => Promise.resolve(false),
+        ...overrides,
+      });
+      return { client, mainWindow, stop };
+    }
+
+    it("reports 'not-available' when no newer version exists", async () => {
+      const { client, stop } = wired();
+
+      client.emit("update-not-available");
+
+      await expect(invoke(IPC_CHANNELS.updatesGetStatus)).resolves.toEqual({
+        phase: "not-available",
+      });
+      stop();
+    });
+
+    it("logs, rather than throws, when the restart prompt itself fails", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const failure = new Error("dialog crashed");
+      const { client, stop } = wired({ promptToRestart: () => Promise.reject(failure) });
+
+      client.emit("update-downloaded", { version: "2.0.0" });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(errorSpy).toHaveBeenCalledWith("updates: restart prompt failed:", failure);
+      expect(client.quitAndInstall).not.toHaveBeenCalled();
+      stop();
+    });
+
+    it("logs, rather than throws, when a background check fails", async () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const failure = new Error("offline");
+      const { client, stop } = wired({ initialCheckDelayMs: 10, checkIntervalMs: 1_000_000 });
+      client.checkForUpdates.mockRejectedValue(failure);
+
+      await vi.advanceTimersByTimeAsync(10);
+
+      expect(errorSpy).toHaveBeenCalledWith("updates: background check failed:", failure);
+      stop();
+    });
+  });
 });

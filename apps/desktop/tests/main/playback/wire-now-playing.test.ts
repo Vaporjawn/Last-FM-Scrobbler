@@ -392,4 +392,27 @@ describe("wireNowPlaying", () => {
       stop();
     });
   });
+
+  describe("default eligibility handler", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    it("logs an eligible scrobble when no handler was wired", async () => {
+      vi.useFakeTimers();
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+      const stop = wireNowPlaying(source, createFakeWindow() as never);
+
+      emitTrackChanged(TRACK);
+      emitPlaybackStateChanged("playing");
+      await vi.advanceTimersByTimeAsync(175_000);
+
+      expect(logSpy).toHaveBeenCalledWith(
+        "Scrobble eligible (not submitted — no handler wired): Everything Everything — Weights",
+      );
+      stop();
+    });
+  });
 });

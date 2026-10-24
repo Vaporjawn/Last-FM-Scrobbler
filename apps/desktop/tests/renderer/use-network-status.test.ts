@@ -79,4 +79,18 @@ describe("useNetworkStatus", () => {
 
     expect(unsubscribed).toBe(true);
   });
+
+  it("logs, rather than throws, when the initial status fetch fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const failure = new Error("ipc down");
+    installFakeNetworkStatusApi(() => Promise.reject(failure));
+
+    const { result } = renderHook(() => useNetworkStatus());
+
+    await vi.waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith("Failed to fetch the current network status:", failure);
+    });
+    expect(result.current.status).toEqual(IDLE);
+    errorSpy.mockRestore();
+  });
 });

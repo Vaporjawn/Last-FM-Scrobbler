@@ -215,4 +215,18 @@ describe("wireTrackActions", () => {
       expect(client.addTags).not.toHaveBeenCalled();
     });
   });
+
+  it("addTags() treats a non-array tag list as no tags", async () => {
+    const accountStore = await accountStoreWithActiveAccount("alice", "sk-123");
+    const client = fakeSessionClient();
+    wireTrackActions({ expectedOrigin: EXPECTED_ORIGIN, accountStore, createSessionClient: () => client });
+
+    await invoke(IPC_CHANNELS.lastfmAddTags, "Aphex Twin", "Windowlicker", "not-an-array");
+
+    expect(client.addTags).toHaveBeenCalledWith({
+      artist: "Aphex Twin",
+      track: "Windowlicker",
+      tags: [],
+    });
+  });
 });

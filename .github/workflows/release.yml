@@ -129,14 +129,21 @@ jobs:
         working-directory: apps/desktop
         run: |
           APP="$PWD/release/linux-unpacked/lastfm-scrobbler"
-          U="$PWD/release/linux-unpacked/resources/app.asar.unpacked/node_modules/usocket"
-          ls -la "$U" "$U/build/Release" 2>&1 | head -20
-          ELECTRON_RUN_AS_NODE=1 "$APP" -e "console.log('node', process.versions.node, 'abi', process.versions.modules, 'electron', process.versions.electron); try { require('$U'); console.log('usocket loaded') } catch (e) { console.log('usocket load error:', e.message) }" 2>&1 | head -20
-          echo "--- app with a session bus, no keyring ---"
-          set +e
-          dbus-run-session -- xvfb-run -a timeout 25 "$APP" --no-sandbox --enable-logging=stderr > /tmp/app.log 2>&1
-          echo "exit=$?"
-          tail -60 /tmp/app.log
+          NODE_DIR="$PWD/release/linux-unpacked/resources/app.asar.unpacked/node_modules/usocket/build/Release"
+          run_app() {
+            set +e
+            "$@" > /tmp/app.log 2>&1
+            echo "exit=$? (133 = SIGTRAP crash, 124 = still running when the timeout ended, i.e. healthy)"
+            grep -E "uncaught|Error:|FATAL|Check failed|dbus|usocket" /tmp/app.log | grep -v "OS-level encryption" | head -8
+          }
+          echo "=== D: no session bus ==="
+          run_app env -u DBUS_SESSION_BUS_ADDRESS xvfb-run -a timeout 20 "$APP" --no-sandbox --enable-logging=stderr
+          echo "=== A: session bus, usocket present ==="
+          run_app dbus-run-session -- xvfb-run -a timeout 20 "$APP" --no-sandbox --enable-logging=stderr
+          echo "=== B: session bus, usocket native addon removed ==="
+          mv "$NODE_DIR/uwrap.node" /tmp/uwrap.node.hold
+          run_app dbus-run-session -- xvfb-run -a timeout 20 "$APP" --no-sandbox --enable-logging=stderr
+          mv /tmp/uwrap.node.hold "$NODE_DIR/uwrap.node"
 
       - name: Smoke test the packaged app (Linux)
         if: matrix.os == 'ubuntu-latest'

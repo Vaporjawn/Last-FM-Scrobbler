@@ -16,12 +16,18 @@ import { useAuth } from "../../src/renderer/src/hooks/use-auth.js";
 /** A promise plus its own externally-callable resolve — for tests that need to
  * control exactly when one of refresh()'s underlying calls settles relative to
  * another overlapping refresh() call. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 function installFakeAuthApi(overrides: Partial<AuthApi> = {}): AuthApi {
@@ -130,5 +136,50 @@ describe("useAuth", () => {
     expect(firstActionSettled).toBe(true);
 
     expect(result.current.accounts).toEqual(["bob"]);
+  });
+
+  describe("without the preload API, or with failing calls", () => {
+    it("reports an action as unavailable when window.auth is absent", async () => {
+      const { result } = renderHook(() => useAuth());
+
+      await expect(result.current.logout("alice")).resolves.toMatchObject({ success: false });
+      await expect(result.current.relaunch()).resolves.toBeUndefined();
+    });
+
+    it("describes a non-Error refresh failure by its string form", async () => {
+      installFakeAuthApi({ isConfigured: vi.fn().mockRejectedValue("plain failure") });
+
+      const { result } = renderHook(() => useAuth());
+
+      await waitFor(() => {
+        expect(result.current.error).toBe("plain failure");
+      });
+      expect(result.current.isConfigured).toBe(false);
+    });
+
+    it("ignores a refresh failure that is superseded by a newer refresh", async () => {
+      const slowFailure = deferred<readonly string[]>();
+      let callCount = 0;
+      const listAccounts = vi.fn(() => {
+        callCount += 1;
+        return callCount === 1 ? slowFailure.promise : Promise.resolve(["alice"]);
+      });
+      installFakeAuthApi({ listAccounts });
+      const { result } = renderHook(() => useAuth());
+      await waitFor(() => {
+        expect(listAccounts).toHaveBeenCalledTimes(1);
+      });
+
+      await act(async () => {
+        await result.current.setActiveAccount("alice");
+      });
+      await act(async () => {
+        slowFailure.reject(new Error("late"));
+        await Promise.resolve();
+      });
+
+      expect(result.current.error).toBeUndefined();
+      expect(result.current.accounts).toEqual(["alice"]);
+    });
   });
 });

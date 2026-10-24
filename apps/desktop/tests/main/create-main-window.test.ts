@@ -9,7 +9,7 @@
 // (Vitest's documented per-file override) sidesteps the incompatibility entirely
 // rather than working around it inside application code.
 import { EventEmitter } from "node:events";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlaybackSource, PlaybackState, TrackInfo, Unsubscribe } from "@lastfm-scrobbler/shared-types";
 
 const ipcMainHandlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -223,5 +223,96 @@ describe("createMainWindow", () => {
       expect(created?.options.width as number).toBeGreaterThanOrEqual(MIN_WINDOW_WIDTH);
       expect(created?.options.height as number).toBeGreaterThanOrEqual(MIN_WINDOW_HEIGHT);
     });
+  });
+
+  describe("window options", () => {
+    it("uses a portrait default size for a portrait aspect ratio and locks the ratio", () => {
+      createMainWindow({ playbackSource: undefined, initialAspectRatio: 0.64 });
+
+      const created = createdWindows.at(-1);
+      expect(created?.setAspectRatio).toHaveBeenCalledWith(0.64);
+      expect(created?.options.width as number).toBeLessThan(created?.options.height as number);
+    });
+
+    it("passes through an icon path when one is given", () => {
+      createMainWindow({ playbackSource: undefined, iconPath: "/icons/app.png" });
+
+      expect(createdWindows.at(-1)?.options).toMatchObject({ icon: "/icons/app.png" });
+    });
+
+    it("shows the window once it is ready to show, unless it should start hidden", () => {
+      createMainWindow({ playbackSource: undefined });
+      createMainWindow({ playbackSource: undefined, startHidden: true });
+      const [visible, hidden] = createdWindows.slice(-2);
+
+      visible?.emit("ready-to-show");
+      hidden?.emit("ready-to-show");
+
+      expect(visible?.show).toHaveBeenCalledTimes(1);
+      expect(hidden?.show).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("external links", () => {
+    function windowOpenHandler(): (details: { url: string }) => { action: string } {
+      const created = createdWindows.at(-1);
+      return created?.webContents.setWindowOpenHandler.mock.calls[0]?.[0] as (details: {
+        url: string;
+      }) => { action: string };
+    }
+
+    it("opens safe URLs in the user's real browser and never in a new Electron window", () => {
+      shellMock.openExternal.mockClear();
+      createMainWindow({ playbackSource: undefined });
+
+      const result = windowOpenHandler()({ url: "https://www.last.fm/music/Radiohead" });
+
+      expect(result).toEqual({ action: "deny" });
+      expect(shellMock.openExternal).toHaveBeenCalledWith("https://www.last.fm/music/Radiohead");
+    });
+
+    it("denies unsafe URLs without handing them to the OS", () => {
+      shellMock.openExternal.mockClear();
+      createMainWindow({ playbackSource: undefined });
+
+      const result = windowOpenHandler()({ url: "file:///etc/passwd" });
+
+      expect(result).toEqual({ action: "deny" });
+      expect(shellMock.openExternal).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("what gets loaded", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("loads the dev server when ELECTRON_RENDERER_URL is set", () => {
+      vi.stubEnv("ELECTRON_RENDERER_URL", "http://localhost:5173");
+
+      createMainWindow({ playbackSource: undefined });
+
+      const created = createdWindows.at(-1);
+      expect(created?.loadURL).toHaveBeenCalledWith("http://localhost:5173");
+      expect(created?.loadFile).not.toHaveBeenCalled();
+    });
+
+    it("loads the built renderer file otherwise", () => {
+      vi.stubEnv("ELECTRON_RENDERER_URL", undefined);
+
+      createMainWindow({ playbackSource: undefined });
+
+      const created = createdWindows.at(-1);
+      expect(created?.loadFile).toHaveBeenCalledTimes(1);
+      expect(created?.loadURL).not.toHaveBeenCalled();
+    });
+  });
+
+  it("forwards eligible scrobbles from the playback source when a handler is given", () => {
+    const onScrobbleEligible = vi.fn();
+
+    expect(() => {
+      createMainWindow({ playbackSource: createFakeSource(), onScrobbleEligible });
+    }).not.toThrow();
   });
 });

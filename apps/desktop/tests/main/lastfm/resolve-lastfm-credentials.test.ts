@@ -128,4 +128,18 @@ describe("resolveLastfmCredentials", () => {
 
     expect(resolved).toBeUndefined();
   });
+
+  it("reads LASTFM_API_KEY/LASTFM_API_SECRET from the real process environment by default", async () => {
+    vi.stubEnv("LASTFM_API_KEY", "process-key");
+    vi.stubEnv("LASTFM_API_SECRET", "process-secret");
+    try {
+      await expect(resolveLastfmCredentials()).resolves.toEqual({
+        apiKey: "process-key",
+        apiSecret: "process-secret",
+        source: "environment",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

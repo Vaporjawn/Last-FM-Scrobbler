@@ -106,4 +106,18 @@ describe("resolveLibrefmCredentials", () => {
 
     expect(resolved).toBeUndefined();
   });
+
+  it("reads LIBREFM_API_KEY/LIBREFM_API_SECRET from the real process environment by default", async () => {
+    vi.stubEnv("LIBREFM_API_KEY", "process-key");
+    vi.stubEnv("LIBREFM_API_SECRET", "process-secret");
+    try {
+      await expect(resolveLibrefmCredentials()).resolves.toEqual({
+        apiKey: "process-key",
+        apiSecret: "process-secret",
+        source: "environment",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

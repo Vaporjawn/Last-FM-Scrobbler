@@ -531,4 +531,120 @@ describe("wireSecondaryAuth", () => {
     expect(ipcMainHandlers.has(IPC_CHANNELS.librefmLogin)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.listenbrainzConnect)).toBe(false);
   });
+
+  describe("without secure storage, or with nothing connected", () => {
+    function wiredWithoutStorage(overrides: Record<string, unknown> = {}) {
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore: undefined,
+        librefmAppCredentialsStore: undefined,
+        resolveLibrefmCredentials: () => Promise.resolve(undefined),
+        listenbrainzAccountStore: undefined,
+        openUrl: vi.fn(),
+        ...overrides,
+      });
+    }
+
+    it("reports Libre.fm as not configured and refuses to save credentials", async () => {
+      wiredWithoutStorage();
+
+      await expect(invoke(IPC_CHANNELS.librefmIsConfigured)).resolves.toBe(false);
+      await expect(invoke(IPC_CHANNELS.librefmSetCredentials, "key", "secret")).rejects.toThrow(
+        /secure storage/i,
+      );
+      await expect(invoke(IPC_CHANNELS.librefmClearCredentials)).resolves.toBeUndefined();
+      await expect(invoke(IPC_CHANNELS.librefmLogin)).rejects.toThrow();
+      await expect(invoke(IPC_CHANNELS.librefmLogout)).resolves.toBeUndefined();
+      await expect(invoke(IPC_CHANNELS.librefmGetActiveAccount)).resolves.toBeUndefined();
+    });
+
+    it("refuses to connect ListenBrainz and treats disconnect as a no-op", async () => {
+      wiredWithoutStorage();
+
+      await expect(invoke(IPC_CHANNELS.listenbrainzConnect, "token")).rejects.toThrow();
+      await expect(invoke(IPC_CHANNELS.listenbrainzDisconnect)).resolves.toBeUndefined();
+      await expect(invoke(IPC_CHANNELS.listenbrainzGetActiveAccount)).resolves.toBeUndefined();
+    });
+
+    it("logging out or disconnecting with nothing connected changes nothing", async () => {
+      wiredWithoutStorage({
+        librefmAccountStore: new AccountStore(inMemoryStorage()),
+        listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+      });
+
+      await expect(invoke(IPC_CHANNELS.librefmLogout)).resolves.toBeUndefined();
+      await expect(invoke(IPC_CHANNELS.listenbrainzDisconnect)).resolves.toBeUndefined();
+    });
+  });
+
+  describe("less common paths", () => {
+    it("reports a non-Error Libre.fm login failure as its string form", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      await librefmAppCredentialsStore.set({ apiKey: "k", apiSecret: "s" });
+      const onLibrefmLoginFailed = vi.fn();
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore: new AccountStore(inMemoryStorage()),
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
+        listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+        openUrl: vi.fn(),
+        onLibrefmLoginFailed,
+        createLibrefmAuthFlowClient: () => ({
+          ...fakeAuthFlowClient("alice"),
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+          getSession: () => Promise.reject("denied"),
+        }),
+      });
+
+      await expect(invoke(IPC_CHANNELS.librefmLogin)).rejects.toBe("denied");
+      expect(onLibrefmLoginFailed).toHaveBeenCalledWith("denied");
+    });
+
+    it("reconnecting the same Libre.fm username keeps that account and removes no one", async () => {
+      const librefmAppCredentialsStore = new AppCredentialsStore(inMemoryStorage());
+      await librefmAppCredentialsStore.set({ apiKey: "k", apiSecret: "s" });
+      const librefmAccountStore = new AccountStore(inMemoryStorage());
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore,
+        librefmAppCredentialsStore,
+        resolveLibrefmCredentials: resolverFor(librefmAppCredentialsStore),
+        listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+        openUrl: vi.fn(),
+        createLibrefmAuthFlowClient: () => fakeAuthFlowClient("alice"),
+      });
+
+      await invoke(IPC_CHANNELS.librefmLogin);
+      await invoke(IPC_CHANNELS.librefmLogin);
+
+      await expect(librefmAccountStore.listAccounts()).resolves.toHaveLength(1);
+      await expect(invoke(IPC_CHANNELS.librefmGetActiveAccount)).resolves.toBe("alice");
+    });
+
+    it("validates a ListenBrainz token against the real ListenBrainz client by default", async () => {
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(JSON.stringify({ valid: true, user_name: "listener" }), { status: 200 }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      try {
+        wireSecondaryAuth({
+          expectedOrigin: EXPECTED_ORIGIN,
+          librefmAccountStore: new AccountStore(inMemoryStorage()),
+          librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+          resolveLibrefmCredentials: () => Promise.resolve(undefined),
+          listenbrainzAccountStore: new AccountStore(inMemoryStorage()),
+          openUrl: vi.fn(),
+        });
+
+        await expect(invoke(IPC_CHANNELS.listenbrainzConnect, " secret-token ")).resolves.toEqual({
+          username: "listener",
+        });
+        const [requestedUrl] = fetchMock.mock.calls[0] as [string];
+        expect(requestedUrl).toContain("validate-token");
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+  });
 });

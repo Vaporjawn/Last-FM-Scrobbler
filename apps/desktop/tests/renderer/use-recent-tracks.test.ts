@@ -407,4 +407,192 @@ describe("useRecentTracks", () => {
       expect(result.current.tracks).toEqual([track("BOB-0")]);
     });
   });
+
+  describe("stale responses and non-Error failures", () => {
+    const FULL_PAGE = Array.from({ length: 20 }, (_, i) => track(`T-${i}`));
+
+    it("drops an initial response and an initial failure that arrive after the username changed", async () => {
+      const staleSuccess = deferred<readonly RecentTrack[]>();
+      const staleFailure = deferred<readonly RecentTrack[]>();
+      const getRecentTracks = vi
+        .fn()
+        .mockReturnValueOnce(staleSuccess.promise)
+        .mockReturnValueOnce(staleFailure.promise)
+        .mockResolvedValueOnce([track("CAROL-0")]);
+      installFakeLastfmApi(getRecentTracks);
+
+      const { result, rerender } = renderHook(({ username }) => useRecentTracks(username, 20), {
+        initialProps: { username: "alice" },
+      });
+      rerender({ username: "bob" });
+      rerender({ username: "carol" });
+      await waitFor(() => {
+        expect(result.current.tracks).toEqual([track("CAROL-0")]);
+      });
+
+      await act(async () => {
+        staleSuccess.resolve([track("STALE")]);
+        staleFailure.reject(new Error("stale failure"));
+        await Promise.resolve();
+      });
+
+      expect(result.current.tracks).toEqual([track("CAROL-0")]);
+      expect(result.current.error).toBeUndefined();
+    });
+
+    it("describes a non-Error initial failure by its string form", async () => {
+      installFakeLastfmApi(vi.fn().mockRejectedValue("plain failure"));
+
+      const { result } = renderHook(() => useRecentTracks("alice", 20));
+
+      await waitFor(() => {
+        expect(result.current.error).toBe("plain failure");
+      });
+    });
+
+    it("stops offering more once a loaded page comes back short", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(FULL_PAGE)
+        .mockResolvedValueOnce([track("LAST")]);
+      installFakeLastfmApi(getRecentTracks);
+      const { result } = renderHook(() => useRecentTracks("alice", 20));
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(true);
+      });
+
+      act(() => {
+        result.current.loadMore();
+      });
+      await waitFor(() => {
+        expect(result.current.loadingMore).toBe(false);
+      });
+
+      expect(result.current.hasMore).toBe(false);
+      expect(result.current.tracks).toHaveLength(21);
+    });
+
+    it("never offers more after an empty page, even with a degenerate limit of 0", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce([track("ONLY")])
+        .mockResolvedValueOnce([]);
+      installFakeLastfmApi(getRecentTracks);
+      const { result } = renderHook(() => useRecentTracks("alice", 0));
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(true);
+      });
+
+      act(() => {
+        result.current.loadMore();
+      });
+      await waitFor(() => {
+        expect(result.current.loadingMore).toBe(false);
+      });
+
+      expect(result.current.hasMore).toBe(false);
+    });
+
+    it("drops a loadMore failure that arrives after the username changed, and describes non-Errors", async () => {
+      const staleFailure = deferred<readonly RecentTrack[]>();
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(FULL_PAGE)
+        .mockReturnValueOnce(staleFailure.promise)
+        .mockResolvedValueOnce([track("BOB-0")]);
+      installFakeLastfmApi(getRecentTracks);
+      const { result, rerender } = renderHook(({ username }) => useRecentTracks(username, 20), {
+        initialProps: { username: "alice" },
+      });
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(true);
+      });
+      act(() => {
+        result.current.loadMore();
+      });
+      rerender({ username: "bob" });
+      await waitFor(() => {
+        expect(result.current.tracks).toEqual([track("BOB-0")]);
+      });
+
+      await act(async () => {
+        staleFailure.reject(new Error("stale failure"));
+        await Promise.resolve();
+      });
+
+      expect(result.current.error).toBeUndefined();
+    });
+
+    it("describes a non-Error loadMore failure by its string form", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce(FULL_PAGE)
+
+        .mockRejectedValueOnce("plain failure");
+      installFakeLastfmApi(getRecentTracks);
+      const { result } = renderHook(() => useRecentTracks("alice", 20));
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(true);
+      });
+
+      act(() => {
+        result.current.loadMore();
+      });
+
+      await waitFor(() => {
+        expect(result.current.error).toBe("plain failure");
+      });
+    });
+
+    it("drops a refetch failure that arrives after the username changed", async () => {
+      const staleFailure = deferred<readonly RecentTrack[]>();
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce([track("A-0")])
+        .mockReturnValueOnce(staleFailure.promise)
+        .mockResolvedValueOnce([track("BOB-0")]);
+      installFakeLastfmApi(getRecentTracks);
+      const { result, rerender } = renderHook(({ username }) => useRecentTracks(username, 20), {
+        initialProps: { username: "alice" },
+      });
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+      act(() => {
+        result.current.refetch();
+      });
+      rerender({ username: "bob" });
+      await waitFor(() => {
+        expect(result.current.tracks).toEqual([track("BOB-0")]);
+      });
+
+      await act(async () => {
+        staleFailure.reject(new Error("stale failure"));
+        await Promise.resolve();
+      });
+
+      expect(result.current.error).toBeUndefined();
+    });
+
+    it("describes a non-Error refetch failure by its string form", async () => {
+      const getRecentTracks = vi
+        .fn()
+        .mockResolvedValueOnce([track("A-0")])
+
+        .mockRejectedValueOnce("plain failure");
+      installFakeLastfmApi(getRecentTracks);
+      const { result } = renderHook(() => useRecentTracks("alice", 20));
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      act(() => {
+        result.current.refetch();
+      });
+
+      await waitFor(() => {
+        expect(result.current.error).toBe("plain failure");
+      });
+    });
+  });
 });

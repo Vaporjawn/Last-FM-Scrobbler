@@ -91,9 +91,6 @@ export function useShrinkToFitIndex(candidateCount: number): {
   }, []);
 
   useLayoutEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
     const handleWindowResize = (): void => {
       setResizeTick((tick) => tick + 1);
     };

@@ -141,4 +141,20 @@ describe("TopAlbumsSection", () => {
 
     expect(onViewModeChange).toHaveBeenCalledWith("tiles");
   });
+
+  it("shows grid-shaped placeholders while loading in tiles view", () => {
+    const { container } = render(
+      <TopAlbumsSection
+        title="Top Albums"
+        albums={[]}
+        loading={true}
+        error={undefined}
+        viewMode="tiles"
+        onViewModeChange={vi.fn()}
+        emptyMessage="No scrobbles yet."
+      />,
+    );
+
+    expect(container.querySelectorAll(".MuiSkeleton-root").length).toBeGreaterThan(0);
+  });
 });

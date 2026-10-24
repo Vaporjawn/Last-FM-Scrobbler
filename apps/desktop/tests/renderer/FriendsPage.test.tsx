@@ -398,4 +398,54 @@ describe("FriendsPage", () => {
       expect(screen.queryByRole("button", { name: "Refresh friends" })).not.toBeInTheDocument();
     });
   });
+
+  it("keeps a playing friend first when they are already listed first", async () => {
+    installFakeApis({
+      activeAccount: "alice",
+      friends: vi.fn().mockResolvedValue([{ username: "bob" }, { username: "carol" }]),
+      recentTracksByUser: {
+        bob: [{ artist: "Radiohead", track: "Idioteque", nowPlaying: true, loved: false }],
+        carol: [{ artist: "Aphex Twin", track: "Windowlicker", nowPlaying: false, loved: false }],
+      },
+    });
+
+    render(<FriendsPage onNavigateToSettings={vi.fn()} />);
+    await screen.findByRole("status", { name: /scrobbling now/i });
+
+    const rowText = screen.getAllByRole("listitem").map((item) => item.textContent);
+    expect(rowText.findIndex((text) => text.includes("bob"))).toBeLessThan(
+      rowText.findIndex((text) => text.includes("carol")),
+    );
+  });
+
+  it("shows the error when the friend list cannot be loaded", async () => {
+    installFakeApis({
+      activeAccount: "alice",
+      friends: vi.fn().mockRejectedValue(new Error("Can't reach Last.fm")),
+    });
+
+    render(<FriendsPage onNavigateToSettings={vi.fn()} />);
+
+    expect(await screen.findByText("Can't reach Last.fm")).toBeInTheDocument();
+  });
+
+  it("opens a friend's track when onSelectScrobble is given", async () => {
+    const onSelectScrobble = vi.fn();
+    const recent: RecentTrack = {
+      artist: "Radiohead",
+      track: "Idioteque",
+      nowPlaying: true,
+      loved: false,
+    };
+    installFakeApis({
+      activeAccount: "alice",
+      friends: vi.fn().mockResolvedValue([{ username: "bob" }]),
+      recentTracksByUser: { bob: [recent] },
+    });
+
+    render(<FriendsPage onNavigateToSettings={vi.fn()} onSelectScrobble={onSelectScrobble} />);
+    fireEvent.click(await screen.findByRole("button", { name: /view details for idioteque/i }));
+
+    expect(onSelectScrobble).toHaveBeenCalledWith(recent);
+  });
 });

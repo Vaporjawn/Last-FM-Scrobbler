@@ -328,4 +328,49 @@ describe("ScrobbleDetailPage", () => {
       expect(getTrackInfo).toHaveBeenCalledTimes(2);
     });
   });
+
+  describe("details missing from the passed-in track", () => {
+    it("falls back to a guessed Last.fm URL, and omits the album, when nothing better is known", async () => {
+      const { album: _album, imageUrl: _imageUrl, ...bare } = TRACK;
+      installFakeLastfmApi({
+        getTrackInfo: vi.fn().mockResolvedValue({
+          artist: "Fleece",
+          track: "Under the Light",
+          listeners: 1,
+          playCount: 1,
+          loved: false,
+        }),
+      });
+
+      renderWithSnackbar({ track: bare });
+
+      await screen.findByText("Under the Light");
+      expect(screen.queryByText(/^from /)).not.toBeInTheDocument();
+      const link = await screen.findByRole("link", { name: /view on last\.fm/i });
+      expect(link).toHaveAttribute(
+        "href",
+        "https://www.last.fm/music/Fleece/_/Under%20the%20Light",
+      );
+    });
+
+    it("uses the track detail's artwork and album when the passed-in track has none", async () => {
+      const { album: _album, imageUrl: _imageUrl, ...bare } = TRACK;
+      installFakeLastfmApi({
+        getTrackInfo: vi.fn().mockResolvedValue({
+          artist: "Fleece",
+          track: "Under the Light",
+          album: "Voyager (Deluxe)",
+          imageUrl: "https://lastfm.freetls.fastly.net/i/u/300x300/deluxe.png",
+          listeners: 1,
+          playCount: 1,
+          loved: false,
+          url: "https://www.last.fm/music/Fleece/_/Under+the+Light",
+        }),
+      });
+
+      renderWithSnackbar({ track: bare });
+
+      expect(await screen.findByText(/from voyager \(deluxe\)/i)).toBeInTheDocument();
+    });
+  });
 });

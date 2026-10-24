@@ -76,4 +76,12 @@ describe("createTrayPopoverWindow", () => {
     expect(popover.loadURL).toHaveBeenCalledWith("http://localhost:5173#tray-popover");
     expect(popover.loadFile).not.toHaveBeenCalled();
   });
+
+  it("hides itself when it loses focus", () => {
+    const popover = createTrayPopoverWindow() as unknown as FakeBrowserWindow;
+
+    popover.emit("blur");
+
+    expect(popover.hide).toHaveBeenCalledTimes(1);
+  });
 });

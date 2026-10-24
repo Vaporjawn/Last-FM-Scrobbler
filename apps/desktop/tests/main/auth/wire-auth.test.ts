@@ -528,4 +528,31 @@ describe("wireAuth", () => {
       await expect(appCredentialsStore.get()).resolves.toEqual({ apiKey: "key", apiSecret: "secret" });
     });
   });
+
+  it("login reports a non-Error failure to onLoginFailed as its string form", async () => {
+    const accountStore = new AccountStore(inMemoryStorage());
+    const onLoginFailed = vi.fn();
+    const failingClient = {
+      getAuthToken: () => Promise.resolve("token123"),
+      buildAuthUrl: (token: string) => `https://last.fm/auth?token=${token}`,
+      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+      getSession: () => Promise.reject("plain string failure"),
+    };
+    wireAuth({
+      expectedOrigin: EXPECTED_ORIGIN,
+      accountStore,
+      client: failingClient,
+      openUrl: vi.fn(),
+      onLoginFailed,
+    });
+
+    await expect(invoke(IPC_CHANNELS.authLogin)).rejects.toBe("plain string failure");
+    expect(onLoginFailed).toHaveBeenCalledWith("plain string failure");
+  });
+
+  it("logout throws a clear error when there is no secure storage", async () => {
+    wireAuth({ expectedOrigin: EXPECTED_ORIGIN, accountStore: undefined, client: undefined, openUrl: vi.fn() });
+
+    await expect(invoke(IPC_CHANNELS.authLogout, "alice")).rejects.toThrow(/not configured/i);
+  });
 });

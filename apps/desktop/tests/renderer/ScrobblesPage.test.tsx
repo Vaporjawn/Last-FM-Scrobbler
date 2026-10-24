@@ -523,4 +523,36 @@ describe("ScrobblesPage", () => {
       expect(screen.queryByRole("button", { name: "Refresh" })).not.toBeInTheDocument();
     });
   });
+
+  it("shows the error when the first page cannot be loaded", async () => {
+    installFakeApis({
+      activeAccount: "alice",
+      lastfmOverrides: { getRecentTracks: vi.fn().mockRejectedValue(new Error("Can't reach Last.fm")) },
+    });
+
+    renderWithSnackbar();
+
+    expect(await screen.findByText("Can't reach Last.fm")).toBeInTheDocument();
+  });
+
+  it("opens a scrobble's details when onSelectScrobble is given", async () => {
+    const recent: RecentTrack = {
+      artist: "Radiohead",
+      track: "Idioteque",
+      nowPlaying: false,
+      timestamp: 1_700_000_000,
+      loved: false,
+    };
+    installFakeApis({ activeAccount: "alice", recentTracks: [recent] });
+    const onSelectScrobble = vi.fn();
+
+    render(
+      <SnackbarProvider>
+        <ScrobblesPage onNavigateToSettings={vi.fn()} onSelectScrobble={onSelectScrobble} />
+      </SnackbarProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /view details for idioteque/i }));
+
+    expect(onSelectScrobble).toHaveBeenCalledWith(recent);
+  });
 });
