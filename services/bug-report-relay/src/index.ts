@@ -1,169 +1,18 @@
 import type { BugReportRequest } from "./bug-report-request.js";
 import { createGitHubIssue } from "./create-github-issue.js";
 import type { Env } from "./env.js";
-import { GitHubIssueCreationError } from "./github-issue-creation-error.js";
+import { isRateLimited } from "./is-rate-limited.js";
+import { jsonResponse } from "./json-response.js";
 import { parseBugReportRequest } from "./parse-bug-report-request.js";
-
-/** Requests from the same IP within this window beyond `RATE_LIMIT_MAX_REQUESTS` are rejected. */
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
-const RATE_LIMIT_MAX_REQUESTS = 5;
-
-/** Most clients the in-memory limiter remembers at once. Without a cap, a flood of
- * requests from many distinct addresses (cheap to produce over IPv6) grows the map for as
- * long as their entries stay inside the window — an isolate-memory exhaustion lever. */
-const MAX_TRACKED_CLIENTS = 10_000;
-
-/** Largest request body accepted. The fields' own limits (`parse-bug-report-request.ts`)
- * add up to about 260k characters, which is at most a bit over 1 MiB as UTF-8; anything
- * bigger cannot be a valid report and is not read any further. */
-const MAX_REQUEST_BYTES = 1_048_576;
+import { readBodyWithinLimit } from "./read-body-within-limit.js";
+import { statusForIssueCreationFailure } from "./status-for-issue-creation-failure.js";
 
 /**
- * Best-effort per-IP rate limit, backed by an in-memory `Map` scoped to this Worker
- * isolate. This is deliberately not a strong guarantee: Cloudflare may route requests
- * from the same IP to different isolates/edge locations, and an idle isolate can be
- * evicted at any time, resetting its counters. It still meaningfully raises the cost of
- * casual abuse from a single source at effectively zero operational complexity (no KV/
- * Durable Object namespace to provision). A stronger, globally-consistent limit (e.g. a
- * Durable Object per IP, or Cloudflare's Rate Limiting bindings) is a reasonable future
- * upgrade — see docs/modules/bug-report-relay.md. Private to this module: it's tightly
- * coupled to `requestLog`'s isolate-scoped state and has no meaning outside handling a
- * request for this specific Worker.
+ * The Cloudflare Worker entry point. Accepts a `POST` bug report from the desktop app,
+ * rate limits it per address, bounds and validates the body, and files it as a GitHub
+ * issue with the relay's own token, so the app never ships a credential that can write
+ * to the repository. See docs/modules/bug-report-relay.md.
  */
-const requestLog = new Map<string, number[]>();
-
-/** How often (in number of `isRateLimited` calls) to run the full sweep below — not
- * every call, to keep the common case cheap. */
-const SWEEP_INTERVAL = 100;
-let callsSinceSweep = 0;
-
-function isRateLimited(clientIp: string, now: number): boolean {
-  const timestamps = (requestLog.get(clientIp) ?? []).filter(
-    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS,
-  );
-
-  if (!requestLog.has(clientIp) && requestLog.size >= MAX_TRACKED_CLIENTS) {
-    makeRoomForNewClient(now);
-  }
-
-  let limited: boolean;
-  if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
-    requestLog.set(clientIp, timestamps);
-    limited = true;
-  } else {
-    timestamps.push(now);
-    requestLog.set(clientIp, timestamps);
-    limited = false;
-  }
-
-  sweepStaleEntries(now);
-  return limited;
-}
-
-/**
- * Sweeps every IP's own entry for timestamps that have aged out of the rate-limit
- * window, deleting any entry that ends up empty. `isRateLimited` above only ever
- * prunes *the current caller's own* entry — an IP that stops sending requests
- * otherwise keeps its (small, but permanent) entry in `requestLog` forever, so a
- * long-lived warm isolate under sustained traffic from many thousands of distinct
- * IPs would grow the map without bound. Runs only every `SWEEP_INTERVAL` calls
- * (not on every request) since a full-map scan is real work not worth paying for
- * on the common, already-handled path.
- */
-function sweepStaleEntries(now: number): void {
-  callsSinceSweep += 1;
-  if (callsSinceSweep < SWEEP_INTERVAL) {
-    return;
-  }
-  callsSinceSweep = 0;
-
-  for (const [ip, timestamps] of requestLog) {
-    const fresh = timestamps.filter((timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS);
-    if (fresh.length === 0) {
-      requestLog.delete(ip);
-    } else if (fresh.length !== timestamps.length) {
-      requestLog.set(ip, fresh);
-    }
-  }
-}
-
-/**
- * Called when the limiter is full and a new client arrives: first drops entries that have
- * aged out, and if every remaining one is still inside the window, forgets the client
- * that has been tracked longest (a `Map` iterates in insertion order). The cost is that
- * an old entry's quota resets early — strictly no worse than having no limiter for it.
- */
-function makeRoomForNewClient(now: number): void {
-  callsSinceSweep = SWEEP_INTERVAL;
-  sweepStaleEntries(now);
-  if (requestLog.size >= MAX_TRACKED_CLIENTS) {
-    for (const oldest of requestLog.keys()) {
-      requestLog.delete(oldest);
-      break;
-    }
-  }
-}
-
-/**
- * Reads the request body as text, giving up as soon as it exceeds `MAX_REQUEST_BYTES`
- * rather than buffering whatever the client chooses to send. `undefined` means "too big".
- * Checks the declared `content-length` first (cheap, rejects honest oversize clients
- * without reading anything), then counts what actually arrives, since the header can be
- * absent (chunked uploads) or simply wrong.
- */
-async function readBodyWithinLimit(request: Request): Promise<string | undefined> {
-  const declared = Number(request.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_REQUEST_BYTES) {
-    return undefined;
-  }
-  if (!request.body) {
-    return "";
-  }
-
-  const reader = request.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
-  const decoder = new TextDecoder();
-  let received = 0;
-  let text = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      return text + decoder.decode();
-    }
-    received += value.byteLength;
-    if (received > MAX_REQUEST_BYTES) {
-      await reader.cancel();
-      return undefined;
-    }
-    text += decoder.decode(value, { stream: true });
-  }
-}
-
-function jsonResponse(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-/**
- * Chooses the HTTP status to report back to the caller for a failed `createGitHubIssue`
- * call. GitHub's own `5xx` and `429` responses are transient — those keep the existing
- * `502` ("try again later"). Any other `4xx` from GitHub (bad/expired `GITHUB_PAT`,
- * wrong repo, insufficient scope, etc.) is instead a maintainer-side misconfiguration
- * that retrying will never fix, so it's reported as `500` — distinct from the `503`
- * used above for "GITHUB_PAT not configured at all" — to signal "this relay is broken,
- * not you" rather than "try again shortly". Anything that isn't a
- * `GitHubIssueCreationError` (e.g. GitHub returned a 2xx with an unexpected shape)
- * falls back to the existing `502`.
- */
-function statusForIssueCreationFailure(error: unknown): number {
-  if (!(error instanceof GitHubIssueCreationError)) {
-    return 502;
-  }
-  const isPermanentClientError = error.status >= 400 && error.status < 500 && error.status !== 429;
-  return isPermanentClientError ? 500 : 502;
-}
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method !== "POST") {
