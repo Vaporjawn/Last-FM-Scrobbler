@@ -37,15 +37,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # electron-builder picks its node-module collector from the root package.json's
+      # `packageManager` field (pnpm@11.18.0) and shells out to `pnpm list`, so this
+      # job has to run on pnpm — with only npm installed, every platform failed with
+      # `spawn pnpm ENOENT` (Windows: "No JSON content found in output"). No explicit
+      # `version:` for the same reason as ci.yml: the action reads it from
+      # package.json.
+      - uses: pnpm/action-setup@v6
+
       # See ci.yml's own comment on this same version bump — several deps across this
       # workspace (pnpm itself, jsdom, better-sqlite3, electron) require Node >=22.
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       # Builds every workspace package first, including packages/adapter-macos's real
       # MediaRemoteAdapter.framework (macOS runner, needs Xcode command line tools —
@@ -55,7 +63,7 @@ jobs:
       # windows-latest ships a .NET SDK already). Both are no-ops on the "wrong" OS —
       # see each adapter's scripts/build-native.mjs.
       - name: Build workspace packages
-        run: npm run build
+        run: pnpm run build
 
       - name: Determine publish mode
         id: publish-mode
@@ -69,7 +77,7 @@ jobs:
 
       - name: Package (and publish on a real tag push)
         working-directory: apps/desktop
-        run: npm run ${{ matrix.script }} -- --publish ${{ steps.publish-mode.outputs.value }}
+        run: pnpm run ${{ matrix.script }} --publish ${{ steps.publish-mode.outputs.value }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Baked into the packaged app so it can log in/scrobble without every user
