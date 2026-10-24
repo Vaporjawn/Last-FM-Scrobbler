@@ -1,7 +1,6 @@
-import { existsSync } from "node:fs";
 import "./restore-util-is-error.js";
-import { sessionBus as defaultSessionBus, type MessageBus } from "dbus-next";
-import { normalizeDbusAddress } from "./normalize-dbus-address.js";
+import type { MessageBus } from "dbus-next";
+import { createDefaultSessionBus } from "./create-default-session-bus.js";
 import { listMprisPlayerBusNames } from "./list-mpris-player-bus-names.js";
 import { PlayerRegistry, type ActiveSnapshot } from "./player-registry.js";
 import { queryMprisPosition } from "./query-mpris-position.js";
@@ -27,20 +26,6 @@ export interface CreateLinuxPlaybackSourceOptions {
   readonly onError?: (error: unknown) => void;
   /** Injectable clock, forwarded to the internal `PlayerRegistry`; defaults to the real clock. */
   readonly now?: () => number;
-}
-
-/** `$DBUS_SESSION_BUS_ADDRESS`, else systemd's per-user socket when it exists, else
- * `undefined` so `dbus-next` falls back to its own discovery. */
-function resolveSessionBusAddress(): string | undefined {
-  const fromEnvironment = process.env.DBUS_SESSION_BUS_ADDRESS;
-  if (fromEnvironment) {
-    return fromEnvironment;
-  }
-  const uid = process.getuid?.();
-  const systemdSocket = uid === undefined ? undefined : `/run/user/${String(uid)}/bus`;
-  return systemdSocket !== undefined && existsSync(systemdSocket)
-    ? `unix:path=${systemdSocket}`
-    : undefined;
 }
 
 function tracksEqual(a: TrackInfo | null, b: TrackInfo | null): boolean {
@@ -79,11 +64,7 @@ export function createLinuxPlaybackSource(
   options: CreateLinuxPlaybackSourceOptions = {},
 ): PlaybackSource {
   const getSessionBus =
-    options.sessionBus ??
-    ((): MessageBus => {
-      const busAddress = normalizeDbusAddress(options.busAddress ?? resolveSessionBusAddress());
-      return defaultSessionBus(busAddress === undefined ? {} : { busAddress });
-    });
+    options.sessionBus ?? ((): MessageBus => createDefaultSessionBus(options.busAddress));
 
   const trackListeners = new Set<(track: TrackInfo) => void>();
   const stateListeners = new Set<(state: PlaybackState) => void>();

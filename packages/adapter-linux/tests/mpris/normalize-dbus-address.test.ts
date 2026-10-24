@@ -42,6 +42,10 @@ describe("normalizeDbusAddress", () => {
     );
   });
 
+  it("keeps parameters that have no value", () => {
+    expect(normalizeDbusAddress("unix:path=/a,noequals")).toBe("unix:socket=/a,noequals");
+  });
+
   it("returns undefined for a missing or empty address so dbus-next can use its own discovery", () => {
     expect(normalizeDbusAddress(undefined)).toBeUndefined();
     expect(normalizeDbusAddress("")).toBeUndefined();
