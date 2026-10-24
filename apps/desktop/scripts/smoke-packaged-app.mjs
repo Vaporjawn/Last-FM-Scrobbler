@@ -52,9 +52,19 @@ try {
 
   if (process.env.SMOKE_EXPECT_LASTFM_LOGIN === "1") {
     await mainWindow.getByRole("button", { name: "Settings", exact: true }).click();
-    await mainWindow
-      .getByRole("button", { name: "Log in with Last.fm" })
-      .waitFor({ timeout: 30_000 });
+    try {
+      await mainWindow
+        .getByRole("button", { name: "Log in with Last.fm" })
+        .waitFor({ timeout: 30_000 });
+    } catch (error) {
+      // Say what the page actually shows, so a CI log is enough to diagnose it.
+      const text = await mainWindow
+        .locator("body")
+        .innerText()
+        .catch(() => "(unreadable)");
+      console.error(`Settings did not offer the login button. Page text:\n${text}`);
+      throw error;
+    }
     console.log("ok: Settings offers 'Log in with Last.fm' (baked key reached the build)");
   }
 } finally {
