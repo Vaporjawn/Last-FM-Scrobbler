@@ -54,9 +54,9 @@ describe("parseBugReportRequest", () => {
     // used to pass the object check as-is and be silently reinterpreted by
     // Object.entries as `{"0":"a","1":"b"}` — diverging from the declared
     // `Record<string, string>` type without ever being rejected.
-    expect(() =>
-      parseBugReportRequest({ title: "x", body: "y", diagnostics: ["a", "b"] }),
-    ).toThrow("`diagnostics` must be an object of string values when present");
+    expect(() => parseBugReportRequest({ title: "x", body: "y", diagnostics: ["a", "b"] })).toThrow(
+      "`diagnostics` must be an object of string values when present",
+    );
   });
 
   describe("length limits", () => {
@@ -107,5 +107,23 @@ describe("parseBugReportRequest", () => {
         "`diagnostics` must have 20 keys or fewer",
       );
     });
+  });
+
+  it("rejects a diagnostics key that is unreasonably long", () => {
+    expect(() =>
+      parseBugReportRequest({
+        title: "t",
+        body: "b",
+        diagnostics: { ["k".repeat(101)]: "v" },
+      }),
+    ).toThrow(/keys must be 100 characters or fewer/);
+  });
+
+  it("accepts a diagnostics key of exactly the maximum length", () => {
+    const key = "k".repeat(100);
+
+    expect(
+      parseBugReportRequest({ title: "t", body: "b", diagnostics: { [key]: "v" } }).diagnostics,
+    ).toEqual({ [key]: "v" });
   });
 });

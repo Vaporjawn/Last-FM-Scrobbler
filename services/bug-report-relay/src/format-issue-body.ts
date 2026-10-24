@@ -18,10 +18,25 @@ import type { BugReportRequest } from "./bug-report-request.js";
  *   text.
  */
 function neutralizeForIssueBody(text: string): string {
-  return text
+  return neutralizeNotifications(text)
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/`{3,}/g, (run) => run.split("").join("​"));
+}
+
+/**
+ * Stops anonymous text from notifying or cross-linking anyone on GitHub. This relay files
+ * issues with a real account's token and accepts reports from anybody, so a body saying
+ * `@some-user` or `@org/team` would send them a notification, and `#123` (or
+ * `owner/repo#123`) would add a "mentioned this" entry to an unrelated issue — free
+ * spam/harassment channels. A zero-width space after the `@` or `#` keeps the text
+ * readable but no longer parses as a mention or reference. An `@` that follows a word
+ * character (`name@example.com`) is an email address, not a mention, and is left alone.
+ */
+function neutralizeNotifications(text: string): string {
+  return text
+    .replace(/(?<![A-Za-z0-9])@(?=[A-Za-z0-9_-])/g, "@\u200B")
+    .replace(/#(?=\d)/g, "#\u200B");
 }
 
 /**
@@ -31,7 +46,7 @@ function neutralizeForIssueBody(text: string): string {
  * anyone reading the issue should immediately understand why "Reporter" isn't a person.
  */
 export function formatIssueBody(report: BugReportRequest): string {
-  const sections = [report.body];
+  const sections = [neutralizeNotifications(report.body)];
 
   if (report.diagnostics && Object.keys(report.diagnostics).length > 0) {
     const lines = Object.entries(report.diagnostics).map(

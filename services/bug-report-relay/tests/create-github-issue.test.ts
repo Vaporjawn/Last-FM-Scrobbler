@@ -31,4 +31,17 @@ describe("createGitHubIssue", () => {
       "GitHub API returned 401: Bad credentials",
     );
   });
+
+  it("sends the request with a timeout signal so a stalled GitHub cannot pin it", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ html_url: "https://github.com/x/y/issues/1", number: 1 })),
+      );
+
+    await createGitHubIssue(REPORT, "pat", fetchImpl);
+
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
 });

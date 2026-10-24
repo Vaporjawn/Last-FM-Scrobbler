@@ -5,6 +5,8 @@ import { GitHubIssueCreationError } from "./github-issue-creation-error.js";
 const GITHUB_REPO = "Vaporjawn/Last-FM-Scrobbler";
 const GITHUB_API_VERSION = "2026-03-10";
 const USER_AGENT = "lastfm-scrobbler-bug-report-relay";
+/** GitHub normally answers in well under a second; a stalled call must not pin the request. */
+const GITHUB_TIMEOUT_MS = 10_000;
 
 interface GitHubCreateIssueResponse {
   readonly html_url: string;
@@ -36,6 +38,7 @@ export async function createGitHubIssue(
       title: `[BUG]: ${report.title}`,
       body: formatIssueBody(report),
     }),
+    signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
   });
 
   if (!response.ok) {

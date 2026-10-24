@@ -8,6 +8,16 @@ import { parseBugReportRequest } from "./parse-bug-report-request.js";
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 
+/** Most clients the in-memory limiter remembers at once. Without a cap, a flood of
+ * requests from many distinct addresses (cheap to produce over IPv6) grows the map for as
+ * long as their entries stay inside the window — an isolate-memory exhaustion lever. */
+const MAX_TRACKED_CLIENTS = 10_000;
+
+/** Largest request body accepted. The fields' own limits (`parse-bug-report-request.ts`)
+ * add up to about 260k characters, which is at most a bit over 1 MiB as UTF-8; anything
+ * bigger cannot be a valid report and is not read any further. */
+const MAX_REQUEST_BYTES = 1_048_576;
+
 /**
  * Best-effort per-IP rate limit, backed by an in-memory `Map` scoped to this Worker
  * isolate. This is deliberately not a strong guarantee: Cloudflare may route requests
@@ -31,6 +41,10 @@ function isRateLimited(clientIp: string, now: number): boolean {
   const timestamps = (requestLog.get(clientIp) ?? []).filter(
     (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS,
   );
+
+  if (!requestLog.has(clientIp) && requestLog.size >= MAX_TRACKED_CLIENTS) {
+    makeRoomForNewClient(now);
+  }
 
   let limited: boolean;
   if (timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
@@ -73,6 +87,57 @@ function sweepStaleEntries(now: number): void {
   }
 }
 
+/**
+ * Called when the limiter is full and a new client arrives: first drops entries that have
+ * aged out, and if every remaining one is still inside the window, forgets the client
+ * that has been tracked longest (a `Map` iterates in insertion order). The cost is that
+ * an old entry's quota resets early — strictly no worse than having no limiter for it.
+ */
+function makeRoomForNewClient(now: number): void {
+  callsSinceSweep = SWEEP_INTERVAL;
+  sweepStaleEntries(now);
+  if (requestLog.size >= MAX_TRACKED_CLIENTS) {
+    for (const oldest of requestLog.keys()) {
+      requestLog.delete(oldest);
+      break;
+    }
+  }
+}
+
+/**
+ * Reads the request body as text, giving up as soon as it exceeds `MAX_REQUEST_BYTES`
+ * rather than buffering whatever the client chooses to send. `undefined` means "too big".
+ * Checks the declared `content-length` first (cheap, rejects honest oversize clients
+ * without reading anything), then counts what actually arrives, since the header can be
+ * absent (chunked uploads) or simply wrong.
+ */
+async function readBodyWithinLimit(request: Request): Promise<string | undefined> {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_REQUEST_BYTES) {
+    return undefined;
+  }
+  if (!request.body) {
+    return "";
+  }
+
+  const reader = request.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) {
+      return text + decoder.decode();
+    }
+    received += value.byteLength;
+    if (received > MAX_REQUEST_BYTES) {
+      await reader.cancel();
+      return undefined;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+}
+
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -95,8 +160,7 @@ function statusForIssueCreationFailure(error: unknown): number {
   if (!(error instanceof GitHubIssueCreationError)) {
     return 502;
   }
-  const isPermanentClientError =
-    error.status >= 400 && error.status < 500 && error.status !== 429;
+  const isPermanentClientError = error.status >= 400 && error.status < 500 && error.status !== 429;
   return isPermanentClientError ? 500 : 502;
 }
 
@@ -114,12 +178,25 @@ export default {
       );
     }
 
+    const rawBody = await readBodyWithinLimit(request);
+    if (rawBody === undefined) {
+      return jsonResponse({ error: "Request body is too large." }, 413);
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return jsonResponse({ error: "Request body must be valid JSON" }, 400);
+    }
+
     let parsed: BugReportRequest;
     try {
-      parsed = parseBugReportRequest(await request.json());
+      parsed = parseBugReportRequest(payload);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Invalid request body";
-      return jsonResponse({ error: message }, 400);
+      // `parseBugReportRequest` rejects only by throwing `Error`s with a message meant
+      // for the caller.
+      return jsonResponse({ error: (error as Error).message }, 400);
     }
 
     if (!env.GITHUB_PAT) {

@@ -16,6 +16,7 @@ const MAX_DIAGNOSTIC_VALUE_LENGTH = 10_000;
 /** Bounds the "many small values" variant of the same problem a single long value
  * would otherwise be the only thing capped against. */
 const MAX_DIAGNOSTIC_KEYS = 20;
+const MAX_DIAGNOSTIC_KEY_LENGTH = 100;
 
 /**
  * Validates and normalizes an incoming JSON request body into a `BugReportRequest` —
@@ -68,6 +69,11 @@ export function parseBugReportRequest(payload: unknown): BugReportRequest {
       throw new Error(`\`diagnostics\` must have ${MAX_DIAGNOSTIC_KEYS} keys or fewer`);
     }
     for (const [key, value] of entries) {
+      if (key.length > MAX_DIAGNOSTIC_KEY_LENGTH) {
+        throw new Error(
+          `\`diagnostics\` keys must be ${MAX_DIAGNOSTIC_KEY_LENGTH} characters or fewer`,
+        );
+      }
       if (typeof value !== "string") {
         throw new Error("`diagnostics` values must all be strings");
       }

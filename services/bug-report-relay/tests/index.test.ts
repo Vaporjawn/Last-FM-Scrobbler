@@ -172,7 +172,10 @@ describe("bug-report-relay fetch handler", () => {
 
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
-      const response = await postReport(ip, { title: `Report ${i}`, body: "Body text long enough." });
+      const response = await postReport(ip, {
+        title: `Report ${i}`,
+        body: "Body text long enough.",
+      });
       statuses.push(response.status);
     }
 
@@ -230,20 +233,15 @@ describe("bug-report-relay fetch handler", () => {
     expect(errorSpy).toHaveBeenCalledWith("bug-report-relay: GITHUB_PAT is not configured");
   });
 
-  it("answers 400 with a generic message when parsing rejects with a non-Error value", async () => {
-    const request = {
+  it("answers 400, without parser internals, for a body that is not JSON", async () => {
+    const response = await SELF.fetch("https://relay.example/report", {
       method: "POST",
-      headers: new Headers({ "cf-connecting-ip": "203.0.113.32" }),
-      // Deliberately not an Error: the handler's message extraction must cope with
-      // whatever a rejected `request.json()` hands it.
-      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-      json: () => Promise.reject("not an Error instance"),
-    } as unknown as Request;
-
-    const response = await worker.fetch(request, { GITHUB_PAT: "test" });
+      headers: { "cf-connecting-ip": "203.0.113.32" },
+      body: "{ not json",
+    });
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Invalid request body" });
+    expect(await response.json()).toEqual({ error: "Request body must be valid JSON" });
   });
 
   describe("housekeeping of the in-memory rate-limit log", () => {
@@ -278,6 +276,130 @@ describe("bug-report-relay fetch handler", () => {
         expect((await postReport("198.51.100.2", {})).status).toBe(400);
       }
       expect((await postReport("198.51.100.2", {})).status).toBe(429);
+    });
+  });
+
+  describe("request size and client tracking limits", () => {
+    function directPost(
+      ip: string,
+      init: RequestInit & { duplex?: "half" } = {},
+    ): Promise<Response> {
+      return worker.fetch(
+        new Request("https://relay.example/report", {
+          method: "POST",
+          headers: {
+            "cf-connecting-ip": ip,
+            ...(init.headers as Record<string, string> | undefined),
+          },
+          ...(init.body !== undefined ? { body: init.body } : {}),
+          ...(init.duplex ? { duplex: init.duplex } : {}),
+        }),
+        { GITHUB_PAT: "test" },
+      );
+    }
+
+    it("rejects a request whose declared size is over the limit without reading it", async () => {
+      const response = await directPost("203.0.113.40", {
+        headers: { "content-length": "2000000" },
+        body: "{}",
+      });
+
+      expect(response.status).toBe(413);
+    });
+
+    it("rejects a body that grows past the limit even when no size was declared", async () => {
+      const chunk = new TextEncoder().encode("x".repeat(100_000));
+      let sent = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (sent >= 11) {
+            controller.close();
+            return;
+          }
+          sent += 1;
+          controller.enqueue(chunk);
+        },
+      });
+
+      const response = await directPost("203.0.113.41", { body: stream, duplex: "half" });
+
+      expect(response.status).toBe(413);
+    });
+
+    it("answers 400, not a crash, to a POST with no body at all", async () => {
+      const response = await directPost("203.0.113.42");
+
+      expect(response.status).toBe(400);
+    });
+
+    it("accepts a multi-chunk body and reassembles characters split across chunks", async () => {
+      const encoded = new TextEncoder().encode(JSON.stringify({ title: "tïtle", body: "bödy" }));
+      const split = encoded.indexOf(0xc3) + 1; // between the two bytes of "ï"
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoded.slice(0, split));
+          controller.enqueue(encoded.slice(split));
+          controller.close();
+        },
+      });
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ html_url: "https://github.com/x/y/issues/9", number: 9 }), {
+          status: 201,
+        }),
+      );
+
+      const response = await directPost("203.0.113.43", { body: stream, duplex: "half" });
+
+      expect(response.status).toBe(201);
+      const [, init] = vi.mocked(globalThis.fetch).mock.calls[0] as [string, RequestInit];
+      const sent = JSON.parse(init.body as string) as { title: string };
+      expect(sent.title).toBe("[BUG]: tïtle");
+    });
+
+    it("makes room by dropping expired clients rather than evicting a live one", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        const start = new Date("2026-02-01T00:00:00Z").getTime();
+        vi.setSystemTime(start);
+        const liveIp = "198.19.0.1";
+        for (let i = 0; i < 5; i++) {
+          await directPost(liveIp);
+        }
+        for (let i = 0; i < 10_000; i++) {
+          await directPost(
+            `172.${String((i >> 16) & 255)}.${String((i >> 8) & 255)}.${String(i & 255)}`,
+          );
+        }
+
+        // Eleven minutes on, everything above has expired; the next new client finds the
+        // table full, sweeps it clean, and evicts nobody still being limited.
+        vi.setSystemTime(start + 11 * 60 * 1000);
+        for (let i = 0; i < 5; i++) {
+          await directPost(liveIp);
+        }
+        await directPost("198.19.0.2");
+
+        expect((await directPost(liveIp)).status).toBe(429);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("stays within its memory bound for many distinct clients, forgetting the oldest first", async () => {
+      const firstIp = "198.18.0.1";
+      for (let i = 0; i < 5; i++) {
+        await directPost(firstIp);
+      }
+      expect((await directPost(firstIp)).status).toBe(429);
+
+      for (let i = 0; i < 10_001; i++) {
+        await directPost(
+          `10.${String((i >> 16) & 255)}.${String((i >> 8) & 255)}.${String(i & 255)}`,
+        );
+      }
+
+      // The earliest-tracked client was evicted to make room, so it starts afresh.
+      expect((await directPost(firstIp)).status).toBe(400);
     });
   });
 });

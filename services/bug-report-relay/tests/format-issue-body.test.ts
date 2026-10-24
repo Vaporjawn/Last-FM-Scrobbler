@@ -40,7 +40,11 @@ describe("formatIssueBody", () => {
     // letting a crafted value inject a fake section into the issue.
     const maliciousValue =
       "before\n```\n\n## Fake Section\n\nThis looks like a real part of the issue.\n\n```\nafter";
-    const report: BugReportRequest = { title: "x", body: "y", diagnostics: { log: maliciousValue } };
+    const report: BugReportRequest = {
+      title: "x",
+      body: "y",
+      diagnostics: { log: maliciousValue },
+    };
 
     const body = formatIssueBody(report);
 
@@ -93,5 +97,41 @@ describe("formatIssueBody", () => {
 
     expect(body).not.toContain("<h1>pwned</h1>");
     expect(body).toContain("&lt;/details&gt;&lt;h1&gt;pwned&lt;/h1&gt;");
+  });
+
+  describe("notifications and cross-references", () => {
+    const ZWSP = "\u200B";
+
+    it("defuses @mentions and team mentions in the reporter's text", () => {
+      const body = formatIssueBody({ title: "t", body: "ping @octocat and @some-org/some-team" });
+
+      expect(body).toContain(`@${ZWSP}octocat`);
+      expect(body).toContain(`@${ZWSP}some-org/some-team`);
+      expect(body).not.toMatch(/@octocat/);
+    });
+
+    it("defuses #123 and owner/repo#123 references", () => {
+      const body = formatIssueBody({ title: "t", body: "see #12 and torvalds/linux#7" });
+
+      expect(body).toContain(`#${ZWSP}12`);
+      expect(body).toContain(`torvalds/linux#${ZWSP}7`);
+    });
+
+    it("defuses mentions inside diagnostics keys and values too", () => {
+      const body = formatIssueBody({
+        title: "t",
+        body: "x",
+        diagnostics: { "@key": "value @user #5" },
+      });
+
+      expect(body).toContain(`@${ZWSP}key`);
+      expect(body).toContain(`@${ZWSP}user #${ZWSP}5`);
+    });
+
+    it("leaves email addresses, lone symbols and ordinary text alone", () => {
+      const text = "mail me at name@example.com, cost is 5 @ 3 and use # for headings";
+
+      expect(formatIssueBody({ title: "t", body: text })).toContain(text);
+    });
   });
 });
