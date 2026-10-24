@@ -59,6 +59,7 @@
         "dbus-next": "^0.10.2",
       },
       "devDependencies": {
+        "@types/node": "^26.1.2",
         "tsup": "^8.5.0",
         "typescript": "^6.0.3",
         "vitest": "^4.1.11",
