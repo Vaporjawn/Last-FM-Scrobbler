@@ -1,4 +1,13 @@
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -130,4 +139,56 @@ describe("ElectronSecretStorage", () => {
       expect(mode).toBe(0o600);
     },
   );
+
+  describe("hostile or damaged files", () => {
+    it("keeps an unreadable secrets file as a .corrupt backup instead of overwriting it", async () => {
+      writeFileSync(filePath, "{ not valid json", "utf8");
+      const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+
+      await storage.set("account:alice", "session-key-123");
+
+      expect(readFileSync(`${filePath}.corrupt`, "utf8")).toBe("{ not valid json");
+      await expect(storage.get("account:alice")).resolves.toBe("session-key-123");
+    });
+
+    it.each([["null"], ["[1, 2]"], ['"text"'], ["7"]])(
+      "treats valid JSON that is not an object (%s) as damaged, not as a crash",
+      async (contents) => {
+        writeFileSync(filePath, contents, "utf8");
+        const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+
+        await expect(storage.get("account:alice")).resolves.toBeUndefined();
+        await expect(storage.list()).resolves.toEqual([]);
+        expect(existsSync(`${filePath}.corrupt`)).toBe(true);
+      },
+    );
+
+    it("ignores entries whose values are not strings", async () => {
+      const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+      await storage.set("account:alice", "key1");
+      const onDisk = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+      writeFileSync(filePath, JSON.stringify({ ...onDisk, broken: { nested: true }, n: 5 }));
+
+      await expect(storage.list()).resolves.toEqual(["account:alice"]);
+    });
+
+    it("never resolves a key to something inherited from Object.prototype", async () => {
+      const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+
+      await expect(storage.get("constructor")).resolves.toBeUndefined();
+      await expect(storage.get("__proto__")).resolves.toBeUndefined();
+      await storage.set("__proto__", "value");
+      await expect(storage.get("__proto__")).resolves.toBe("value");
+      expect(({} as Record<string, unknown>).value).toBeUndefined();
+    });
+
+    it("leaves no temporary file behind after writing", async () => {
+      const storage = new ElectronSecretStorage({ filePath, safeStorage: fakeSafeStorage() });
+
+      await storage.set("a", "1");
+      await storage.set("b", "2");
+
+      expect(readdirSync(dir)).toEqual(["secrets.json"]);
+    });
+  });
 });

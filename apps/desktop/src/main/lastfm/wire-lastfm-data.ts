@@ -1,3 +1,4 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
 import {
   LastfmApiError,
@@ -59,6 +60,8 @@ export interface LastfmDataClient {
 }
 
 export interface WireLastfmDataOptions {
+  /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
+  readonly expectedOrigin: string;
   /** `undefined` when this build has no Last.fm API credentials configured. */
   readonly client: LastfmDataClient | undefined;
   /** Reports each call's outcome for the offline-mode status chip/tray tooltip — see
@@ -85,16 +88,12 @@ const NOT_CONFIGURED_MESSAGE =
  * through completely unaffected.
  */
 export function wireLastfmData(options: WireLastfmDataOptions): () => void {
-  const { client, networkStatus } = options;
+  const { client, networkStatus, expectedOrigin } = options;
+  const ipc = createTrustedIpc(ipcMain, expectedOrigin);
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetRecentTracks,
-    (
-      _event,
-      user: unknown,
-      limit?: unknown,
-      page?: unknown,
-    ): Promise<readonly RecentTrack[]> => {
+    (_event, user: unknown, limit?: unknown, page?: unknown): Promise<readonly RecentTrack[]> => {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
@@ -109,14 +108,9 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetTopArtists,
-    (
-      _event,
-      user: unknown,
-      limit?: unknown,
-      period?: unknown,
-    ): Promise<readonly TopArtist[]> => {
+    (_event, user: unknown, limit?: unknown, period?: unknown): Promise<readonly TopArtist[]> => {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
@@ -131,14 +125,9 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetTopTracks,
-    (
-      _event,
-      user: unknown,
-      limit?: unknown,
-      period?: unknown,
-    ): Promise<readonly TopTrack[]> => {
+    (_event, user: unknown, limit?: unknown, period?: unknown): Promise<readonly TopTrack[]> => {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
@@ -153,14 +142,9 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetTopAlbums,
-    (
-      _event,
-      user: unknown,
-      limit?: unknown,
-      period?: unknown,
-    ): Promise<readonly TopAlbum[]> => {
+    (_event, user: unknown, limit?: unknown, period?: unknown): Promise<readonly TopAlbum[]> => {
       if (!client) {
         return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
       }
@@ -175,37 +159,28 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
-  ipcMain.handle(
-    IPC_CHANNELS.lastfmGetFriends,
-    (_event, user: unknown): Promise<readonly Friend[]> => {
-      if (!client) {
-        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
-      }
-      return reportNetworkOutcome(networkStatus, client.getFriends({ user: String(user) }));
-    },
-  );
+  ipc.handle(IPC_CHANNELS.lastfmGetFriends, (_event, user: unknown): Promise<readonly Friend[]> => {
+    if (!client) {
+      return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+    }
+    return reportNetworkOutcome(networkStatus, client.getFriends({ user: String(user) }));
+  });
 
-  ipcMain.handle(
-    IPC_CHANNELS.lastfmGetUserInfo,
-    (_event, user: unknown): Promise<UserProfile> => {
-      if (!client) {
-        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
-      }
-      return reportNetworkOutcome(networkStatus, client.getUserInfo({ user: String(user) }));
-    },
-  );
+  ipc.handle(IPC_CHANNELS.lastfmGetUserInfo, (_event, user: unknown): Promise<UserProfile> => {
+    if (!client) {
+      return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+    }
+    return reportNetworkOutcome(networkStatus, client.getUserInfo({ user: String(user) }));
+  });
 
-  ipcMain.handle(
-    IPC_CHANNELS.lastfmGetLovedTracksCount,
-    (_event, user: unknown): Promise<number> => {
-      if (!client) {
-        return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
-      }
-      return reportNetworkOutcome(networkStatus, client.getLovedTracksCount({ user: String(user) }));
-    },
-  );
+  ipc.handle(IPC_CHANNELS.lastfmGetLovedTracksCount, (_event, user: unknown): Promise<number> => {
+    if (!client) {
+      return Promise.reject(new Error(NOT_CONFIGURED_MESSAGE));
+    }
+    return reportNetworkOutcome(networkStatus, client.getLovedTracksCount({ user: String(user) }));
+  });
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetArtistInfo,
     (_event, artist: unknown, username: unknown): Promise<ArtistInfo | undefined> => {
       if (!client) {
@@ -250,7 +225,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetSimilarArtists,
     (_event, artist: unknown, limit?: unknown): Promise<readonly SimilarArtist[]> => {
       if (!client) {
@@ -277,7 +252,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetTopTags,
     (_event, artist: unknown): Promise<readonly string[]> => {
       if (!client) {
@@ -287,7 +262,7 @@ export function wireLastfmData(options: WireLastfmDataOptions): () => void {
     },
   );
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.lastfmGetTrackInfo,
     (_event, artist: unknown, track: unknown, username?: unknown): Promise<TrackDetail> => {
       if (!client) {

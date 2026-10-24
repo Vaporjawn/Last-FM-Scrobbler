@@ -59,8 +59,11 @@ function createFakeSource(): {
   };
 }
 
-function createFakeWindow(): { webContents: { send: ReturnType<typeof vi.fn> } } {
-  return { webContents: { send: vi.fn() } };
+function createFakeWindow(): {
+  webContents: { send: ReturnType<typeof vi.fn> };
+  isDestroyed: ReturnType<typeof vi.fn>;
+} {
+  return { webContents: { send: vi.fn() }, isDestroyed: vi.fn().mockReturnValue(false) };
 }
 
 const TRACK: TrackInfo = {
@@ -72,12 +75,15 @@ const TRACK: TrackInfo = {
   isStream: false,
 };
 
+const EXPECTED_ORIGIN = "http://localhost:5173";
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 describe("wireNowPlaying", () => {
   it("relays track changes to the renderer over IPC", () => {
     const { source, emitTrackChanged } = createFakeSource();
     const mainWindow = createFakeWindow();
 
-    const stop = wireNowPlaying(source, mainWindow as never);
+    const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
     emitTrackChanged(TRACK);
 
     expect(mainWindow.webContents.send).toHaveBeenCalledWith(
@@ -91,7 +97,7 @@ describe("wireNowPlaying", () => {
     const { source, emitPlaybackStateChanged } = createFakeSource();
     const mainWindow = createFakeWindow();
 
-    const stop = wireNowPlaying(source, mainWindow as never);
+    const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
     emitPlaybackStateChanged("playing");
 
     expect(mainWindow.webContents.send).toHaveBeenCalledWith(
@@ -105,13 +111,17 @@ describe("wireNowPlaying", () => {
     const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
     const mainWindow = createFakeWindow();
 
-    const stop = wireNowPlaying(source, mainWindow as never);
+    const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
     emitTrackChanged(TRACK);
     emitPlaybackStateChanged("playing");
 
     const handler = ipcMainHandlers.get(IPC_CHANNELS.nowPlayingGetCurrent);
     expect(handler).toBeDefined();
-    await expect(handler?.()).resolves.toEqual({ track: TRACK, state: "playing", positionSec: 0 });
+    await expect(handler?.(TRUSTED_EVENT)).resolves.toEqual({
+      track: TRACK,
+      state: "playing",
+      positionSec: 0,
+    });
     stop();
   });
 
@@ -119,10 +129,10 @@ describe("wireNowPlaying", () => {
     const { source } = createFakeSource();
     const mainWindow = createFakeWindow();
 
-    const stop = wireNowPlaying(source, mainWindow as never);
+    const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
 
     const handler = ipcMainHandlers.get(IPC_CHANNELS.nowPlayingGetCurrent);
-    await expect(handler?.()).resolves.toEqual({
+    await expect(handler?.(TRUSTED_EVENT)).resolves.toEqual({
       track: undefined,
       state: "stopped",
       positionSec: 0,
@@ -135,12 +145,12 @@ describe("wireNowPlaying", () => {
     const mainWindow = createFakeWindow();
     source.getPosition = () => Promise.resolve(123.4);
 
-    const stop = wireNowPlaying(source, mainWindow as never);
+    const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
     emitTrackChanged(TRACK);
     emitPlaybackStateChanged("playing");
 
     const handler = ipcMainHandlers.get(IPC_CHANNELS.nowPlayingGetCurrent);
-    await expect(handler?.()).resolves.toEqual({
+    await expect(handler?.(TRUSTED_EVENT)).resolves.toEqual({
       track: TRACK,
       state: "playing",
       positionSec: 123.4,
@@ -153,12 +163,16 @@ describe("wireNowPlaying", () => {
     const mainWindow = createFakeWindow();
     const onTrackChanged = vi.fn();
 
-    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged);
+    const stop = wireNowPlaying(
+      source,
+      mainWindow as never,
+      EXPECTED_ORIGIN,
+      undefined,
+      onTrackChanged,
+    );
     emitTrackChanged(TRACK);
 
-    expect(onTrackChanged).toHaveBeenCalledWith(
-      expect.objectContaining({ track: TRACK }),
-    );
+    expect(onTrackChanged).toHaveBeenCalledWith(expect.objectContaining({ track: TRACK }));
     stop();
   });
 
@@ -167,7 +181,13 @@ describe("wireNowPlaying", () => {
     const mainWindow = createFakeWindow();
     const onTrackChanged = vi.fn();
 
-    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged);
+    const stop = wireNowPlaying(
+      source,
+      mainWindow as never,
+      EXPECTED_ORIGIN,
+      undefined,
+      onTrackChanged,
+    );
     emitTrackChanged(TRACK);
     emitTrackChanged(TRACK);
 
@@ -187,7 +207,14 @@ describe("wireNowPlaying", () => {
     const onTrackChanged = vi.fn();
     const filter = compileFilter('sourceApp == "com.apple.Music"');
 
-    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged, filter);
+    const stop = wireNowPlaying(
+      source,
+      mainWindow as never,
+      EXPECTED_ORIGIN,
+      undefined,
+      onTrackChanged,
+      filter,
+    );
     emitTrackChanged(TRACK);
 
     expect(onTrackChanged).not.toHaveBeenCalled();
@@ -202,7 +229,14 @@ describe("wireNowPlaying", () => {
     const mainWindow = createFakeWindow();
     const filter = compileFilter('sourceApp == "com.apple.Music"');
 
-    const stop = wireNowPlaying(source, mainWindow as never, undefined, undefined, filter);
+    const stop = wireNowPlaying(
+      source,
+      mainWindow as never,
+      EXPECTED_ORIGIN,
+      undefined,
+      undefined,
+      filter,
+    );
     emitTrackChanged(TRACK);
 
     expect(mainWindow.webContents.send).toHaveBeenCalledWith(
@@ -218,7 +252,14 @@ describe("wireNowPlaying", () => {
     const onTrackChanged = vi.fn();
     const filter = compileFilter('sourceApp == "spotify"');
 
-    const stop = wireNowPlaying(source, mainWindow as never, undefined, onTrackChanged, filter);
+    const stop = wireNowPlaying(
+      source,
+      mainWindow as never,
+      EXPECTED_ORIGIN,
+      undefined,
+      onTrackChanged,
+      filter,
+    );
     emitTrackChanged(TRACK);
 
     expect(onTrackChanged).toHaveBeenCalledWith(expect.objectContaining({ track: TRACK }));
@@ -237,7 +278,7 @@ describe("wireNowPlaying", () => {
 
     // Two of each: wireNowPlaying's own relay-to-renderer subscription, plus the
     // Tracker's independent subscription (tracker.start() inside wireNowPlaying).
-    const stop = wireNowPlaying(source, mainWindow as never);
+    const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
     expect(trackListenerCount()).toBe(2);
     expect(stateListenerCount()).toBe(2);
 
@@ -251,7 +292,7 @@ describe("wireNowPlaying", () => {
     const { source } = createFakeSource();
     const mainWindow = createFakeWindow();
 
-    const stop = wireNowPlaying(source, mainWindow as never);
+    const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
     expect(ipcMainHandlers.has(IPC_CHANNELS.nowPlayingGetCurrent)).toBe(true);
 
     stop();
@@ -270,7 +311,7 @@ describe("wireNowPlaying", () => {
       source.getPosition = () => Promise.resolve(42);
       const mainWindow = createFakeWindow();
 
-      const stop = wireNowPlaying(source, mainWindow as never);
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
       emitTrackChanged(TRACK);
       emitPlaybackStateChanged("playing");
 
@@ -290,7 +331,7 @@ describe("wireNowPlaying", () => {
       source.getPosition = getPosition;
       const mainWindow = createFakeWindow();
 
-      const stop = wireNowPlaying(source, mainWindow as never);
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
       emitTrackChanged(TRACK);
       emitPlaybackStateChanged("paused");
 
@@ -311,7 +352,7 @@ describe("wireNowPlaying", () => {
       source.getPosition = getPosition;
       const mainWindow = createFakeWindow();
 
-      const stop = wireNowPlaying(source, mainWindow as never);
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
 
       await vi.advanceTimersByTimeAsync(1000);
 
@@ -326,7 +367,7 @@ describe("wireNowPlaying", () => {
       source.getPosition = () => Promise.resolve(position);
       const mainWindow = createFakeWindow();
 
-      const stop = wireNowPlaying(source, mainWindow as never);
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
       emitTrackChanged(TRACK);
       emitPlaybackStateChanged("playing");
 
@@ -353,7 +394,7 @@ describe("wireNowPlaying", () => {
       source.getPosition = getPosition;
       const mainWindow = createFakeWindow();
 
-      const stop = wireNowPlaying(source, mainWindow as never);
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
       emitTrackChanged(TRACK);
       emitPlaybackStateChanged("playing");
       stop();
@@ -376,7 +417,7 @@ describe("wireNowPlaying", () => {
         .mockResolvedValue(7);
       const mainWindow = createFakeWindow();
 
-      const stop = wireNowPlaying(source, mainWindow as never);
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
       emitTrackChanged(TRACK);
       emitPlaybackStateChanged("playing");
 
@@ -403,7 +444,7 @@ describe("wireNowPlaying", () => {
       vi.useFakeTimers();
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
       const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
-      const stop = wireNowPlaying(source, createFakeWindow() as never);
+      const stop = wireNowPlaying(source, createFakeWindow() as never, EXPECTED_ORIGIN);
 
       emitTrackChanged(TRACK);
       emitPlaybackStateChanged("playing");
@@ -414,5 +455,102 @@ describe("wireNowPlaying", () => {
       );
       stop();
     });
+  });
+
+  describe("position polling", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("does not start another position read while the previous one is still pending", async () => {
+      vi.useFakeTimers();
+      const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+      let finishRead: (positionSec: number) => void = () => undefined;
+      const getPosition = vi.fn(
+        () =>
+          new Promise<number>((resolve) => {
+            finishRead = resolve;
+          }),
+      );
+      source.getPosition = getPosition;
+      const mainWindow = createFakeWindow();
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
+      emitTrackChanged(TRACK);
+      emitPlaybackStateChanged("playing");
+
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(getPosition).toHaveBeenCalledTimes(1);
+
+      finishRead(12);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(getPosition).toHaveBeenCalledTimes(2);
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith(
+        IPC_CHANNELS.nowPlayingPositionChanged,
+        12,
+      );
+      stop();
+    });
+
+    it("keeps polling after a read fails", async () => {
+      vi.useFakeTimers();
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+      const getPosition = vi
+        .fn<() => Promise<number>>()
+        .mockRejectedValueOnce(new Error("player gone"))
+        .mockResolvedValue(30);
+      source.getPosition = getPosition;
+      const mainWindow = createFakeWindow();
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
+      emitTrackChanged(TRACK);
+      emitPlaybackStateChanged("playing");
+
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(errorSpy).toHaveBeenCalled();
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith(
+        IPC_CHANNELS.nowPlayingPositionChanged,
+        30,
+      );
+      errorSpy.mockRestore();
+      stop();
+    });
+
+    it("does not write to a window that was destroyed while a read was pending", async () => {
+      vi.useFakeTimers();
+      const { source, emitTrackChanged, emitPlaybackStateChanged } = createFakeSource();
+      let finishRead: (positionSec: number) => void = () => undefined;
+      source.getPosition = () =>
+        new Promise<number>((resolve) => {
+          finishRead = resolve;
+        });
+      const mainWindow = createFakeWindow();
+      const stop = wireNowPlaying(source, mainWindow as never, EXPECTED_ORIGIN);
+      emitTrackChanged(TRACK);
+      emitPlaybackStateChanged("playing");
+      await vi.advanceTimersByTimeAsync(1000);
+
+      mainWindow.isDestroyed.mockReturnValue(true);
+      finishRead(5);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+        IPC_CHANNELS.nowPlayingPositionChanged,
+        5,
+      );
+      stop();
+    });
+  });
+
+  it("rejects the get-current query when the caller is not the app's own page", () => {
+    const { source } = createFakeSource();
+    const stop = wireNowPlaying(source, createFakeWindow() as never, EXPECTED_ORIGIN);
+    const handler = ipcMainHandlers.get(IPC_CHANNELS.nowPlayingGetCurrent);
+
+    expect(() => handler?.({ senderFrame: { url: "https://evil.example/" } })).toThrow(
+      /untrusted sender/i,
+    );
+    stop();
   });
 });

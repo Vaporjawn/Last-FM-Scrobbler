@@ -6,6 +6,56 @@ import { assertTrustedSender } from "../validate-ipc-sender.js";
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
 
+/** How long the relay may take to answer before the report is given up on. Without a
+ * ceiling a stalled relay leaves the dialog "submitting" forever. */
+const RELAY_TIMEOUT_MS = 30_000;
+
+/**
+ * Whether `value` is somewhere reports (and the diagnostics bundled with them: recent log
+ * lines) may be sent: an https URL, or plain http only to this machine for development.
+ * Anything else — a typo'd scheme, a cleartext remote host — is treated as "not
+ * configured" rather than sent in the clear.
+ */
+function isAcceptableRelayUrl(value: string | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol === "https:") {
+    return true;
+  }
+  return (
+    parsed.protocol === "http:" &&
+    (parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "[::1]")
+  );
+}
+
+/** Narrows the relay's reply to the two fields this app uses. The link in it is later
+ * shown to the user and opened, so it must be an https URL — whatever the relay (or
+ * something impersonating it) sends back. */
+function parseRelayResponse(payload: unknown): RelayResponse {
+  if (typeof payload === "object" && payload !== null) {
+    const { issueUrl, issueNumber } = payload as Record<string, unknown>;
+    if (typeof issueUrl === "string" && typeof issueNumber === "number") {
+      try {
+        if (new URL(issueUrl).protocol === "https:") {
+          return { issueUrl, issueNumber };
+        }
+      } catch {
+        // Not a URL at all — falls through to the error below.
+      }
+    }
+  }
+  throw new Error("The bug report relay sent back a response this app could not understand.");
+}
+
 const NOT_CONFIGURED_MESSAGE =
   "Bug reporting is not configured for this build (BUG_REPORT_RELAY_URL) — see " +
   "docs/modules/desktop.md.";
@@ -42,13 +92,19 @@ interface RelayResponse {
  * creation — this just forwards the report and diagnostics to it.
  */
 export function wireBugReport(options: WireBugReportOptions): () => void {
-  const { expectedOrigin, relayUrl, getDiagnostics } = options;
+  const { expectedOrigin, getDiagnostics } = options;
+  const relayUrl = isAcceptableRelayUrl(options.relayUrl) ? options.relayUrl : undefined;
   const fetchImpl = options.fetchImpl ?? fetch;
 
   // `Boolean(relayUrl)` rather than `relayUrl !== undefined`: a build-time `define` can
   // bake in `""` instead of an absent/undefined value (see this option's docstring), and
   // an empty string is exactly as "not configured" as a missing one.
-  ipcMain.handle(IPC_CHANNELS.bugReportIsConfigured, (): boolean => Boolean(relayUrl));
+  let inFlight: { readonly key: string; readonly promise: Promise<RelayResponse> } | undefined;
+
+  ipcMain.handle(IPC_CHANNELS.bugReportIsConfigured, (event): boolean => {
+    assertTrustedSender(event, expectedOrigin);
+    return Boolean(relayUrl);
+  });
 
   ipcMain.handle(
     IPC_CHANNELS.bugReportSubmit,
@@ -58,22 +114,39 @@ export function wireBugReport(options: WireBugReportOptions): () => void {
         throw new Error(NOT_CONFIGURED_MESSAGE);
       }
 
-      const response = await fetchImpl(relayUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: String(title),
-          body: String(body),
-          ...(getDiagnostics ? { diagnostics: getDiagnostics() } : {}),
-        }),
-      });
-
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(`Bug report relay returned ${response.status}: ${detail}`);
+      // The same report submitted twice while the first is still in flight (a double
+      // click) would file two public GitHub issues; share the first one's outcome instead.
+      const reportKey = JSON.stringify([String(title), String(body)]);
+      if (inFlight) {
+        if (inFlight.key === reportKey) {
+          return inFlight.promise;
+        }
+        throw new Error("A bug report is already being sent — wait for it to finish.");
       }
 
-      return (await response.json()) as RelayResponse;
+      const promise = (async (): Promise<RelayResponse> => {
+        const response = await fetchImpl(relayUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title: String(title),
+            body: String(body),
+            ...(getDiagnostics ? { diagnostics: getDiagnostics() } : {}),
+          }),
+          signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
+        });
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "");
+          throw new Error(`Bug report relay returned ${response.status}: ${detail}`);
+        }
+
+        return parseRelayResponse(await response.json());
+      })().finally(() => {
+        inFlight = undefined;
+      });
+      inFlight = { key: reportKey, promise };
+      return promise;
     },
   );
 

@@ -1,11 +1,13 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import electron from "electron";
+import { resolveExpectedRendererOrigin } from "../resolve-expected-renderer-origin.js";
+import { hardenWebContents } from "../security/harden-web-contents.js";
 import { TRAY_POPOVER_SIZE } from "./tray-popover-size.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { BrowserWindow } from "electron"`.
-const { BrowserWindow } = electron;
+const { BrowserWindow, shell } = electron;
 
 const dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -48,6 +50,15 @@ export function createTrayPopoverWindow(): Electron.BrowserWindow {
       // See create-main-window.ts's own identical setting for why.
       sandbox: false,
       spellcheck: false,
+    },
+  });
+
+  // Same lock-down as the main window: this window loads the same page and gets the same
+  // preload bridge, so it must not be navigable to anything else either.
+  hardenWebContents(popover.webContents, {
+    expectedOrigin: resolveExpectedRendererOrigin(dirname, process.env.ELECTRON_RENDERER_URL),
+    openExternal: (url) => {
+      void shell.openExternal(url);
     },
   });
 

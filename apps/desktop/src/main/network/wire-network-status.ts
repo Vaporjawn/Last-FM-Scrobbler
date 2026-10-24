@@ -1,3 +1,4 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import type { BrowserWindow, Tray } from "electron";
 import type { NetworkStatus, NetworkStatusMonitor } from "@lastfm-scrobbler/core";
 import electron from "electron";
@@ -8,6 +9,8 @@ import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 const { ipcMain } = electron;
 
 export interface WireNetworkStatusOptions {
+  /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
+  readonly expectedOrigin: string;
   readonly monitor: NetworkStatusMonitor;
   /** A live accessor, not a captured value — same "read fresh on every push" reasoning
    * as `wire-updates.ts`'s `getMainWindow`. */
@@ -42,7 +45,8 @@ function formatTooltip(status: NetworkStatus): string {
  * `IPC_CHANNELS.networkStatusGetStatus` for the renderer's initial pull.
  */
 export function wireNetworkStatus(options: WireNetworkStatusOptions): NetworkStatusHandle {
-  const { monitor, getMainWindow, getTray } = options;
+  const { monitor, getMainWindow, getTray, expectedOrigin } = options;
+  const ipc = createTrustedIpc(ipcMain, expectedOrigin);
 
   function apply(status: NetworkStatus): void {
     const mainWindow = getMainWindow();
@@ -57,7 +61,7 @@ export function wireNetworkStatus(options: WireNetworkStatusOptions): NetworkSta
 
   const unsubscribe = monitor.subscribe(apply);
 
-  ipcMain.handle(IPC_CHANNELS.networkStatusGetStatus, (): NetworkStatus => monitor.getStatus());
+  ipc.handle(IPC_CHANNELS.networkStatusGetStatus, (): NetworkStatus => monitor.getStatus());
 
   return {
     syncTrayTooltip: () => {

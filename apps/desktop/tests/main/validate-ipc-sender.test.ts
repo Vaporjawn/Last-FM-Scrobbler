@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertTrustedSender } from "../../src/main/validate-ipc-sender.js";
+import { assertTrustedSender, isTrustedUrl } from "../../src/main/validate-ipc-sender.js";
 
 describe("assertTrustedSender", () => {
   describe("dev-style origin (http)", () => {
@@ -40,7 +40,8 @@ describe("assertTrustedSender", () => {
   });
 
   describe("packaged-style origin (file:)", () => {
-    const expectedOrigin = "file:///Applications/Last.fm%20Scrobbler.app/Contents/Resources/app.asar/out/renderer/index.html";
+    const expectedOrigin =
+      "file:///Applications/Last.fm%20Scrobbler.app/Contents/Resources/app.asar/out/renderer/index.html";
 
     it("passes for the exact same file: path", () => {
       expect(() => {
@@ -60,7 +61,9 @@ describe("assertTrustedSender", () => {
     // verified directly here, not just asserted in a comment.
     it("confirms two different file: URLs really do share the same origin (the gotcha this guards against)", () => {
       expect(new URL("file:///a/index.html").origin).toBe("null");
-      expect(new URL("file:///a/index.html").origin).toBe(new URL("file:///totally/different/b.html").origin);
+      expect(new URL("file:///a/index.html").origin).toBe(
+        new URL("file:///totally/different/b.html").origin,
+      );
     });
 
     it("throws for a different file: path — proving the pathname check, not just protocol, is what's enforced", () => {
@@ -81,6 +84,21 @@ describe("assertTrustedSender", () => {
       expect(() => {
         assertTrustedSender({ senderFrame: null }, "http://localhost:5173");
       }).toThrow(/no senderFrame/i);
+    });
+  });
+
+  describe("isTrustedUrl", () => {
+    it("is false, rather than throwing, for text that is not a URL", () => {
+      expect(isTrustedUrl("not a url", "http://localhost:5173")).toBe(false);
+      expect(isTrustedUrl("", "file:///app/index.html")).toBe(false);
+    });
+
+    it("compares a dev origin by origin and a packaged page by file path", () => {
+      expect(isTrustedUrl("http://localhost:5173/x?y=1#z", "http://localhost:5173")).toBe(true);
+      expect(isTrustedUrl("file:///app/index.html#tray-popover", "file:///app/index.html")).toBe(
+        true,
+      );
+      expect(isTrustedUrl("file:///other/index.html", "file:///app/index.html")).toBe(false);
     });
   });
 });

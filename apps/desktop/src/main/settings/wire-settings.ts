@@ -1,7 +1,9 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import { isAspectRatioOption } from "../../shared/settings-api.js";
 import type { AppSettings, AspectRatioOption } from "../../shared/settings-api.js";
+import { sanitizeSettings } from "./sanitize-settings.js";
 import type { SettingsStore } from "./settings-store.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
@@ -9,6 +11,8 @@ import type { SettingsStore } from "./settings-store.js";
 const { ipcMain } = electron;
 
 export interface WireSettingsOptions {
+  /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
+  readonly expectedOrigin: string;
   readonly store: SettingsStore;
   /** Called immediately whenever a `set()` patch changes `aspectRatio` — lets the
    * caller apply the new ratio to the already-open window
@@ -36,11 +40,21 @@ export interface WireSettingsOptions {
 
 /** Wires the settings IPC surface (see `shared/settings-api.ts`) to a real `SettingsStore`. */
 export function wireSettings(options: WireSettingsOptions): () => void {
-  const { store, onAspectRatioChange, onLaunchAtLoginChange, onShowDockIconChange } = options;
+  const {
+    store,
+    expectedOrigin,
+    onAspectRatioChange,
+    onLaunchAtLoginChange,
+    onShowDockIconChange,
+  } = options;
+  const ipc = createTrustedIpc(ipcMain, expectedOrigin);
 
-  ipcMain.handle(IPC_CHANNELS.settingsGet, (): AppSettings => store.get());
+  ipc.handle(IPC_CHANNELS.settingsGet, (): AppSettings => store.get());
 
-  ipcMain.handle(IPC_CHANNELS.settingsSet, (_event, patch: unknown): AppSettings => {
+  ipc.handle(IPC_CHANNELS.settingsSet, (_event, patch: unknown): AppSettings => {
+    if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
+      throw new Error("settings:set expects an object of settings to change");
+    }
     const typedPatch = patch as Partial<AppSettings>;
     // Validated here, at the trust boundary, rather than trusting the renderer (or a
     // stale/corrupted settings.json migrated forward via a prior `store.set()` call)
@@ -48,7 +62,15 @@ export function wireSettings(options: WireSettingsOptions): () => void {
     // straight through into NaN window-geometry math (see `isAspectRatioOption`'s own
     // docstring for the full failure chain).
     if (typedPatch.aspectRatio !== undefined && !isAspectRatioOption(typedPatch.aspectRatio)) {
-      throw new Error(`settings:set received an invalid aspectRatio: ${String(typedPatch.aspectRatio)}`);
+      throw new Error(
+        `settings:set received an invalid aspectRatio: ${String(typedPatch.aspectRatio)}`,
+      );
+    }
+    const { rejectedKeys } = sanitizeSettings(patch);
+    if (rejectedKeys.length > 0) {
+      throw new Error(
+        `settings:set rejected unknown or invalid settings: ${rejectedKeys.join(", ")}`,
+      );
     }
     const updated = store.set(typedPatch);
     if (typedPatch.aspectRatio !== undefined) {
@@ -63,7 +85,7 @@ export function wireSettings(options: WireSettingsOptions): () => void {
     return updated;
   });
 
-  ipcMain.handle(IPC_CHANNELS.settingsReset, (): AppSettings => {
+  ipc.handle(IPC_CHANNELS.settingsReset, (): AppSettings => {
     const defaults = store.reset();
     // Unconditional, unlike settingsSet's guards above: reset() always changes every
     // field back to its default (or leaves it unchanged if already default, which

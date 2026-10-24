@@ -1,18 +1,32 @@
 /**
+ * Whether `url` is one of this app's own renderer pages. A packaged build serves exactly
+ * one file (`expectedOrigin` is that file's `file:` URL, and the page's hash/query are
+ * ignored); a dev build serves from one origin.
+ */
+export function isTrustedUrl(url: string, expectedOrigin: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  const expected = new URL(expectedOrigin);
+
+  return expected.protocol === "file:"
+    ? parsed.protocol === "file:" && parsed.pathname === expected.pathname
+    : parsed.origin === expected.origin;
+}
+
+/**
  * Defense-in-depth `ipcMain.handle()` guard: throws unless the call's `senderFrame`
- * genuinely matches this app's own renderer. Not currently protecting against anything
- * exploitable today — `contextIsolation` is on, `nodeIntegration` is off, and
- * `create-main-window.ts`'s `setWindowOpenHandler` denies every attempt to open a new
- * window/navigate elsewhere, so untrusted content should never end up sharing this
- * window's IPC surface in normal operation. Electron's own security checklist still
- * lists sender validation as standard practice specifically for the regressions this
- * guards against instead (a dependency accidentally loading remote content, a future
- * feature adding an iframe, etc.) — see the highest-privilege/highest-side-effect
- * handler modules this is actually wired into: `auth/wire-auth.ts`,
- * `auth/wire-secondary-auth.ts`, and `lastfm/wire-track-actions.ts` check it on every
- * `ipcMain.handle` they register; `bug-report/wire-bug-report.ts` checks it only on
- * `bugReportSubmit` (the one handler there with a real external side effect — filing a
- * GitHub issue via the relay — unlike its sibling `bugReportIsConfigured`, a plain read).
+ * genuinely matches this app's own renderer. Every IPC handler registers through it (see
+ * `ipc/handle-trusted.ts`). `contextIsolation` is on, `nodeIntegration` is off and
+ * `security/harden-web-contents.ts` blocks navigation, so untrusted content should never
+ * end up sharing a window's IPC surface in normal operation — but Electron's own security
+ * checklist lists sender validation as standard practice for the regressions that would
+ * change that (a dependency loading remote content, a future feature adding an iframe),
+ * and a handler that quietly skips it is exactly the one that turns such a regression
+ * into a real hole.
  *
  * **The `file:` origin gotcha this exists to get right**: per RFC 6454, a URL with no
  * scheme/host/port triple — which includes every `file:` URL — serializes to the
@@ -24,7 +38,7 @@
  * just this app's own packaged `renderer/index.html` — silently defeating the whole
  * point of this check in a packaged build. `expectedOrigin` being a real `file:` URL
  * (not the string `"null"` — see `resolve-expected-renderer-origin.ts`) is what lets
- * this function fall back to a full pathname compare specifically for that case.
+ * `isTrustedUrl` fall back to a full pathname compare specifically for that case.
  */
 export function assertTrustedSender(
   event: { readonly senderFrame: { readonly url: string } | null },
@@ -34,15 +48,7 @@ export function assertTrustedSender(
     throw new Error("Refusing IPC call with no senderFrame.");
   }
 
-  const senderUrl = new URL(event.senderFrame.url);
-  const expected = new URL(expectedOrigin);
-
-  const trusted =
-    expected.protocol === "file:"
-      ? senderUrl.protocol === "file:" && senderUrl.pathname === expected.pathname
-      : senderUrl.origin === expected.origin;
-
-  if (!trusted) {
+  if (!isTrustedUrl(event.senderFrame.url, expectedOrigin)) {
     throw new Error(`Refusing IPC call from untrusted sender: ${event.senderFrame.url}`);
   }
 }

@@ -165,6 +165,10 @@ const playbackSource = createPlatformPlaybackSource((message) => {
 // collected (and its icon silently disappears) if nothing holds a reference to it.
 let isQuitting = false;
 let tray: Electron.Tray | undefined;
+// Releases what scrobbling holds open — its drain timer and the SQLite queue file — right
+// before the process exits. Set once scrobbling is wired (it is skipped without secure
+// storage).
+let stopScrobbling: (() => void) | undefined;
 
 void app.whenReady().then(async () => {
   // Local dev convenience: a git-ignored `apps/desktop/.env` file (already covered by
@@ -409,15 +413,22 @@ void app.whenReady().then(async () => {
       });
     },
   });
-  wireLastfmData({ client: lastfmClient, ...(networkStatus ? { networkStatus } : {}) });
+  wireLastfmData({
+    expectedOrigin: expectedRendererOrigin,
+    client: lastfmClient,
+    ...(networkStatus ? { networkStatus } : {}),
+  });
   // Tries Last.fm's own artist photo first when `lastfmClient` is configured (usually
   // a miss — see wire-artist-image.ts's docstring), Deezer's public artist search
   // always as the guaranteed fallback — unlike wireLastfmData above, this still works
   // even in a build with no Last.fm credentials at all, since Deezer needs none.
-  wireArtistImage({ ...(lastfmClient ? { lastfmClient } : {}) });
+  wireArtistImage({
+    expectedOrigin: expectedRendererOrigin,
+    ...(lastfmClient ? { lastfmClient } : {}),
+  });
   // Also unconditional — validating a filter expression is pure, local, and needs no
   // Last.fm credentials at all, see wire-filter-validation.ts.
-  wireFilterValidation();
+  wireFilterValidation({ expectedOrigin: expectedRendererOrigin });
 
   // Shared by scrobble submission and the signed track actions (love/unlove/addTags)
   // below — both need a client signed with a *specific account's* session key, which
@@ -530,6 +541,10 @@ void app.whenReady().then(async () => {
     });
     onScrobbleEligible = gatedScrobbling.onScrobbleEligible;
     onTrackChanged = gatedScrobbling.onTrackChanged;
+    stopScrobbling = () => {
+      scrobbling.stop();
+      scrobbleQueue.close();
+    };
   }
 
   wireBugReport({
@@ -639,6 +654,7 @@ void app.whenReady().then(async () => {
   // just skipped rather than wiring an inert monitor.
   const networkStatusHandle = networkStatus
     ? wireNetworkStatus({
+        expectedOrigin: expectedRendererOrigin,
         monitor: networkStatus,
         // Live accessors, not captured values — same "read fresh on every push"
         // reasoning as wireUpdates'/wireAppInfo's own getMainWindow/onShowMainWindow
@@ -650,6 +666,7 @@ void app.whenReady().then(async () => {
     : undefined;
 
   wireAppInfo({
+    expectedOrigin: expectedRendererOrigin,
     getVersion: () => app.getVersion(),
     // Reads the live `mainWindow` binding, not a stale reference, matching
     // `wireSettings`'s own `onAspectRatioChange` right below — keeps working
@@ -661,6 +678,7 @@ void app.whenReady().then(async () => {
   });
 
   wireSettings({
+    expectedOrigin: expectedRendererOrigin,
     store: settingsStore,
     // Applies a Settings → Window aspect-ratio change to the already-open window
     // immediately, rather than waiting for the user to restart the app — reads the
@@ -701,6 +719,7 @@ void app.whenReady().then(async () => {
   // "Auto-update" section.
   const updaterClient = createUpdaterClient({ logger });
   wireUpdates({
+    expectedOrigin: expectedRendererOrigin,
     client: updaterClient,
     // Live accessor, not the `mainWindow` value at this point in time — the main
     // window can be closed and recreated (see `app.on("activate")` below) for as long
@@ -761,6 +780,10 @@ void app.whenReady().then(async () => {
   app.on("before-quit", () => {
     isQuitting = true;
     tray?.destroy();
+  });
+
+  app.on("will-quit", () => {
+    stopScrobbling?.();
   });
 
   app.on("activate", () => {

@@ -25,6 +25,8 @@ const m = vi.hoisted(() => {
   return {
     appHandlers,
     loadEnvFile: fn(),
+    queueClose: fn(),
+    scrobblingStop: fn(),
     existsSync: fn(),
     app: {
       isPackaged: false,
@@ -125,6 +127,7 @@ vi.mock("@lastfm-scrobbler/core", async (importOriginal) => {
       }
     },
     ScrobbleQueue: class {
+      readonly close = m.queueClose;
       constructor(readonly options: unknown) {
         m.queues.push(this);
       }
@@ -388,6 +391,7 @@ async function boot(scenario: Scenario = {}): Promise<Booted> {
   const gated = {
     onScrobbleEligible: vi.fn(),
     onTrackChanged: vi.fn(),
+    stop: m.scrobblingStop,
   };
   m.wireScrobbling.mockReturnValue(gated);
 
@@ -1125,6 +1129,55 @@ describe("main process entry point", () => {
       await boot({ platform: "darwin" });
       m.appHandlers["window-all-closed"]?.();
       expect(m.app.quit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("shutdown", () => {
+    beforeEach(() => {
+      vi.spyOn(console, "log").mockImplementation(() => undefined);
+    });
+
+    it("stops scrobbling and closes the queue file right before quitting", async () => {
+      await boot();
+      expect(m.queueClose).not.toHaveBeenCalled();
+
+      m.appHandlers["will-quit"]?.();
+
+      expect(m.scrobblingStop).toHaveBeenCalledTimes(1);
+      expect(m.queueClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("quits cleanly when scrobbling was never wired (no secure storage)", async () => {
+      await boot({ accountStores: [undefined, undefined, undefined] });
+
+      expect(() => m.appHandlers["will-quit"]?.()).not.toThrow();
+      expect(m.queueClose).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("IPC trust", () => {
+    beforeEach(() => {
+      vi.spyOn(console, "log").mockImplementation(() => undefined);
+    });
+
+    it("hands the renderer's origin to every module that registers IPC handlers", async () => {
+      await boot();
+
+      for (const wire of [
+        m.wireAuth,
+        m.wireSecondaryAuth,
+        m.wireLastfmData,
+        m.wireArtistImage,
+        m.wireFilterValidation,
+        m.wireTrackActions,
+        m.wireBugReport,
+        m.wireNetworkStatus,
+        m.wireAppInfo,
+        m.wireSettings,
+        m.wireUpdates,
+      ]) {
+        expect(optionsOf(wire).expectedOrigin).toBe("app://renderer");
+      }
     });
   });
 });

@@ -6,7 +6,6 @@ import {
   type AppCredentials,
   type AppCredentialsStore,
   type AuthFlowClient,
-  type StoredAccount,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 import { assertTrustedSender } from "../validate-ipc-sender.js";
@@ -74,36 +73,6 @@ export interface WireSecondaryAuthOptions {
    * injectable for testing, same reasoning as `createLibrefmAuthFlowClient`. Defaults
    * to a real `ListenBrainzClient`. */
   readonly createListenBrainzClient?: (token: string) => Pick<ListenBrainzClient, "validateToken">;
-}
-
-/**
- * Removes every *other* stored account before adding/activating this one, then does
- * so. This app's model for Libre.fm/ListenBrainz (unlike Last.fm — see
- * `shared/secondary-auth-api.ts`) is "at most one connected account per service at a
- * time", but `AccountStore` itself is a general multi-account primitive (shared with
- * Last.fm's own genuinely-multi-account `wire-auth.ts`) with no such constraint built
- * in — enforcing it here, not there, keeps that shared primitive honest about what it
- * actually is.
- *
- * Without this, connecting a new account (e.g. pasting a different ListenBrainz token)
- * without first explicitly disconnecting the previous one left the old account
- * orphaned but still stored. Disconnecting the *new* one would then silently
- * auto-promote the orphaned old account back to active — `AccountStore.removeAccount`
- * always leaves *some* account active if one remains on disk — resurrecting an account
- * the user believed was gone, with scrobbles then silently submitted under it. Neither
- * `librefmGetActiveAccount`/`listenbrainzGetActiveAccount` (nor anything else this
- * module exposes) can discover or purge that orphaned entry, so this has to prevent it
- * from ever existing rather than clean it up after the fact.
- */
-async function connectSingleAccount(store: AccountStore, account: StoredAccount): Promise<void> {
-  const existing = await store.listAccounts();
-  for (const stored of existing) {
-    if (stored.username !== account.username) {
-      await store.removeAccount(stored.username);
-    }
-  }
-  await store.addAccount(account);
-  await store.setActiveAccount(account.username);
 }
 
 /**
@@ -188,7 +157,7 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
         const authFlow = new AuthFlow({ client, openUrl });
         try {
           const session = await authFlow.authenticate();
-          await connectSingleAccount(librefmAccountStore, {
+          await librefmAccountStore.connectExclusively({
             username: session.username,
             sessionKey: session.sessionKey,
           });
@@ -241,7 +210,7 @@ export function wireSecondaryAuth(options: WireSecondaryAuthOptions): () => void
       if (!validation.valid || !validation.username) {
         throw new Error("That ListenBrainz token isn't valid — check it and try again.");
       }
-      await connectSingleAccount(listenbrainzAccountStore, {
+      await listenbrainzAccountStore.connectExclusively({
         username: validation.username,
         sessionKey: trimmedToken,
       });

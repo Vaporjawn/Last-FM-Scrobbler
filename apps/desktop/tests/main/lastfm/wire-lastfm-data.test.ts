@@ -16,12 +16,15 @@ vi.mock("electron", () => ({ ipcMain, default: { ipcMain } }));
 const { wireLastfmData } = await import("../../../src/main/lastfm/wire-lastfm-data.js");
 const { IPC_CHANNELS } = await import("../../../src/shared/ipc-channels.js");
 
+const EXPECTED_ORIGIN = "http://localhost:5173";
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   const handler = ipcMainHandlers.get(channel);
   if (!handler) {
     throw new Error(`No handler registered for ${channel}`);
   }
-  return Promise.resolve(handler({}, ...args));
+  return Promise.resolve(handler(TRUSTED_EVENT, ...args));
 }
 
 function fakeClient() {
@@ -33,7 +36,9 @@ function fakeClient() {
     getTopTracks: vi.fn().mockResolvedValue([{ name: "T", artist: "A", playCount: 5 }]),
     getTopAlbums: vi.fn().mockResolvedValue([{ name: "Al", artist: "A", playCount: 5 }]),
     getFriends: vi.fn().mockResolvedValue([{ username: "bob" }]),
-    getUserInfo: vi.fn().mockResolvedValue({ username: "alice", avatarUrl: "https://example.com/a.png" }),
+    getUserInfo: vi
+      .fn()
+      .mockResolvedValue({ username: "alice", avatarUrl: "https://example.com/a.png" }),
     getLovedTracksCount: vi.fn().mockResolvedValue(42),
     getArtistInfo: vi.fn().mockResolvedValue({ name: "A", listeners: 100, playCount: 500 }),
     getSimilarArtists: vi.fn().mockResolvedValue([{ name: "B", match: 0.9 }]),
@@ -52,7 +57,7 @@ function fakeClient() {
 describe("wireLastfmData", () => {
   it("getRecentTracks forwards user/limit and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice", 10);
 
@@ -62,7 +67,7 @@ describe("wireLastfmData", () => {
 
   it("getRecentTracks also forwards page when given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice", 10, 2);
 
@@ -71,7 +76,7 @@ describe("wireLastfmData", () => {
 
   it("getRecentTracks omits limit/page entirely when neither is given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice");
 
@@ -80,7 +85,7 @@ describe("wireLastfmData", () => {
 
   it("getTopArtists forwards user/limit and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice", 5);
 
@@ -90,7 +95,7 @@ describe("wireLastfmData", () => {
 
   it("getTopArtists also forwards period when given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice", 5, "7day");
 
@@ -99,7 +104,7 @@ describe("wireLastfmData", () => {
 
   it("getTopArtists omits limit entirely when not given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice");
 
@@ -108,7 +113,7 @@ describe("wireLastfmData", () => {
 
   it("getTopTracks forwards user/limit and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice", 5);
 
@@ -118,7 +123,7 @@ describe("wireLastfmData", () => {
 
   it("getTopTracks also forwards period when given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice", 5, "7day");
 
@@ -127,7 +132,7 @@ describe("wireLastfmData", () => {
 
   it("getTopTracks omits limit entirely when not given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice");
 
@@ -136,7 +141,7 @@ describe("wireLastfmData", () => {
 
   it("getTopAlbums forwards user/limit and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice", 5);
 
@@ -146,7 +151,7 @@ describe("wireLastfmData", () => {
 
   it("getTopAlbums also forwards period when given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice", 5, "7day");
 
@@ -155,7 +160,7 @@ describe("wireLastfmData", () => {
 
   it("getTopAlbums omits limit entirely when not given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice");
 
@@ -164,7 +169,7 @@ describe("wireLastfmData", () => {
 
   it("getFriends forwards user and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetFriends, "alice");
 
@@ -174,7 +179,7 @@ describe("wireLastfmData", () => {
 
   it("getUserInfo forwards the username and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetUserInfo, "alice");
 
@@ -184,7 +189,7 @@ describe("wireLastfmData", () => {
 
   it("getLovedTracksCount forwards the username and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetLovedTracksCount, "alice");
 
@@ -194,7 +199,7 @@ describe("wireLastfmData", () => {
 
   it("getArtistInfo forwards the artist name and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Aphex Twin");
 
@@ -204,7 +209,7 @@ describe("wireLastfmData", () => {
 
   it("getSimilarArtists forwards artist/limit and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "Aphex Twin", 4);
 
@@ -214,7 +219,7 @@ describe("wireLastfmData", () => {
 
   it("getSimilarArtists omits limit entirely when not given", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "Aphex Twin");
 
@@ -223,7 +228,7 @@ describe("wireLastfmData", () => {
 
   it("getArtistInfo forwards a username when given, for personal stats", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Aphex Twin", "someuser");
 
@@ -242,7 +247,7 @@ describe("wireLastfmData", () => {
     client.getArtistInfo.mockRejectedValueOnce(
       new LastfmApiError(6, "The artist you supplied could not be found"),
     );
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetArtistInfo, "C:\\User");
 
@@ -252,7 +257,7 @@ describe("wireLastfmData", () => {
   it("getArtistInfo still rejects for a LastfmApiError that isn't the not-found code", async () => {
     const client = fakeClient();
     client.getArtistInfo.mockRejectedValueOnce(new LastfmApiError(29, "Rate limit exceeded"));
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Aphex Twin")).rejects.toThrow(
       "Rate limit exceeded",
@@ -262,7 +267,7 @@ describe("wireLastfmData", () => {
   it("getArtistInfo still rejects for a non-LastfmApiError failure (e.g. network down)", async () => {
     const client = fakeClient();
     client.getArtistInfo.mockRejectedValueOnce(new Error("fetch failed"));
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Aphex Twin")).rejects.toThrow(
       "fetch failed",
@@ -274,7 +279,7 @@ describe("wireLastfmData", () => {
     client.getSimilarArtists.mockRejectedValueOnce(
       new LastfmApiError(6, "The artist you supplied could not be found"),
     );
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "C:\\User");
 
@@ -284,7 +289,7 @@ describe("wireLastfmData", () => {
   it("getSimilarArtists still rejects for a LastfmApiError that isn't the not-found code", async () => {
     const client = fakeClient();
     client.getSimilarArtists.mockRejectedValueOnce(new LastfmApiError(29, "Rate limit exceeded"));
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await expect(invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "Aphex Twin")).rejects.toThrow(
       "Rate limit exceeded",
@@ -293,7 +298,7 @@ describe("wireLastfmData", () => {
 
   it("getTopTags forwards the artist name and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetTopTags, "Fleece");
 
@@ -303,7 +308,7 @@ describe("wireLastfmData", () => {
 
   it("getTrackInfo forwards artist/track and returns the client's result", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     const result = await invoke(IPC_CHANNELS.lastfmGetTrackInfo, "A", "T");
 
@@ -313,7 +318,7 @@ describe("wireLastfmData", () => {
 
   it("getTrackInfo forwards a username when given, for personal play count", async () => {
     const client = fakeClient();
-    wireLastfmData({ client });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client });
 
     await invoke(IPC_CHANNELS.lastfmGetTrackInfo, "A", "T", "someuser");
 
@@ -325,25 +330,39 @@ describe("wireLastfmData", () => {
   });
 
   it("all handlers reject when no client is configured", async () => {
-    wireLastfmData({ client: undefined });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client: undefined });
 
-    await expect(invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice")).rejects.toThrow(/not configured/i);
-    await expect(invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice")).rejects.toThrow(/not configured/i);
-    await expect(invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice")).rejects.toThrow(/not configured/i);
-    await expect(invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice")).rejects.toThrow(
+      /not configured/i,
+    );
+    await expect(invoke(IPC_CHANNELS.lastfmGetTopArtists, "alice")).rejects.toThrow(
+      /not configured/i,
+    );
+    await expect(invoke(IPC_CHANNELS.lastfmGetTopTracks, "alice")).rejects.toThrow(
+      /not configured/i,
+    );
+    await expect(invoke(IPC_CHANNELS.lastfmGetTopAlbums, "alice")).rejects.toThrow(
+      /not configured/i,
+    );
     await expect(invoke(IPC_CHANNELS.lastfmGetFriends, "alice")).rejects.toThrow(/not configured/i);
-    await expect(invoke(IPC_CHANNELS.lastfmGetUserInfo, "alice")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetUserInfo, "alice")).rejects.toThrow(
+      /not configured/i,
+    );
     await expect(invoke(IPC_CHANNELS.lastfmGetLovedTracksCount, "alice")).rejects.toThrow(
       /not configured/i,
     );
     await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "A")).rejects.toThrow(/not configured/i);
-    await expect(invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "A")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetSimilarArtists, "A")).rejects.toThrow(
+      /not configured/i,
+    );
     await expect(invoke(IPC_CHANNELS.lastfmGetTopTags, "A")).rejects.toThrow(/not configured/i);
-    await expect(invoke(IPC_CHANNELS.lastfmGetTrackInfo, "A", "T")).rejects.toThrow(/not configured/i);
+    await expect(invoke(IPC_CHANNELS.lastfmGetTrackInfo, "A", "T")).rejects.toThrow(
+      /not configured/i,
+    );
   });
 
   it("removes all handlers when the returned cleanup function is called", () => {
-    const stop = wireLastfmData({ client: fakeClient() });
+    const stop = wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client: fakeClient() });
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetRecentTracks)).toBe(true);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetArtistInfo)).toBe(true);
     expect(ipcMainHandlers.has(IPC_CHANNELS.lastfmGetTopTags)).toBe(true);
@@ -370,7 +389,7 @@ describe("wireLastfmData", () => {
     client.getRecentTracks.mockRejectedValue(networkFailure);
     const queue = new ScrobbleQueue({ databasePath: ":memory:" });
     const networkStatus = new NetworkStatusMonitor({ queue });
-    wireLastfmData({ client, networkStatus });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client, networkStatus });
 
     await expect(invoke(IPC_CHANNELS.lastfmGetRecentTracks, "alice")).rejects.toThrow(
       "Can't reach Last.fm — check your internet connection.",
@@ -386,10 +405,22 @@ describe("wireLastfmData", () => {
     const queue = new ScrobbleQueue({ databasePath: ":memory:" });
     const networkStatus = new NetworkStatusMonitor({ queue });
     networkStatus.reportSuccess();
-    wireLastfmData({ client, networkStatus });
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client, networkStatus });
 
-    await expect(invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Nonexistent Artist")).resolves.toBeUndefined();
+    await expect(
+      invoke(IPC_CHANNELS.lastfmGetArtistInfo, "Nonexistent Artist"),
+    ).resolves.toBeUndefined();
     expect(networkStatus.getStatus().online).toBe(true);
     queue.close();
+  });
+
+  it("rejects every handler it registers when the caller is not the app's own page", () => {
+    wireLastfmData({ expectedOrigin: EXPECTED_ORIGIN, client: undefined });
+    expect(ipcMainHandlers.size).toBeGreaterThan(0);
+    for (const [channel, handler] of ipcMainHandlers) {
+      expect(() => handler({ senderFrame: { url: "https://evil.example/" } }), channel).toThrow(
+        /untrusted sender/i,
+      );
+    }
   });
 });

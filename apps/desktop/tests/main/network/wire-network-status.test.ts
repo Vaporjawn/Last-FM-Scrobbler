@@ -16,7 +16,10 @@ vi.mock("electron", () => ({ ipcMain, default: { ipcMain } }));
 const { wireNetworkStatus } = await import("../../../src/main/network/wire-network-status.js");
 const { IPC_CHANNELS } = await import("../../../src/shared/ipc-channels.js");
 
-function fakeWindow(): { isDestroyed: () => boolean; webContents: { send: ReturnType<typeof vi.fn> } } {
+function fakeWindow(): {
+  isDestroyed: () => boolean;
+  webContents: { send: ReturnType<typeof vi.fn> };
+} {
   return { isDestroyed: () => false, webContents: { send: vi.fn() } };
 }
 
@@ -24,12 +27,16 @@ function fakeTray(): { setToolTip: ReturnType<typeof vi.fn> } {
   return { setToolTip: vi.fn() };
 }
 
+const EXPECTED_ORIGIN = "http://localhost:5173";
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 describe("wireNetworkStatus", () => {
   it("pushes the current status to the main window on every monitor change", () => {
     const queue = new ScrobbleQueue({ databasePath: ":memory:" });
     const monitor = new NetworkStatusMonitor({ queue });
     const mainWindow = fakeWindow();
     const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => mainWindow as unknown as Electron.BrowserWindow,
       getTray: () => undefined,
@@ -50,6 +57,7 @@ describe("wireNetworkStatus", () => {
     const monitor = new NetworkStatusMonitor({ queue });
     const mainWindow = { isDestroyed: () => true, webContents: { send: vi.fn() } };
     const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => mainWindow as unknown as Electron.BrowserWindow,
       getTray: () => undefined,
@@ -69,6 +77,7 @@ describe("wireNetworkStatus", () => {
     const monitor = new NetworkStatusMonitor({ queue });
     const tray = fakeTray();
     const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => undefined,
       getTray: () => tray as unknown as Electron.Tray,
@@ -86,6 +95,7 @@ describe("wireNetworkStatus", () => {
     const monitor = new NetworkStatusMonitor({ queue });
     const tray = fakeTray();
     const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => undefined,
       getTray: () => tray as unknown as Electron.Tray,
@@ -104,6 +114,7 @@ describe("wireNetworkStatus", () => {
     const monitor = new NetworkStatusMonitor({ queue });
     const tray = fakeTray();
     const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => undefined,
       getTray: () => tray as unknown as Electron.Tray,
@@ -122,6 +133,7 @@ describe("wireNetworkStatus", () => {
     monitor.reportFailure(Object.assign(new Error("x"), { code: "ECONNREFUSED" }));
     const tray = fakeTray();
     const { syncTrayTooltip, stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => undefined,
       getTray: () => tray as unknown as Electron.Tray,
@@ -139,6 +151,7 @@ describe("wireNetworkStatus", () => {
     const monitor = new NetworkStatusMonitor({ queue });
     const mainWindow = fakeWindow();
     const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => mainWindow as unknown as Electron.BrowserWindow,
       getTray: () => undefined,
@@ -155,6 +168,7 @@ describe("wireNetworkStatus", () => {
     const queue = new ScrobbleQueue({ databasePath: ":memory:" });
     const monitor = new NetworkStatusMonitor({ queue });
     const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => undefined,
       getTray: () => undefined,
@@ -162,7 +176,7 @@ describe("wireNetworkStatus", () => {
 
     const handler = ipcMainHandlers.get(IPC_CHANNELS.networkStatusGetStatus);
 
-    expect(handler?.({})).toEqual(monitor.getStatus());
+    expect(handler?.(TRUSTED_EVENT)).toEqual(monitor.getStatus());
     stop();
     queue.close();
   });
@@ -171,6 +185,7 @@ describe("wireNetworkStatus", () => {
     const queue = new ScrobbleQueue({ databasePath: ":memory:" });
     const monitor = new NetworkStatusMonitor({ queue });
     const { syncTrayTooltip, stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
       monitor,
       getMainWindow: () => undefined,
       getTray: () => undefined,
@@ -179,6 +194,25 @@ describe("wireNetworkStatus", () => {
     expect(() => {
       syncTrayTooltip();
     }).not.toThrow();
+    stop();
+    queue.close();
+  });
+
+  it("rejects the status query when the caller is not the app's own page", () => {
+    const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+    const monitor = new NetworkStatusMonitor({ queue });
+    const { stop } = wireNetworkStatus({
+      expectedOrigin: EXPECTED_ORIGIN,
+      monitor,
+      getMainWindow: () => undefined,
+      getTray: () => undefined,
+    });
+
+    const handler = ipcMainHandlers.get(IPC_CHANNELS.networkStatusGetStatus);
+
+    expect(() => handler?.({ senderFrame: { url: "https://evil.example/" } })).toThrow(
+      /untrusted sender/i,
+    );
     stop();
     queue.close();
   });

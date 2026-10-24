@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "../../shared/settings-api.js";
+import { sanitizeSettings } from "./sanitize-settings.js";
 
 export interface SettingsStoreOptions {
   /** Where to persist settings as JSON, e.g. `app.getPath("userData")/settings.json`. */
@@ -39,8 +40,10 @@ export function createSettingsStore(options: SettingsStoreOptions): SettingsStor
       return { ...DEFAULT_APP_SETTINGS };
     }
     try {
-      const parsed = JSON.parse(readFileSync(filePath, "utf8")) as Partial<AppSettings>;
-      return { ...DEFAULT_APP_SETTINGS, ...parsed };
+      // The file can be hand-edited or corrupted, and what is read here is written back
+      // by the next change — keep only known settings with valid values.
+      const parsed: unknown = JSON.parse(readFileSync(filePath, "utf8"));
+      return { ...DEFAULT_APP_SETTINGS, ...sanitizeSettings(parsed).accepted };
     } catch {
       // A corrupt or unreadable settings file must never block app startup — fall back
       // to defaults rather than throwing (the next set() call will overwrite it with a
@@ -75,7 +78,7 @@ export function createSettingsStore(options: SettingsStoreOptions): SettingsStor
   return {
     get: readSettings,
     set(patch) {
-      const updated = { ...readSettings(), ...patch };
+      const updated = { ...readSettings(), ...sanitizeSettings(patch).accepted };
       writeSettings(updated);
       return updated;
     },

@@ -1,4 +1,14 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import type { SecretStorage } from "@lastfm-scrobbler/core";
 
@@ -47,64 +57,104 @@ export class ElectronSecretStorage implements SecretStorage {
     this.safeStorage = options.safeStorage;
   }
 
+  /** Runs `operation` so that a failure (unreadable keychain entry, full disk) comes back
+   * as a rejected promise, which is what every caller of this async interface handles. As
+   * plain synchronous methods returning `Promise.resolve(...)` they threw straight out of
+   * the call instead, past any `.catch(...)` a caller had chained. */
+  private run<T>(operation: () => T): Promise<T> {
+    return new Promise<T>((resolve) => {
+      resolve(operation());
+    });
+  }
+
   get(key: string): Promise<string | undefined> {
-    const file = this.readFile();
-    const encoded = file[key];
-    if (encoded === undefined) {
-      return Promise.resolve(undefined);
-    }
-    return Promise.resolve(this.safeStorage.decryptString(Buffer.from(encoded, "base64")));
+    return this.run(() => {
+      const encoded = this.readFile()[key];
+      return encoded === undefined
+        ? undefined
+        : this.safeStorage.decryptString(Buffer.from(encoded, "base64"));
+    });
   }
 
   set(key: string, value: string): Promise<void> {
-    const file = this.readFile();
-    file[key] = this.safeStorage.encryptString(value).toString("base64");
-    this.writeFile(file);
-    return Promise.resolve();
+    return this.run(() => {
+      const file = this.readFile();
+      file[key] = this.safeStorage.encryptString(value).toString("base64");
+      this.writeFile(file);
+    });
   }
 
   delete(key: string): Promise<void> {
-    const file = this.readFile();
-    if (key in file) {
-      Reflect.deleteProperty(file, key);
-      this.writeFile(file);
-    }
-    return Promise.resolve();
+    return this.run(() => {
+      const file = this.readFile();
+      if (key in file) {
+        Reflect.deleteProperty(file, key);
+        this.writeFile(file);
+      }
+    });
   }
 
   list(): Promise<readonly string[]> {
-    return Promise.resolve(Object.keys(this.readFile()));
+    return this.run(() => Object.keys(this.readFile()));
   }
 
   private readFile(): SecretsFile {
     if (!existsSync(this.filePath)) {
-      return {};
+      return Object.create(null) as SecretsFile;
     }
+
+    let parsed: unknown;
     try {
-      return JSON.parse(readFileSync(this.filePath, "utf8")) as SecretsFile;
+      parsed = JSON.parse(readFileSync(this.filePath, "utf8"));
     } catch {
-      // A corrupt or unreadable secrets file (an interrupted write during a crash,
-      // disk corruption, manual tampering) must never crash every get()/set()/
-      // delete()/list() call from here on — fall back to "nothing stored" instead,
-      // same reasoning (and same fallback shape) as settings-store.ts's own
-      // readSettings(): the next successful write overwrites the file with valid
-      // JSON again, and until then this just behaves like a fresh install with no
-      // accounts saved rather than hard-failing every account-related IPC call.
-      return {};
+      this.setCorruptFileAside();
+      return Object.create(null) as SecretsFile;
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      this.setCorruptFileAside();
+      return Object.create(null) as SecretsFile;
+    }
+
+    // A null-prototype object holding only string values, so a key such as
+    // "constructor" or "__proto__" can never resolve to something inherited.
+    const file = Object.create(null) as SecretsFile;
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "string") {
+        file[key] = value;
+      }
+    }
+    return file;
+  }
+
+  /** Moves an unreadable secrets file out of the way instead of treating it as empty and
+   * letting the next write overwrite it: the encrypted entries in it may still be
+   * recoverable by hand, and silently destroying them would be unrecoverable. */
+  private setCorruptFileAside(): void {
+    try {
+      renameSync(this.filePath, `${this.filePath}.corrupt`);
+    } catch {
+      // Best effort — the file may have vanished, or be read-only. Reading carries on.
     }
   }
 
+  /** Writes to a sibling temp file, flushes it to disk, then renames it over the real
+   * file. Rename is atomic, so a crash or power loss mid-write leaves the previous
+   * complete file in place instead of a truncated one that reads back as "no accounts". */
   private writeFile(file: SecretsFile): void {
-    // `mode` on mkdirSync/writeFileSync only applies when the directory/file is newly
-    // created — it does not retroactively tighten permissions on one that already
-    // exists on disk (e.g. from a version of this app built before this hardening).
-    // The explicit chmodSync below corrects that on every write, regardless of
-    // whether the file already existed with looser permissions. This file holds
-    // safeStorage-encrypted Last.fm session keys/API credentials — encryption
-    // protects the values, but there's no reason the file itself should be readable
-    // by other local accounts on a shared/multi-user machine.
     mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 });
-    writeFileSync(this.filePath, JSON.stringify(file, null, 2), { encoding: "utf8", mode: 0o600 });
-    chmodSync(this.filePath, 0o600);
+    const tempPath = `${this.filePath}.${String(process.pid)}.tmp`;
+    const descriptor = openSync(tempPath, "w", 0o600);
+    try {
+      writeSync(descriptor, JSON.stringify(file, null, 2));
+      fsyncSync(descriptor);
+    } finally {
+      closeSync(descriptor);
+    }
+    try {
+      renameSync(tempPath, this.filePath);
+    } catch (error) {
+      rmSync(tempPath, { force: true });
+      throw error;
+    }
   }
 }

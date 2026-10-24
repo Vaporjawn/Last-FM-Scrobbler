@@ -10,7 +10,12 @@
 // rather than working around it inside application code.
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PlaybackSource, PlaybackState, TrackInfo, Unsubscribe } from "@lastfm-scrobbler/shared-types";
+import type {
+  PlaybackSource,
+  PlaybackState,
+  TrackInfo,
+  Unsubscribe,
+} from "@lastfm-scrobbler/shared-types";
 
 const ipcMainHandlers = new Map<string, (...args: unknown[]) => unknown>();
 const ipcMain = {
@@ -31,6 +36,8 @@ const ipcMain = {
 class FakeWebContents {
   send = vi.fn();
   setWindowOpenHandler = vi.fn();
+  on = vi.fn();
+  session = { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn() };
 }
 
 const createdWindows: FakeBrowserWindow[] = [];
@@ -85,9 +92,8 @@ vi.mock("electron", () => ({
   default: { BrowserWindow: FakeBrowserWindow, ipcMain, screen: screenMock, shell: shellMock },
 }));
 
-const { createMainWindow, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT } = await import(
-  "../../src/main/create-main-window.js"
-);
+const { createMainWindow, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT } =
+  await import("../../src/main/create-main-window.js");
 const { IPC_CHANNELS } = await import("../../src/shared/ipc-channels.js");
 
 /** A fake `PlaybackSource` whose subscription methods are real enough to exercise
@@ -181,8 +187,7 @@ describe("createMainWindow", () => {
 
       const created = createdWindows.at(-1);
       const webPreferences = created?.options.webPreferences as
-        | { additionalArguments?: readonly string[] }
-        | undefined;
+        { additionalArguments?: readonly string[] } | undefined;
       expect(webPreferences?.additionalArguments).toContain("--initial-theme-mode=light");
     });
 
@@ -191,8 +196,7 @@ describe("createMainWindow", () => {
 
       const created = createdWindows.at(-1);
       const webPreferences = created?.options.webPreferences as
-        | { additionalArguments?: readonly string[] }
-        | undefined;
+        { additionalArguments?: readonly string[] } | undefined;
       expect(webPreferences?.additionalArguments).toContain("--initial-theme-mode=dark");
     });
   });
@@ -314,5 +318,18 @@ describe("createMainWindow", () => {
     expect(() => {
       createMainWindow({ playbackSource: createFakeSource(), onScrobbleEligible });
     }).not.toThrow();
+  });
+
+  it("locks the window to its own page: navigation, webviews and permission prompts", () => {
+    createMainWindow({ playbackSource: undefined });
+
+    const [created] = createdWindows.slice(-1) as [FakeBrowserWindow];
+    const { webContents } = created;
+    const hooked = webContents.on.mock.calls.map((call) => call[0] as string);
+    expect(hooked).toEqual(
+      expect.arrayContaining(["will-navigate", "will-redirect", "will-attach-webview"]),
+    );
+    expect(webContents.session.setPermissionRequestHandler).toHaveBeenCalledTimes(1);
+    expect(webContents.session.setPermissionCheckHandler).toHaveBeenCalledTimes(1);
   });
 });

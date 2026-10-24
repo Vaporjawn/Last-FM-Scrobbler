@@ -1,3 +1,4 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import type { BrowserWindow } from "electron";
 import electron from "electron";
 import type { PlaybackSource, PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
@@ -58,8 +59,11 @@ const TRACKER_TICK_INTERVAL_MS = 1000;
 export function wireNowPlaying(
   source: PlaybackSource,
   mainWindow: BrowserWindow,
+  expectedOrigin: string,
   onScrobbleEligible: (event: ScrobbleEligibleEvent) => void = (event) => {
-    console.log(`Scrobble eligible (not submitted — no handler wired): ${event.track.artist} — ${event.track.title}`);
+    console.log(
+      `Scrobble eligible (not submitted — no handler wired): ${event.track.artist} — ${event.track.title}`,
+    );
   },
   onTrackChanged?: (event: TrackChangedEvent) => void,
   filter?: CompiledFilter,
@@ -81,7 +85,8 @@ export function wireNowPlaying(
     mainWindow.webContents.send(IPC_CHANNELS.nowPlayingStateChanged, state);
   });
 
-  ipcMain.handle(IPC_CHANNELS.nowPlayingGetCurrent, async (): Promise<NowPlayingSnapshot> => {
+  const ipc = createTrustedIpc(ipcMain, expectedOrigin);
+  ipc.handle(IPC_CHANNELS.nowPlayingGetCurrent, async (): Promise<NowPlayingSnapshot> => {
     const positionSec = await source.getPosition();
     return { track: currentTrack, state: currentState, positionSec };
   });
@@ -92,6 +97,10 @@ export function wireNowPlaying(
     ...(filter ? { filter } : {}),
   });
   tracker.start();
+  // One position read at a time: if the player is slow to answer, issuing a new read on
+  // every tick would let replies arrive out of order (the bar jumping backwards) and keep
+  // every pending read alive until the player responds.
+  let positionReadInFlight = false;
   const tickHandle = setInterval(() => {
     tracker.tick();
 
@@ -99,11 +108,15 @@ export function wireNowPlaying(
     // playback has no reason to change every tick, and every current adapter's
     // `getPosition()` is either a live IPC/D-Bus round trip (Windows/Linux) or a
     // spawned-process read (macOS), not free to call for no reason.
-    if (currentState === "playing") {
+    if (currentState === "playing" && !positionReadInFlight) {
+      positionReadInFlight = true;
       source
         .getPosition()
         .then((positionSec) => {
-          mainWindow.webContents.send(IPC_CHANNELS.nowPlayingPositionChanged, positionSec);
+          // The window can be closed while the read was pending.
+          if (!mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC_CHANNELS.nowPlayingPositionChanged, positionSec);
+          }
         })
         .catch((error: unknown) => {
           // Defensive only — every current adapter's getPosition() already never
@@ -113,6 +126,9 @@ export function wireNowPlaying(
           // scrobble-critical (see Tracker, which never reads it) — never worth
           // crashing the tick loop over.
           console.error("Failed to read playback position:", error);
+        })
+        .finally(() => {
+          positionReadInFlight = false;
         });
     }
   }, TRACKER_TICK_INTERVAL_MS);

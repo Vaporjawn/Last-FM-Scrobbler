@@ -16,12 +16,15 @@ vi.mock("electron", () => ({ ipcMain, default: { ipcMain } }));
 const { wireSettings } = await import("../../../src/main/settings/wire-settings.js");
 const { IPC_CHANNELS } = await import("../../../src/shared/ipc-channels.js");
 
+const EXPECTED_ORIGIN = "http://localhost:5173";
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   const handler = ipcMainHandlers.get(channel);
   if (!handler) {
     throw new Error(`No handler registered for ${channel}`);
   }
-  return Promise.resolve(handler({}, ...args));
+  return Promise.resolve(handler(TRUSTED_EVENT, ...args));
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -58,14 +61,14 @@ function fakeStore(initial = DEFAULT_SETTINGS) {
 describe("wireSettings", () => {
   it("get returns the store's current settings", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     await expect(invoke(IPC_CHANNELS.settingsGet)).resolves.toEqual(DEFAULT_SETTINGS);
   });
 
   it("set forwards the patch to the store and returns the updated settings", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     const result = await invoke(IPC_CHANNELS.settingsSet, { closeToTray: false });
 
@@ -76,7 +79,7 @@ describe("wireSettings", () => {
   it("calls onAspectRatioChange with the new value when a set() patch changes aspectRatio", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
     const onAspectRatioChange = vi.fn();
-    wireSettings({ store, onAspectRatioChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onAspectRatioChange });
 
     await invoke(IPC_CHANNELS.settingsSet, { aspectRatio: "16:9" });
 
@@ -86,7 +89,7 @@ describe("wireSettings", () => {
   it("does not call onAspectRatioChange when a set() patch doesn't touch aspectRatio", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
     const onAspectRatioChange = vi.fn();
-    wireSettings({ store, onAspectRatioChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onAspectRatioChange });
 
     await invoke(IPC_CHANNELS.settingsSet, { closeToTray: false });
 
@@ -95,7 +98,7 @@ describe("wireSettings", () => {
 
   it("doesn't throw when onAspectRatioChange is omitted and a patch changes aspectRatio", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     const result = await invoke(IPC_CHANNELS.settingsSet, { aspectRatio: "4:3" });
 
@@ -111,13 +114,13 @@ describe("wireSettings", () => {
     // any of that.
     const store = fakeStore(DEFAULT_SETTINGS);
     const onAspectRatioChange = vi.fn();
-    wireSettings({ store, onAspectRatioChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onAspectRatioChange });
     const handler = ipcMainHandlers.get(IPC_CHANNELS.settingsSet);
 
     // Electron's real ipcMain.handle contract accepts either a synchronous throw or a
     // rejected promise from a handler — this is a synchronous throw, so it must be
     // caught via a wrapping function, not `await ... rejects`.
-    expect(() => handler?.({}, { aspectRatio: "21:9" })).toThrow(/invalid aspectRatio/i);
+    expect(() => handler?.(TRUSTED_EVENT, { aspectRatio: "21:9" })).toThrow(/invalid aspectRatio/i);
     expect(store.set).not.toHaveBeenCalled();
     expect(onAspectRatioChange).not.toHaveBeenCalled();
   });
@@ -125,7 +128,7 @@ describe("wireSettings", () => {
   it("calls onLaunchAtLoginChange with the new value when a set() patch changes launchAtLogin", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
     const onLaunchAtLoginChange = vi.fn();
-    wireSettings({ store, onLaunchAtLoginChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onLaunchAtLoginChange });
 
     await invoke(IPC_CHANNELS.settingsSet, { launchAtLogin: true });
 
@@ -138,7 +141,7 @@ describe("wireSettings", () => {
     // apply immediately the way launchAtLogin's OS login-item registration needs.
     const store = fakeStore({ ...DEFAULT_SETTINGS, launchAtLogin: true });
     const onLaunchAtLoginChange = vi.fn();
-    wireSettings({ store, onLaunchAtLoginChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onLaunchAtLoginChange });
 
     await invoke(IPC_CHANNELS.settingsSet, { startMinimized: true });
 
@@ -148,7 +151,7 @@ describe("wireSettings", () => {
   it("does not call onLaunchAtLoginChange when a set() patch touches neither launchAtLogin nor startMinimized", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
     const onLaunchAtLoginChange = vi.fn();
-    wireSettings({ store, onLaunchAtLoginChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onLaunchAtLoginChange });
 
     await invoke(IPC_CHANNELS.settingsSet, { closeToTray: false });
 
@@ -157,7 +160,7 @@ describe("wireSettings", () => {
 
   it("doesn't throw when onLaunchAtLoginChange is omitted and a patch changes launchAtLogin", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     const result = await invoke(IPC_CHANNELS.settingsSet, { launchAtLogin: true });
 
@@ -167,7 +170,7 @@ describe("wireSettings", () => {
   it("calls onShowDockIconChange with the new value when a set() patch changes showDockIcon", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
     const onShowDockIconChange = vi.fn();
-    wireSettings({ store, onShowDockIconChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onShowDockIconChange });
 
     await invoke(IPC_CHANNELS.settingsSet, { showDockIcon: false });
 
@@ -177,7 +180,7 @@ describe("wireSettings", () => {
   it("does not call onShowDockIconChange when a set() patch doesn't touch showDockIcon", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
     const onShowDockIconChange = vi.fn();
-    wireSettings({ store, onShowDockIconChange });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store, onShowDockIconChange });
 
     await invoke(IPC_CHANNELS.settingsSet, { closeToTray: false });
 
@@ -186,7 +189,7 @@ describe("wireSettings", () => {
 
   it("doesn't throw when onShowDockIconChange is omitted and a patch changes showDockIcon", async () => {
     const store = fakeStore(DEFAULT_SETTINGS);
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     const result = await invoke(IPC_CHANNELS.settingsSet, { showDockIcon: false });
 
@@ -195,7 +198,7 @@ describe("wireSettings", () => {
 
   it("reset calls the store's reset() and returns the defaults", async () => {
     const store = fakeStore({ ...DEFAULT_SETTINGS, closeToTray: false });
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     const result = await invoke(IPC_CHANNELS.settingsReset);
 
@@ -205,7 +208,7 @@ describe("wireSettings", () => {
 
   it("reset persists — a subsequent get reflects the defaults, not the pre-reset settings", async () => {
     const store = fakeStore({ ...DEFAULT_SETTINGS, closeToTray: false, themeMode: "light" });
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     await invoke(IPC_CHANNELS.settingsReset);
 
@@ -222,7 +225,13 @@ describe("wireSettings", () => {
     const onAspectRatioChange = vi.fn();
     const onLaunchAtLoginChange = vi.fn();
     const onShowDockIconChange = vi.fn();
-    wireSettings({ store, onAspectRatioChange, onLaunchAtLoginChange, onShowDockIconChange });
+    wireSettings({
+      expectedOrigin: EXPECTED_ORIGIN,
+      store,
+      onAspectRatioChange,
+      onLaunchAtLoginChange,
+      onShowDockIconChange,
+    });
 
     await invoke(IPC_CHANNELS.settingsReset);
 
@@ -233,13 +242,13 @@ describe("wireSettings", () => {
 
   it("doesn't throw when reset is invoked with both live-update callbacks omitted", async () => {
     const store = fakeStore();
-    wireSettings({ store });
+    wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
 
     await expect(invoke(IPC_CHANNELS.settingsReset)).resolves.toEqual(DEFAULT_SETTINGS);
   });
 
   it("removes all handlers when the returned cleanup function is called", () => {
-    const stop = wireSettings({ store: fakeStore() });
+    const stop = wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store: fakeStore() });
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsGet)).toBe(true);
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsReset)).toBe(true);
 
@@ -248,5 +257,50 @@ describe("wireSettings", () => {
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsGet)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsSet)).toBe(false);
     expect(ipcMainHandlers.has(IPC_CHANNELS.settingsReset)).toBe(false);
+  });
+
+  it("rejects every handler it registers when the caller is not the app's own page", () => {
+    wireSettings({
+      expectedOrigin: EXPECTED_ORIGIN,
+      store: { get: vi.fn(), set: vi.fn(), reset: vi.fn() },
+    });
+    expect(ipcMainHandlers.size).toBeGreaterThan(0);
+    for (const [channel, handler] of ipcMainHandlers) {
+      expect(() => handler({ senderFrame: { url: "https://evil.example/" } }), channel).toThrow(
+        /untrusted sender/i,
+      );
+    }
+  });
+
+  describe("untrusted patches", () => {
+    function handlerFor(store = { get: vi.fn(), set: vi.fn(), reset: vi.fn() }) {
+      wireSettings({ expectedOrigin: EXPECTED_ORIGIN, store });
+      return {
+        store,
+        handler: ipcMainHandlers.get(IPC_CHANNELS.settingsSet) as (
+          event: unknown,
+          patch: unknown,
+        ) => unknown,
+      };
+    }
+
+    it.each([[null], [undefined], ["themeMode"], [7], [[{ themeMode: "dark" }]]])(
+      "refuses %j, which is not an object of settings",
+      (patch) => {
+        const { handler, store } = handlerFor();
+
+        expect(() => handler(TRUSTED_EVENT, patch)).toThrow(/expects an object/);
+        expect(store.set).not.toHaveBeenCalled();
+      },
+    );
+
+    it("refuses unknown keys and invalid values without storing anything", () => {
+      const { handler, store } = handlerFor();
+
+      expect(() => handler(TRUSTED_EVENT, { themeMode: "neon", evil: 1 })).toThrow(
+        /rejected unknown or invalid settings: themeMode, evil/,
+      );
+      expect(store.set).not.toHaveBeenCalled();
+    });
   });
 });

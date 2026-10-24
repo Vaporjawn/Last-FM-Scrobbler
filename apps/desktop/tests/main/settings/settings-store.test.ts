@@ -156,4 +156,47 @@ describe("createSettingsStore", () => {
       expect(mode).toBe(0o600);
     },
   );
+
+  describe("untrusted input", () => {
+    it("ignores unknown keys and invalid values in a hand-edited settings file", () => {
+      writeFileSync(
+        filePath,
+        JSON.stringify({
+          closeToTray: false,
+          themeMode: "sepia",
+          windowBounds: { x: 0, y: 0, width: 1e12, height: 10 },
+          injected: "value",
+        }),
+      );
+      const store = createSettingsStore({ filePath });
+
+      expect(store.get()).toEqual({ ...DEFAULT_APP_SETTINGS, closeToTray: false });
+    });
+
+    it("falls back to the defaults for a file that is valid JSON but not an object", () => {
+      writeFileSync(filePath, "null");
+
+      expect(createSettingsStore({ filePath }).get()).toEqual(DEFAULT_APP_SETTINGS);
+    });
+
+    it("does not persist unknown keys or invalid values passed to set()", () => {
+      const store = createSettingsStore({ filePath });
+
+      store.set({ closeToTray: false, bogus: 1, themeMode: "neon" } as never);
+
+      expect(JSON.parse(readFileSync(filePath, "utf8"))).toEqual({
+        ...DEFAULT_APP_SETTINGS,
+        closeToTray: false,
+      });
+    });
+
+    it("still lets set() clear a saved filter expression", () => {
+      const store = createSettingsStore({ filePath });
+      store.set({ filterExpression: 'sourceApp == "x"' });
+
+      store.set({ filterExpression: undefined });
+
+      expect(store.get().filterExpression).toBeUndefined();
+    });
+  });
 });

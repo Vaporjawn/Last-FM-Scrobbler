@@ -200,18 +200,15 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     networkStatus?.reportQueueChanged();
   }
 
-  async function onTrackChanged(event: TrackChangedEvent): Promise<void> {
+  async function sendNowPlaying(event: TrackChangedEvent): Promise<void> {
     let connected: readonly ConnectedService[];
     try {
       connected = await connectedServices();
     } catch (error) {
-      // A service's getClient() can genuinely reject (see drainOnce's matching catch
-      // for the full failure-mode writeup) — best-effort here too, matching this
-      // function's own per-service catch below and its own docstring: a "now playing"
-      // push failing is never worth crashing over or leaving as an unhandled
-      // rejection (this is always invoked via a bare, uncaught
-      // `void scrobbling.onTrackChanged(event)` in main/index.ts).
-      console.error("scrobbling: failed to resolve connected services for now-playing update:", error);
+      console.error(
+        "scrobbling: failed to resolve connected services for now-playing update:",
+        error,
+      );
       return;
     }
     if (connected.length === 0) {
@@ -227,17 +224,44 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
         try {
           await client.updateNowPlaying(submission);
         } catch {
-          // Best-effort per service — see ScrobblingHandle.onTrackChanged's docstring
-          // for why this isn't retried, surfaced via onScrobbleFailed (that callback
-          // specifically tracks the persistent scrobble-queue drain, a different
-          // failure mode with different stakes than a single transient now-playing
-          // update), or allowed to stop the update from reaching other services.
+          // Best-effort: a failed now-playing update is not worth surfacing, the real
+          // scrobble follows through the queue.
         }
       }),
     );
   }
 
-  async function drainOnce(): Promise<void> {
+  // Now-playing updates go out one at a time. Sent concurrently, a slow request for the
+  // previous track could land at the service *after* the newest one and leave the wrong
+  // track showing as "now playing". While one is in flight, later events replace each
+  // other in this single slot, so only the newest is sent next and superseded ones are
+  // skipped rather than queued up behind a slow request.
+  let nowPlayingRunning = false;
+  let queuedNowPlaying: TrackChangedEvent | undefined;
+  const takeQueuedNowPlaying = (): TrackChangedEvent | undefined => {
+    const queued = queuedNowPlaying;
+    queuedNowPlaying = undefined;
+    return queued;
+  };
+
+  async function onTrackChanged(event: TrackChangedEvent): Promise<void> {
+    if (nowPlayingRunning) {
+      queuedNowPlaying = event;
+      return;
+    }
+    nowPlayingRunning = true;
+    try {
+      let next: TrackChangedEvent | undefined = event;
+      while (next) {
+        await sendNowPlaying(next);
+        next = takeQueuedNowPlaying();
+      }
+    } finally {
+      nowPlayingRunning = false;
+    }
+  }
+
+  async function runDrain(): Promise<void> {
     let connected: readonly ConnectedService[];
     try {
       connected = await connectedServices();
@@ -371,8 +395,24 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     }
   }
 
+  // A drain reads the queue, submits the batch over the network, and only then removes
+  // what was accepted. If the network is slower than the drain interval, a second drain
+  // started in that window would read the very same rows and submit every one of them
+  // again — duplicate scrobbles. While one drain runs, callers share its result instead.
+  let drainInFlight: Promise<void> | undefined;
+  function drainOnce(): Promise<void> {
+    drainInFlight ??= runDrain().finally(() => {
+      drainInFlight = undefined;
+    });
+    return drainInFlight;
+  }
+
   const intervalHandle = setInterval(() => {
-    void drainOnce();
+    // Nothing awaits the timer's drain, so a failure inside it (a full disk, a closed
+    // database during shutdown) would otherwise surface as an unhandled rejection.
+    drainOnce().catch((error: unknown) => {
+      console.error("scrobbling: drain failed:", error);
+    });
   }, options.drainIntervalMs ?? DEFAULT_DRAIN_INTERVAL_MS);
 
   return {

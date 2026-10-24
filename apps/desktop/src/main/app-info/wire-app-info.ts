@@ -1,3 +1,4 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 
@@ -6,6 +7,8 @@ import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 const { ipcMain } = electron;
 
 export interface WireAppInfoOptions {
+  /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
+  readonly expectedOrigin: string;
   /** Real callers pass `() => app.getVersion()` — injected for easy testing, and so
    * this module doesn't need to import Electron's `app` singleton itself. */
   readonly getVersion: () => string;
@@ -21,10 +24,11 @@ export interface WireAppInfoOptions {
  * own version (shown in Settings → General) and a way for the tray popover to bring
  * the main window forward. */
 export function wireAppInfo(options: WireAppInfoOptions): () => void {
-  const { getVersion, onShowMainWindow } = options;
+  const { getVersion, onShowMainWindow, expectedOrigin } = options;
+  const ipc = createTrustedIpc(ipcMain, expectedOrigin);
 
-  ipcMain.handle(IPC_CHANNELS.appGetVersion, (): string => getVersion());
-  ipcMain.handle(IPC_CHANNELS.appShowMainWindow, (): void => {
+  ipc.handle(IPC_CHANNELS.appGetVersion, (): string => getVersion());
+  ipc.handle(IPC_CHANNELS.appShowMainWindow, (): void => {
     onShowMainWindow?.();
   });
 

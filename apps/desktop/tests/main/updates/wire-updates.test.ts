@@ -49,12 +49,15 @@ function fakeMainWindow() {
   };
 }
 
+const EXPECTED_ORIGIN = "http://localhost:5173";
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   const handler = ipcMainHandlers.get(channel);
   if (!handler) {
     throw new Error(`No handler registered for ${channel}`);
   }
-  return Promise.resolve(handler({}, ...args));
+  return Promise.resolve(handler(TRUSTED_EVENT, ...args));
 }
 
 describe("wireUpdates", () => {
@@ -69,6 +72,7 @@ describe("wireUpdates", () => {
   it("getStatus starts at idle before any check has run", async () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -82,6 +86,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     const mainWindow = fakeMainWindow();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => mainWindow as never,
       isAutoCheckEnabled: () => false,
@@ -119,6 +124,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     let currentWindow = fakeMainWindow();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => currentWindow as never,
       isAutoCheckEnabled: () => false,
@@ -137,10 +143,10 @@ describe("wireUpdates", () => {
     client.emit("update-available", { version: "1.2.3" });
 
     expect(oldWindow.webContents.send).toHaveBeenCalledTimes(1); // unchanged, still 1
-    expect(currentWindow.webContents.send).toHaveBeenCalledWith(
-      IPC_CHANNELS.updatesStatusChanged,
-      { phase: "available", version: "1.2.3" },
-    );
+    expect(currentWindow.webContents.send).toHaveBeenCalledWith(IPC_CHANNELS.updatesStatusChanged, {
+      phase: "available",
+      version: "1.2.3",
+    });
   });
 
   it("doesn't push to a destroyed window", () => {
@@ -148,6 +154,7 @@ describe("wireUpdates", () => {
     const mainWindow = fakeMainWindow();
     mainWindow.isDestroyed.mockReturnValue(true);
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => mainWindow as never,
       isAutoCheckEnabled: () => false,
@@ -162,6 +169,7 @@ describe("wireUpdates", () => {
   it("an 'error' event updates status with the error's message", async () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -180,6 +188,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     const onUpdateCheckFailed = vi.fn();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -195,6 +204,7 @@ describe("wireUpdates", () => {
   it("doesn't throw when an 'error' event fires with no onUpdateCheckFailed provided", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -210,6 +220,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     const onUpdateAvailable = vi.fn();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -225,6 +236,7 @@ describe("wireUpdates", () => {
   it("doesn't throw when 'update-available' fires with no onUpdateAvailable provided", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -240,6 +252,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     const promptToRestart = vi.fn().mockResolvedValue(true);
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -259,6 +272,7 @@ describe("wireUpdates", () => {
     const client = fakeUpdaterClient();
     const promptToRestart = vi.fn().mockResolvedValue(false);
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -276,6 +290,7 @@ describe("wireUpdates", () => {
   it("checkNow (manual) always triggers a check, even with auto-check disabled", async () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -290,6 +305,7 @@ describe("wireUpdates", () => {
   it("runs an initial background check after the startup delay, only when auto-check is enabled", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => true,
@@ -308,6 +324,7 @@ describe("wireUpdates", () => {
   it("skips the initial and periodic background checks when auto-check is disabled", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => false,
@@ -324,6 +341,7 @@ describe("wireUpdates", () => {
   it("checks again on the configured interval", () => {
     const client = fakeUpdaterClient();
     wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => true,
@@ -345,6 +363,7 @@ describe("wireUpdates", () => {
   it("removes handlers, listeners, and timers when the returned cleanup function is called", () => {
     const client = fakeUpdaterClient();
     const stop = wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
       client,
       getMainWindow: () => fakeMainWindow() as never,
       isAutoCheckEnabled: () => true,
@@ -376,6 +395,7 @@ describe("wireUpdates", () => {
       const client = fakeUpdaterClient();
       const mainWindow = fakeMainWindow();
       const stop = wireUpdates({
+        expectedOrigin: EXPECTED_ORIGIN,
         client,
         getMainWindow: () => mainWindow as never,
         isAutoCheckEnabled: () => true,
@@ -420,5 +440,23 @@ describe("wireUpdates", () => {
       expect(errorSpy).toHaveBeenCalledWith("updates: background check failed:", failure);
       stop();
     });
+  });
+
+  it("rejects every handler it registers when the caller is not the app's own page", () => {
+    const stop = wireUpdates({
+      expectedOrigin: EXPECTED_ORIGIN,
+      client: fakeUpdaterClient(),
+      getMainWindow: () => fakeMainWindow() as never,
+      isAutoCheckEnabled: () => false,
+      promptToRestart: () => Promise.resolve(false),
+    });
+
+    expect(ipcMainHandlers.size).toBeGreaterThan(0);
+    for (const [channel, handler] of ipcMainHandlers) {
+      expect(() => handler({ senderFrame: { url: "https://evil.example/" } }), channel).toThrow(
+        /untrusted sender/i,
+      );
+    }
+    stop();
   });
 });

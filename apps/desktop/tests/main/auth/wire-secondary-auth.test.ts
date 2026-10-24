@@ -205,7 +205,10 @@ describe("wireSecondaryAuth", () => {
       await librefmAppCredentialsStore.set({ apiKey: "key", apiSecret: "secret" });
       let resolveToken: ((token: string) => void) | undefined;
       const getAuthToken = vi.fn(
-        () => new Promise<string>((resolve) => { resolveToken = resolve; }),
+        () =>
+          new Promise<string>((resolve) => {
+            resolveToken = resolve;
+          }),
       );
       wireSecondaryAuth({
         expectedOrigin: EXPECTED_ORIGIN,
@@ -623,9 +626,11 @@ describe("wireSecondaryAuth", () => {
     });
 
     it("validates a ListenBrainz token against the real ListenBrainz client by default", async () => {
-      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-        new Response(JSON.stringify({ valid: true, user_name: "listener" }), { status: 200 }),
-      );
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ valid: true, user_name: "listener" }), { status: 200 }),
+        );
       vi.stubGlobal("fetch", fetchMock);
       try {
         wireSecondaryAuth({
@@ -645,6 +650,59 @@ describe("wireSecondaryAuth", () => {
       } finally {
         vi.unstubAllGlobals();
       }
+    });
+  });
+
+  describe("overlapping connects", () => {
+    /** Storage that yields to the event loop on every call, so overlapping store
+     * operations genuinely interleave. */
+    function slowStorage(): SecretStorage {
+      const inner = inMemoryStorage();
+      const yieldFirst = () => new Promise<void>((resolve) => setImmediate(resolve));
+      return {
+        get: async (key) => {
+          await yieldFirst();
+          return inner.get(key);
+        },
+        set: async (key, value) => {
+          await yieldFirst();
+          return inner.set(key, value);
+        },
+        delete: async (key) => {
+          await yieldFirst();
+          return inner.delete(key);
+        },
+        list: async () => {
+          await yieldFirst();
+          return inner.list();
+        },
+      };
+    }
+
+    it("leaves exactly one ListenBrainz account when two connects overlap", async () => {
+      const listenbrainzAccountStore = new AccountStore(slowStorage());
+      wireSecondaryAuth({
+        expectedOrigin: EXPECTED_ORIGIN,
+        librefmAccountStore: new AccountStore(inMemoryStorage()),
+        librefmAppCredentialsStore: new AppCredentialsStore(inMemoryStorage()),
+        resolveLibrefmCredentials: () => Promise.resolve(undefined),
+        listenbrainzAccountStore,
+        openUrl: vi.fn(),
+        createListenBrainzClient: (token) => ({
+          validateToken: () => Promise.resolve({ valid: true, username: `user-of-${token}` }),
+        }),
+      });
+
+      await Promise.all([
+        invoke(IPC_CHANNELS.listenbrainzConnect, "token-a"),
+        invoke(IPC_CHANNELS.listenbrainzConnect, "token-b"),
+      ]);
+
+      const usernames = (await listenbrainzAccountStore.listAccounts()).map(
+        (account) => account.username,
+      );
+      expect(usernames).toHaveLength(1);
+      expect((await listenbrainzAccountStore.getActiveAccount())?.username).toBe(usernames[0]);
     });
   });
 });

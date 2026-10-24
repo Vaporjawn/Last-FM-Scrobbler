@@ -1,3 +1,4 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
 import { compileFilter, FilterSyntaxError } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
@@ -7,25 +8,29 @@ import type { FilterValidationResult } from "../../shared/filter-api.js";
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
 
+export interface WireFilterValidationOptions {
+  /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
+  readonly expectedOrigin: string;
+}
+
 /**
  * Wires the filter-expression validation IPC surface (see `shared/filter-api.ts` for
  * why this exists as its own channel rather than a renderer-side `compileFilter`
  * call). Unconditional, like `wireArtistImage` — no credentials or configuration
  * needed, so this is always available regardless of build.
  */
-export function wireFilterValidation(): () => void {
-  ipcMain.handle(
-    IPC_CHANNELS.filterValidate,
-    (_event, expression: unknown): FilterValidationResult => {
-      try {
-        compileFilter(String(expression));
-        return { valid: true };
-      } catch (error) {
-        const message = error instanceof FilterSyntaxError ? error.message : String(error);
-        return { valid: false, error: message };
-      }
-    },
-  );
+export function wireFilterValidation(options: WireFilterValidationOptions): () => void {
+  const ipc = createTrustedIpc(ipcMain, options.expectedOrigin);
+
+  ipc.handle(IPC_CHANNELS.filterValidate, (_event, expression: unknown): FilterValidationResult => {
+    try {
+      compileFilter(String(expression));
+      return { valid: true };
+    } catch (error) {
+      const message = error instanceof FilterSyntaxError ? error.message : String(error);
+      return { valid: false, error: message };
+    }
+  });
 
   return () => {
     ipcMain.removeHandler(IPC_CHANNELS.filterValidate);

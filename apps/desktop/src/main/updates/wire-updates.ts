@@ -1,3 +1,4 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import type { BrowserWindow } from "electron";
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
@@ -18,6 +19,8 @@ const DEFAULT_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const INITIAL_CHECK_DELAY_MS = 10_000;
 
 export interface WireUpdatesOptions {
+  /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
+  readonly expectedOrigin: string;
   readonly client: UpdaterClient;
   /** A live accessor for the current main window, not a captured value — this window
    * can be destroyed and replaced (main window closed with "close to tray" off, then
@@ -70,6 +73,7 @@ export interface WireUpdatesOptions {
 export function wireUpdates(options: WireUpdatesOptions): () => void {
   const {
     client,
+    expectedOrigin,
     getMainWindow,
     isAutoCheckEnabled,
     promptToRestart,
@@ -78,6 +82,7 @@ export function wireUpdates(options: WireUpdatesOptions): () => void {
     onUpdateAvailable,
     onUpdateCheckFailed,
   } = options;
+  const ipc = createTrustedIpc(ipcMain, expectedOrigin);
 
   let status: UpdateStatus = { phase: "idle" };
 
@@ -126,8 +131,8 @@ export function wireUpdates(options: WireUpdatesOptions): () => void {
   client.on("update-downloaded", onUpdateDownloaded);
   client.on("error", handleError);
 
-  ipcMain.handle(IPC_CHANNELS.updatesGetStatus, (): UpdateStatus => status);
-  ipcMain.handle(IPC_CHANNELS.updatesCheckNow, async (): Promise<void> => {
+  ipc.handle(IPC_CHANNELS.updatesGetStatus, (): UpdateStatus => status);
+  ipc.handle(IPC_CHANNELS.updatesCheckNow, async (): Promise<void> => {
     await client.checkForUpdates();
   });
 

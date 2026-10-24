@@ -1,3 +1,4 @@
+import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
 import { fetchArtistImageUrl, type LastfmClient } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
@@ -13,6 +14,8 @@ export interface ArtistImageLastfmClient {
 }
 
 export interface WireArtistImageOptions {
+  /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
+  readonly expectedOrigin: string;
   /** When given, tried first — Last.fm's own `artist.getInfo` photo (already filtered
    * for Last.fm's shared placeholder; see `LastfmClient.getArtistImageUrl`). Falls
    * through to Deezer (see below) on any failure — an artist Last.fm's catalog
@@ -56,11 +59,12 @@ async function resolveArtistImageUrl(
  * `wire-lastfm-data.ts`/`wire-bug-report.ts` — Deezer's search endpoint needs no API
  * key, so photos keep working even in a build with no Last.fm credentials at all.
  */
-export function wireArtistImage(options: WireArtistImageOptions = {}): () => void {
+export function wireArtistImage(options: WireArtistImageOptions): () => void {
   const fetchImpl = options.fetchImpl ?? fetch;
   const lastfmClient = options.lastfmClient;
+  const ipc = createTrustedIpc(ipcMain, options.expectedOrigin);
 
-  ipcMain.handle(
+  ipc.handle(
     IPC_CHANNELS.artistImageGetUrl,
     (_event, artistName: unknown): Promise<string | undefined> =>
       resolveArtistImageUrl(String(artistName), lastfmClient, fetchImpl),

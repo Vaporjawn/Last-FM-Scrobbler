@@ -15,26 +15,32 @@ vi.mock("electron", () => ({ ipcMain, default: { ipcMain } }));
 const { wireArtistImage } = await import("../../../src/main/artist-images/wire-artist-image.js");
 const { IPC_CHANNELS } = await import("../../../src/shared/ipc-channels.js");
 
+const EXPECTED_ORIGIN = "http://localhost:5173";
+const TRUSTED_EVENT = { senderFrame: { url: "http://localhost:5173/" } };
+
 function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
   const handler = ipcMainHandlers.get(channel);
   if (!handler) {
     throw new Error(`No handler registered for ${channel}`);
   }
-  return Promise.resolve(handler({}, ...args));
+  return Promise.resolve(handler(TRUSTED_EVENT, ...args));
 }
 
 function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 describe("wireArtistImage", () => {
   it("resolves with the fetched artist's image URL", async () => {
-    const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        jsonResponse({ data: [{ name: "Radiohead", picture_xl: "https://example.com/radiohead.jpg" }] }),
-      );
-    wireArtistImage({ fetchImpl });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({
+        data: [{ name: "Radiohead", picture_xl: "https://example.com/radiohead.jpg" }],
+      }),
+    );
+    wireArtistImage({ expectedOrigin: EXPECTED_ORIGIN, fetchImpl });
 
     const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Radiohead");
 
@@ -45,13 +51,13 @@ describe("wireArtistImage", () => {
 
   it("resolves undefined rather than rejecting when nothing is found", async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ data: [] }));
-    wireArtistImage({ fetchImpl });
+    wireArtistImage({ expectedOrigin: EXPECTED_ORIGIN, fetchImpl });
 
     await expect(invoke(IPC_CHANNELS.artistImageGetUrl, "zzznonexistent")).resolves.toBeUndefined();
   });
 
   it("removes the handler when the returned cleanup function is called", () => {
-    const stop = wireArtistImage({ fetchImpl: vi.fn() });
+    const stop = wireArtistImage({ expectedOrigin: EXPECTED_ORIGIN, fetchImpl: vi.fn() });
     expect(ipcMainHandlers.has(IPC_CHANNELS.artistImageGetUrl)).toBe(true);
 
     stop();
@@ -63,7 +69,11 @@ describe("wireArtistImage", () => {
     it("tries Last.fm first and returns its photo without ever calling Deezer", async () => {
       const getArtistImageUrl = vi.fn().mockResolvedValue("https://lastfm.example.com/real.jpg");
       const fetchImpl = vi.fn<typeof fetch>();
-      wireArtistImage({ lastfmClient: { getArtistImageUrl }, fetchImpl });
+      wireArtistImage({
+        expectedOrigin: EXPECTED_ORIGIN,
+        lastfmClient: { getArtistImageUrl },
+        fetchImpl,
+      });
 
       const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Radiohead");
 
@@ -74,12 +84,16 @@ describe("wireArtistImage", () => {
 
     it("falls through to Deezer when Last.fm has nothing for this artist", async () => {
       const getArtistImageUrl = vi.fn().mockResolvedValue(undefined);
-      const fetchImpl = vi
-        .fn<typeof fetch>()
-        .mockResolvedValue(
-          jsonResponse({ data: [{ name: "Kendrick Lamar", picture_xl: "https://deezer.example.com/real.jpg" }] }),
-        );
-      wireArtistImage({ lastfmClient: { getArtistImageUrl }, fetchImpl });
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          data: [{ name: "Kendrick Lamar", picture_xl: "https://deezer.example.com/real.jpg" }],
+        }),
+      );
+      wireArtistImage({
+        expectedOrigin: EXPECTED_ORIGIN,
+        lastfmClient: { getArtistImageUrl },
+        fetchImpl,
+      });
 
       const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Kendrick Lamar");
 
@@ -90,12 +104,18 @@ describe("wireArtistImage", () => {
       // e.g. LastfmApiError for an artist Last.fm's catalog doesn't have at all —
       // a common, expected case, not something that should ever surface as a failure.
       const getArtistImageUrl = vi.fn().mockRejectedValue(new Error("artist not found"));
-      const fetchImpl = vi
-        .fn<typeof fetch>()
-        .mockResolvedValue(
-          jsonResponse({ data: [{ name: "Some Obscure Artist", picture_xl: "https://deezer.example.com/real.jpg" }] }),
-        );
-      wireArtistImage({ lastfmClient: { getArtistImageUrl }, fetchImpl });
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          data: [
+            { name: "Some Obscure Artist", picture_xl: "https://deezer.example.com/real.jpg" },
+          ],
+        }),
+      );
+      wireArtistImage({
+        expectedOrigin: EXPECTED_ORIGIN,
+        lastfmClient: { getArtistImageUrl },
+        fetchImpl,
+      });
 
       const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Some Obscure Artist");
 
@@ -103,12 +123,12 @@ describe("wireArtistImage", () => {
     });
 
     it("goes straight to Deezer when no lastfmClient is given at all", async () => {
-      const fetchImpl = vi
-        .fn<typeof fetch>()
-        .mockResolvedValue(
-          jsonResponse({ data: [{ name: "Radiohead", picture_xl: "https://deezer.example.com/real.jpg" }] }),
-        );
-      wireArtistImage({ fetchImpl });
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+        jsonResponse({
+          data: [{ name: "Radiohead", picture_xl: "https://deezer.example.com/real.jpg" }],
+        }),
+      );
+      wireArtistImage({ expectedOrigin: EXPECTED_ORIGIN, fetchImpl });
 
       const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Radiohead");
 
@@ -124,7 +144,7 @@ describe("wireArtistImage", () => {
       );
     vi.stubGlobal("fetch", globalFetch);
     try {
-      wireArtistImage();
+      wireArtistImage({ expectedOrigin: EXPECTED_ORIGIN });
 
       const result = await invoke(IPC_CHANNELS.artistImageGetUrl, "Radiohead");
 
@@ -132,6 +152,16 @@ describe("wireArtistImage", () => {
       expect(globalFetch).toHaveBeenCalledTimes(1);
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects every handler it registers when the caller is not the app's own page", () => {
+    wireArtistImage({ expectedOrigin: EXPECTED_ORIGIN, fetchImpl: vi.fn() });
+    expect(ipcMainHandlers.size).toBeGreaterThan(0);
+    for (const [channel, handler] of ipcMainHandlers) {
+      expect(() => handler({ senderFrame: { url: "https://evil.example/" } }), channel).toThrow(
+        /untrusted sender/i,
+      );
     }
   });
 });

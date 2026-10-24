@@ -67,9 +67,12 @@ describe("wireBugReport", () => {
 
   it("submit POSTs title/body/diagnostics to the relay and returns the issue URL", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ issueUrl: "https://github.com/x/y/issues/1", issueNumber: 1 }), {
-        status: 201,
-      }),
+      new Response(
+        JSON.stringify({ issueUrl: "https://github.com/x/y/issues/1", issueNumber: 1 }),
+        {
+          status: 201,
+        },
+      ),
     );
     wireBugReport({
       expectedOrigin: EXPECTED_ORIGIN,
@@ -138,6 +141,17 @@ describe("wireBugReport", () => {
       ).rejects.toThrow(/untrusted sender/i);
     });
 
+    it("rejects the configured check from an untrusted sender too", async () => {
+      wireBugReport({ expectedOrigin: EXPECTED_ORIGIN, relayUrl: "https://relay.example/report" });
+
+      await expect(
+        invokeFrom(
+          { senderFrame: { url: "http://evil.example/" } },
+          IPC_CHANNELS.bugReportIsConfigured,
+        ),
+      ).rejects.toThrow(/untrusted sender/i);
+    });
+
     it("rejects submit when senderFrame is null", async () => {
       wireBugReport({
         expectedOrigin: EXPECTED_ORIGIN,
@@ -166,5 +180,138 @@ describe("wireBugReport", () => {
     await expect(invoke(IPC_CHANNELS.bugReportSubmit, "Title", "Body")).rejects.toThrow(
       "Bug report relay returned 500: ",
     );
+  });
+
+  describe("relay URL and response hardening", () => {
+    const GOOD_REPLY = { issueUrl: "https://github.com/x/y/issues/1", issueNumber: 1 };
+
+    it.each([
+      ["https://relay.example/report", true],
+      ["http://localhost:8787/report", true],
+      ["http://127.0.0.1:8787/report", true],
+      ["http://[::1]:8787/report", true],
+      ["http://relay.example/report", false],
+      ["ftp://relay.example/report", false],
+      ["relay.example/report", false],
+      ["not a url", false],
+    ])("treats the relay URL %s as configured: %s", async (relayUrl, configured) => {
+      wireBugReport({ expectedOrigin: EXPECTED_ORIGIN, relayUrl });
+
+      await expect(invoke(IPC_CHANNELS.bugReportIsConfigured)).resolves.toBe(configured);
+    });
+
+    it("never sends a report to a relay URL it does not accept", async () => {
+      const fetchImpl = vi.fn();
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "http://relay.example/report",
+        fetchImpl,
+      });
+
+      await expect(invoke(IPC_CHANNELS.bugReportSubmit, "T", "B")).rejects.toThrow(
+        /not configured/i,
+      );
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it("sends the request with a timeout signal", async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(GOOD_REPLY)));
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "https://relay.example/report",
+        fetchImpl,
+      });
+
+      await invoke(IPC_CHANNELS.bugReportSubmit, "T", "B");
+
+      expect((fetchImpl.mock.calls[0]?.[1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it.each([
+      ["a non-object", "oops"],
+      ["null", null],
+      ["a missing issue number", { issueUrl: "https://github.com/x/y/issues/1" }],
+      ["a missing issue URL", { issueNumber: 1 }],
+      ["a non-https issue URL", { issueUrl: "javascript:alert(1)", issueNumber: 1 }],
+      ["an http issue URL", { issueUrl: "http://github.com/x/y/issues/1", issueNumber: 1 }],
+      ["an issue URL that is not a URL", { issueUrl: "not a url", issueNumber: 1 }],
+    ])("rejects a relay reply with %s", async (_label, reply) => {
+      const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify(reply)));
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "https://relay.example/report",
+        fetchImpl,
+      });
+
+      await expect(invoke(IPC_CHANNELS.bugReportSubmit, "T", "B")).rejects.toThrow(
+        /could not understand/i,
+      );
+    });
+
+    it("sends a double-submitted identical report only once", async () => {
+      let reply: (response: Response) => void = () => undefined;
+      const fetchImpl = vi.fn().mockReturnValue(
+        new Promise<Response>((resolve) => {
+          reply = resolve;
+        }),
+      );
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "https://relay.example/report",
+        fetchImpl,
+      });
+
+      const first = invoke(IPC_CHANNELS.bugReportSubmit, "Title", "Body");
+      const second = invoke(IPC_CHANNELS.bugReportSubmit, "Title", "Body");
+      reply(new Response(JSON.stringify(GOOD_REPLY)));
+
+      await expect(first).resolves.toEqual(GOOD_REPLY);
+      await expect(second).resolves.toEqual(GOOD_REPLY);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses a different report while one is still being sent, then accepts new ones", async () => {
+      let reply: (response: Response) => void = () => undefined;
+      const fetchImpl = vi
+        .fn()
+        .mockReturnValueOnce(
+          new Promise<Response>((resolve) => {
+            reply = resolve;
+          }),
+        )
+        .mockResolvedValue(new Response(JSON.stringify(GOOD_REPLY)));
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "https://relay.example/report",
+        fetchImpl,
+      });
+
+      const first = invoke(IPC_CHANNELS.bugReportSubmit, "Title", "Body");
+      await expect(invoke(IPC_CHANNELS.bugReportSubmit, "Other", "Report")).rejects.toThrow(
+        /already being sent/i,
+      );
+      reply(new Response(JSON.stringify(GOOD_REPLY)));
+      await first;
+
+      await expect(invoke(IPC_CHANNELS.bugReportSubmit, "Other", "Report")).resolves.toEqual(
+        GOOD_REPLY,
+      );
+    });
+
+    it("allows a retry after a failed send", async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(new Response("down", { status: 503 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(GOOD_REPLY)));
+      wireBugReport({
+        expectedOrigin: EXPECTED_ORIGIN,
+        relayUrl: "https://relay.example/report",
+        fetchImpl,
+      });
+
+      await expect(invoke(IPC_CHANNELS.bugReportSubmit, "T", "B")).rejects.toThrow(/503/);
+
+      await expect(invoke(IPC_CHANNELS.bugReportSubmit, "T", "B")).resolves.toEqual(GOOD_REPLY);
+    });
   });
 });

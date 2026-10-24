@@ -134,7 +134,9 @@ describe("wireScrobbling", () => {
 
     await drainOnce();
 
-    expect(onScrobbled).toHaveBeenCalledWith([{ artist: "Everything Everything", track: "Weights" }]);
+    expect(onScrobbled).toHaveBeenCalledWith([
+      { artist: "Everything Everything", track: "Weights" },
+    ]);
 
     stop();
     queue.close();
@@ -229,7 +231,9 @@ describe("wireScrobbling", () => {
     await expect(drainOnce()).resolves.toBeUndefined();
 
     expect(onScrobbleFailed).toHaveBeenCalledTimes(1);
-    expect(onScrobbleFailed).toHaveBeenCalledWith(expect.stringContaining("Keychain access denied"));
+    expect(onScrobbleFailed).toHaveBeenCalledWith(
+      expect.stringContaining("Keychain access denied"),
+    );
     // The item stays queued — nothing was actually submitted or dropped.
     expect(queue.count()).toBe(1);
 
@@ -431,14 +435,19 @@ describe("wireScrobbling", () => {
     const createSessionClient = vi.fn().mockReturnValue({ scrobble: vi.fn(), updateNowPlaying });
     const { onTrackChanged, stop } = wireScrobbling({ queue, accountStore, createSessionClient });
 
-    await expect(onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 })).resolves.toBeUndefined();
+    await expect(
+      onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 }),
+    ).resolves.toBeUndefined();
 
     stop();
     queue.close();
   });
 
   describe("multi-service (additionalServices)", () => {
-    function connection(id: string, client: { scrobble: ReturnType<typeof vi.fn>; updateNowPlaying?: ReturnType<typeof vi.fn> }) {
+    function connection(
+      id: string,
+      client: { scrobble: ReturnType<typeof vi.fn>; updateNowPlaying?: ReturnType<typeof vi.fn> },
+    ) {
       return { id, getClient: vi.fn().mockResolvedValue(client) };
     }
 
@@ -541,7 +550,9 @@ describe("wireScrobbling", () => {
       expect(queue.count()).toBe(0);
       // Accepted by Libre.fm even though Last.fm permanently ignored it — still
       // reported once as an accepted scrobble.
-      expect(onScrobbled).toHaveBeenCalledWith([{ artist: "Everything Everything", track: "Weights" }]);
+      expect(onScrobbled).toHaveBeenCalledWith([
+        { artist: "Everything Everything", track: "Weights" },
+      ]);
 
       stop();
       queue.close();
@@ -649,7 +660,9 @@ describe("wireScrobbling", () => {
         ],
       });
 
-      await expect(onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 })).resolves.toBeUndefined();
+      await expect(
+        onTrackChanged({ track: TRACK, startedAt: 1_700_000_000 }),
+      ).resolves.toBeUndefined();
 
       expect(lastfmUpdateNowPlaying).toHaveBeenCalledTimes(1);
       expect(librefmUpdateNowPlaying).toHaveBeenCalledTimes(1);
@@ -712,7 +725,9 @@ describe("wireScrobbling", () => {
     const failingAccountStore = {
       getActiveAccount: vi
         .fn()
-        .mockRejectedValue(Object.assign(new Error("keychain unavailable"), { code: "ECONNREFUSED" })),
+        .mockRejectedValue(
+          Object.assign(new Error("keychain unavailable"), { code: "ECONNREFUSED" }),
+        ),
     } as unknown as AccountStore;
     const networkStatus = new NetworkStatusMonitor({ queue });
     const { drainOnce, stop } = wireScrobbling({
@@ -816,7 +831,7 @@ describe("wireScrobbling", () => {
       const queue = new ScrobbleQueue({ databasePath: ":memory:" });
       const accountStore = new AccountStore(inMemoryStorage());
       await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
-       
+
       const scrobble = vi.fn().mockRejectedValue("socket hang up");
       const onScrobbleFailed = vi.fn();
       const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
@@ -863,6 +878,176 @@ describe("wireScrobbling", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("overlapping work", () => {
+    function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((res) => {
+        resolve = res;
+      });
+      return { promise, resolve };
+    }
+
+    const ACCEPTED = {
+      accepted: 1,
+      ignored: 0,
+      results: [{ track: "Weights", ignoredCode: 0, retryable: false }],
+    };
+
+    it("submits a batch once even when a second drain starts while the first is still in flight", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const reply = deferred<typeof ACCEPTED>();
+      const scrobble = vi.fn().mockReturnValue(reply.promise);
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble }) as never,
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      const first = drainOnce();
+      const second = drainOnce();
+      await vi.waitFor(() => {
+        expect(scrobble).toHaveBeenCalledTimes(1);
+      });
+      reply.resolve(ACCEPTED);
+      await Promise.all([first, second]);
+
+      expect(scrobble).toHaveBeenCalledTimes(1);
+      expect(queue.count()).toBe(0);
+      stop();
+      queue.close();
+    });
+
+    it("can drain again once the previous drain has finished", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const scrobble = vi.fn().mockResolvedValue(ACCEPTED);
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble }) as never,
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+      await drainOnce();
+      onScrobbleEligible({ track: { ...TRACK, title: "Next" }, startedAt: 1_700_000_500 });
+
+      await drainOnce();
+
+      expect(scrobble).toHaveBeenCalledTimes(2);
+      stop();
+      queue.close();
+    });
+
+    it("recovers from a drain that failed outright so later drains still run", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const scrobble = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("offline"))
+        .mockResolvedValueOnce(ACCEPTED);
+      const { onScrobbleEligible, drainOnce, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble }) as never,
+      });
+      onScrobbleEligible({ track: TRACK, startedAt: 1_700_000_000 });
+
+      await drainOnce();
+      await drainOnce();
+
+      expect(queue.count()).toBe(0);
+      stop();
+      queue.close();
+    });
+
+    it("sends now-playing updates one at a time, in order, and skips superseded ones", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const firstReply = deferred<undefined>();
+      const updateNowPlaying = vi
+        .fn()
+        .mockReturnValueOnce(firstReply.promise)
+        .mockResolvedValue(undefined);
+      const { onTrackChanged, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble: vi.fn(), updateNowPlaying }),
+      });
+      const event = (title: string) => ({ track: { ...TRACK, title }, startedAt: 1 });
+
+      const first = onTrackChanged(event("A"));
+      await vi.waitFor(() => {
+        expect(updateNowPlaying).toHaveBeenCalledTimes(1);
+      });
+      const second = onTrackChanged(event("B"));
+      const third = onTrackChanged(event("C"));
+      await Promise.all([second, third]);
+      expect(updateNowPlaying).toHaveBeenCalledTimes(1);
+
+      firstReply.resolve(undefined);
+      await first;
+
+      expect(
+        updateNowPlaying.mock.calls.map((call) => (call[0] as { track: string }).track),
+      ).toEqual(["A", "C"]);
+      stop();
+      queue.close();
+    });
+
+    it("logs, instead of leaving an unhandled rejection, when a scheduled drain throws", async () => {
+      vi.useFakeTimers();
+      try {
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+        const accountStore = new AccountStore(inMemoryStorage());
+        await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+        const failure = new Error("database is closed");
+        vi.spyOn(queue, "dequeueBatch").mockImplementation(() => {
+          throw failure;
+        });
+        const { stop } = wireScrobbling({
+          queue,
+          accountStore,
+          createSessionClient: () => ({ scrobble: vi.fn() }) as never,
+          drainIntervalMs: 1000,
+        });
+
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(errorSpy).toHaveBeenCalledWith("scrobbling: drain failed:", failure);
+        stop();
+        queue.close();
+        errorSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("sends the next now-playing update after the previous one has finished", async () => {
+      const queue = new ScrobbleQueue({ databasePath: ":memory:" });
+      const accountStore = new AccountStore(inMemoryStorage());
+      await accountStore.addAccount({ username: "alice", sessionKey: "sk-123" });
+      const updateNowPlaying = vi.fn().mockResolvedValue(undefined);
+      const { onTrackChanged, stop } = wireScrobbling({
+        queue,
+        accountStore,
+        createSessionClient: () => ({ scrobble: vi.fn(), updateNowPlaying }),
+      });
+
+      await onTrackChanged({ track: TRACK, startedAt: 1 });
+      await onTrackChanged({ track: { ...TRACK, title: "Next" }, startedAt: 2 });
+
+      expect(updateNowPlaying).toHaveBeenCalledTimes(2);
+      stop();
+      queue.close();
     });
   });
 });

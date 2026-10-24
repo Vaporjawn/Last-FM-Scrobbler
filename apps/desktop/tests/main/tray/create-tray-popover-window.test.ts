@@ -13,18 +13,27 @@ class FakeBrowserWindow extends EventEmitter {
   loadURL = vi.fn().mockResolvedValue(undefined);
   loadFile = vi.fn().mockResolvedValue(undefined);
   hide = vi.fn();
+  webContents = {
+    on: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn() },
+  };
 
   constructor(public readonly options: Record<string, unknown>) {
     super();
   }
 }
 
+const shell = vi.hoisted(() => ({ openExternal: vi.fn() }));
+
 vi.mock("electron", () => ({
   BrowserWindow: FakeBrowserWindow,
-  default: { BrowserWindow: FakeBrowserWindow },
+  shell,
+  default: { BrowserWindow: FakeBrowserWindow, shell },
 }));
 
-const { createTrayPopoverWindow } = await import("../../../src/main/tray/create-tray-popover-window.js");
+const { createTrayPopoverWindow } =
+  await import("../../../src/main/tray/create-tray-popover-window.js");
 
 /** The real, on-disk directory of the module under test - independently computed here
  * (not copy-pasted from its source) so this test can assert the *exact* expected
@@ -36,7 +45,9 @@ const { createTrayPopoverWindow } = await import("../../../src/main/tray/create-
  * `out/main/index.js` at runtime closely enough to prove the path arithmetic itself
  * is right: exactly one `..` segment above this module's own directory, landing in a
  * sibling `renderer/` folder - not two. */
-const sourceModuleDir = dirname(fileURLToPath(import.meta.resolve("../../../src/main/tray/create-tray-popover-window.js")));
+const sourceModuleDir = dirname(
+  fileURLToPath(import.meta.resolve("../../../src/main/tray/create-tray-popover-window.js")),
+);
 const EXPECTED_RENDERER_HTML_PATH = join(sourceModuleDir, "../renderer/index.html");
 
 describe("createTrayPopoverWindow", () => {
@@ -83,5 +94,21 @@ describe("createTrayPopoverWindow", () => {
     popover.emit("blur");
 
     expect(popover.hide).toHaveBeenCalledTimes(1);
+  });
+
+  it("is locked to its own page and sends links to the real browser", () => {
+    const popover = createTrayPopoverWindow() as unknown as FakeBrowserWindow;
+
+    const hooked = popover.webContents.on.mock.calls.map((call) => call[0] as string);
+    expect(hooked).toEqual(
+      expect.arrayContaining(["will-navigate", "will-redirect", "will-attach-webview"]),
+    );
+    expect(popover.webContents.session.setPermissionCheckHandler).toHaveBeenCalledTimes(1);
+
+    const handler = popover.webContents.setWindowOpenHandler.mock.calls[0]?.[0] as (details: {
+      url: string;
+    }) => { action: string };
+    expect(handler({ url: "https://www.last.fm/" })).toEqual({ action: "deny" });
+    expect(shell.openExternal).toHaveBeenCalledWith("https://www.last.fm/");
   });
 });

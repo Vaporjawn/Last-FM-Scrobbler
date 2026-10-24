@@ -10,7 +10,8 @@ import type {
 import type { ThemeMode, WindowBounds } from "../shared/settings-api.js";
 import { buildInitialThemeModeArgument } from "../shared/initial-theme-mode-argument.js";
 import { computeMinimumSizeForAspectRatio } from "./window/compute-minimum-size-for-aspect-ratio.js";
-import { isSafeExternalUrl } from "./window/is-safe-external-url.js";
+import { resolveExpectedRendererOrigin } from "./resolve-expected-renderer-origin.js";
+import { hardenWebContents } from "./security/harden-web-contents.js";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
 
 /** This window's hardcoded default size, used whenever there's no `initialBounds` to
@@ -44,9 +45,7 @@ function rectanglesIntersect(
   a: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
   b: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
 ): boolean {
-  return (
-    a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
-  );
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
 export interface CreateMainWindowOptions {
@@ -206,6 +205,7 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
       targetDisplay.workArea,
     );
 
+  const expectedOrigin = resolveExpectedRendererOrigin(dirname, process.env.ELECTRON_RENDERER_URL);
   const mainWindow = new BrowserWindow({
     width: initialBounds?.width ?? defaultSize.width,
     height: initialBounds?.height ?? defaultSize.height,
@@ -293,11 +293,11 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
   // security checklist warns against handing `openExternal` untrusted content, since a
   // crafted `file:`/`javascript:`/custom-protocol URL can trigger unintended local
   // behavior depending on platform and what's registered as a handler for it.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (isSafeExternalUrl(url)) {
+  hardenWebContents(mainWindow.webContents, {
+    expectedOrigin,
+    openExternal: (url) => {
       void shell.openExternal(url);
-    }
-    return { action: "deny" };
+    },
   });
 
   if (playbackSource) {
@@ -312,8 +312,22 @@ export function createMainWindow(options: CreateMainWindowOptions): Electron.Bro
     // the first window's now-destroyed `webContents.send` callback would still be
     // subscribed to the shared source, throwing on the next track/state change.
     const cleanupNowPlaying = onScrobbleEligible
-      ? wireNowPlaying(playbackSource, mainWindow, onScrobbleEligible, onTrackChanged, filter)
-      : wireNowPlaying(playbackSource, mainWindow, undefined, onTrackChanged, filter);
+      ? wireNowPlaying(
+          playbackSource,
+          mainWindow,
+          expectedOrigin,
+          onScrobbleEligible,
+          onTrackChanged,
+          filter,
+        )
+      : wireNowPlaying(
+          playbackSource,
+          mainWindow,
+          expectedOrigin,
+          undefined,
+          onTrackChanged,
+          filter,
+        );
     mainWindow.once("closed", cleanupNowPlaying);
   }
 
