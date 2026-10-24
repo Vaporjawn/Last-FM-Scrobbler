@@ -1,3 +1,4 @@
+import { type AspectRatioOption } from "./aspect-ratio-option.js";
 /** The main window's size and position, as returned by `BrowserWindow.getBounds()` —
  * see `main/window/persist-window-bounds.ts` (saves it) and `main/create-main-window.ts`
  * (restores it on the next launch). */
@@ -7,69 +8,12 @@ export interface WindowBounds {
   readonly x: number;
   readonly y: number;
 }
-
-/**
- * A user-selectable resize constraint for the main window — `"9:14"` is the default
- * (see `DEFAULT_APP_SETTINGS`), locking the window to a portrait shape out of the box;
- * `"free"` is unconstrained resizing, this app's *original* default before this
- * setting existed, still available as an explicit opt-out. `"9:16"` and `"9:14"` are
- * the only portrait options (width < height) — `"16:9"`/`"4:3"`/`"1:1"` are landscape
- * or square — which is why the immediate resize either of them triggers anchors on
- * this window's minimum width and derives a matching height, rather than anchoring on
- * the current width and deriving height the way the landscape/square options do; see
- * `main/window/compute-minimum-size-for-aspect-ratio.ts` and `main/window/
- * apply-aspect-ratio.ts` for that branch, and `create-main-window.ts` for how a
- * portrait default also changes this window's *initial* size on a fresh install (no
- * `windowBounds` saved yet). See `main/window/resolve-aspect-ratio.ts` for how any of
- * these becomes the numeric ratio `BrowserWindow.setAspectRatio()` expects.
- */
-export type AspectRatioOption = "free" | "16:9" | "4:3" | "1:1" | "9:16" | "9:14";
-
-/** Every valid `AspectRatioOption` value — the runtime companion to the type above,
- * since a type alone can't validate a value arriving from outside TypeScript-checked
- * code (an IPC payload from the renderer, a stale/corrupted persisted settings.json
- * from an older version of this app that supported a different set of options). See
- * `isAspectRatioOption` below for the actual validation check. */
-export const ASPECT_RATIO_OPTIONS: readonly AspectRatioOption[] = [
-  "free",
-  "16:9",
-  "4:3",
-  "1:1",
-  "9:16",
-  "9:14",
-];
-
-/** Validates an unknown value as a real `AspectRatioOption` before it's trusted —
- * `main/settings/wire-settings.ts` uses this at the `settings:set` IPC boundary.
- * Without this check, an invalid value (typo'd, a removed option from an older
- * version, a malformed IPC payload) used to flow straight through
- * `main/window/resolve-aspect-ratio.ts`'s `Record` lookup as `undefined` — despite
- * that function's own return type claiming `number` — and cascade into `NaN` in the
- * native window-geometry math downstream (`computeMinimumSizeForAspectRatio`,
- * `BrowserWindow.setAspectRatio`/`setMinimumSize`). */
-export function isAspectRatioOption(value: unknown): value is AspectRatioOption {
-  return ASPECT_RATIO_OPTIONS.includes(value as AspectRatioOption);
-}
-
-/** `true` for `"9:16"`/`"9:14"` (width < height, see `AspectRatioOption`'s own
- * docstring), `false` for every landscape/square option and `"free"`. A plain set
- * check on the option string itself — deliberately not sharing
- * `main/window/resolve-aspect-ratio.ts`'s numeric `0 < value < 1` version, which
- * needs a `BrowserWindow`-ready numeric ratio Electron's `screen` APIs don't exist to
- * compute in the renderer; this one only needs the raw `AppSettings.aspectRatio`
- * value itself, so both processes can use whichever form they already have on hand
- * without one needing to import anything from the other. */
-export function isPortraitAspectRatio(option: AspectRatioOption): boolean {
-  return option === "9:16" || option === "9:14";
-}
-
 /**
  * The app's color scheme — `"dark"` (the default, and this app's original and only
  * look before this setting existed) or `"light"`. See `renderer/src/theme/index.ts`'s
  * `createAppTheme` for both palettes.
  */
 export type ThemeMode = "light" | "dark";
-
 /**
  * User-configurable app settings, persisted by `main/settings/settings-store.ts` and
  * exposed to the renderer via `window.settings` (see `preload/index.ts`).
@@ -260,7 +204,6 @@ export interface AppSettings {
    */
   readonly showTrayIcon: boolean;
 }
-
 /** `closeToTray`/`autoUpdateEnabled` on by default: this app is meant to run in the
  * background, not be quit on every window close, and meant to keep itself current
  * without the user having to remember to check manually (see
@@ -302,7 +245,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showDockIcon: true,
   showTrayIcon: true,
 };
-
 /** Renderer-facing settings API — see `preload/index.ts` for the real implementation,
  * `renderer/src/hooks/use-settings-state.ts` for the state-holding hook, and
  * `renderer/src/contexts/settings-context.ts` for the shared hook most components

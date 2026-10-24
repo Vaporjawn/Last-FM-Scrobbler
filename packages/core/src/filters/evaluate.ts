@@ -1,7 +1,6 @@
 import type { FilterableTrack } from "./filterable-track.js";
-import { NUMERIC_FIELD_ACCESSORS } from "./numeric-field-accessors.js";
-import type { AstNode, ComparisonNode } from "./parser.js";
-import { STRING_FIELD_ACCESSORS } from "./string-field-accessors.js";
+import type { AstNode } from "./ast-node.js";
+import { evaluateComparison } from "./evaluate-comparison.js";
 
 /** Recursively evaluates a parsed filter expression AST (see `parse`) against one
  * track, applying `and`/`or`/`not` combinators over leaf field comparisons. */
@@ -15,53 +14,5 @@ export function evaluate(node: AstNode, track: FilterableTrack): boolean {
       return !evaluate(node.operand, track);
     case "comparison":
       return evaluateComparison(node, track);
-  }
-}
-
-function evaluateComparison(node: ComparisonNode, track: FilterableTrack): boolean {
-  const numericAccessor = NUMERIC_FIELD_ACCESSORS[node.field];
-  if (numericAccessor) {
-    return evaluateNumeric(numericAccessor(track), node);
-  }
-
-  const stringAccessor = STRING_FIELD_ACCESSORS[node.field];
-  const fieldValue = stringAccessor ? stringAccessor(track) : "";
-  return evaluateString(fieldValue, node);
-}
-
-function evaluateNumeric(fieldValue: number | undefined, node: ComparisonNode): boolean {
-  if (fieldValue === undefined || typeof node.value !== "number") {
-    return false;
-  }
-  switch (node.operator) {
-    case "==":
-      return fieldValue === node.value;
-    case "!=":
-      return fieldValue !== node.value;
-    case "<":
-      return fieldValue < node.value;
-    case ">":
-      return fieldValue > node.value;
-    case "<=":
-      return fieldValue <= node.value;
-    case ">=":
-      return fieldValue >= node.value;
-    default:
-      return false;
-  }
-}
-
-function evaluateString(fieldValue: string, node: ComparisonNode): boolean {
-  switch (node.operator) {
-    case "==":
-      return typeof node.value === "string" && fieldValue === node.value;
-    case "!=":
-      return typeof node.value === "string" && fieldValue !== node.value;
-    case "matches":
-      return node.value instanceof RegExp && node.value.test(fieldValue);
-    case "contains":
-      return typeof node.value === "string" && fieldValue.includes(node.value);
-    default:
-      return false;
   }
 }

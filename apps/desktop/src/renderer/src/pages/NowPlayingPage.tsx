@@ -1,8 +1,6 @@
 import type { JSX } from "react";
 import AlbumIcon from "@mui/icons-material/Album";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import PauseIcon from "@mui/icons-material/Pause";
-import StopIcon from "@mui/icons-material/Stop";
 import VolumeUpIcon from "@mui/icons-material/VolumeUp";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
@@ -14,11 +12,9 @@ import Link from "@mui/material/Link";
 import Stack from "@mui/material/Stack";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import type { PlaybackState } from "@lastfm-scrobbler/shared-types";
 import { ArtistInfoPanel } from "../components/ArtistInfoPanel.js";
 import { AsyncState } from "../components/AsyncState.js";
 import { PageHeader } from "../components/PageHeader.js";
-import { ScrobblingIndicator } from "../components/ScrobblingIndicator.js";
 import { ListenedToCallout } from "../components/shared/ListenedToCallout.js";
 import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { StatBox } from "../components/shared/StatBox.js";
@@ -29,64 +25,11 @@ import { useAuth } from "../hooks/use-auth.js";
 import { useNowPlaying } from "../hooks/use-now-playing.js";
 import { useTrackDetail } from "../hooks/use-track-detail.js";
 import { resolveSourceAppName } from "../utils/resolve-source-app-name.js";
+import { NowPlayingArtwork } from "./NowPlayingArtwork.js";
+import { StateIcon } from "./StateIcon.js";
+import { formatDuration } from "./format-duration.js";
 
 const STATE_LABEL = { playing: "Playing", paused: "Paused", stopped: "Stopped" } as const;
-
-/** Formats a duration in whole seconds as `m:ss` (e.g. 340 -> "5:40"). Track durations
- * only ever need minutes:seconds here — nothing in this app plays anything long enough
- * to need an hours component. */
-function formatDuration(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = Math.floor(totalSeconds % 60);
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function StateIcon({ state }: { state: PlaybackState }): JSX.Element {
-  switch (state) {
-    case "playing":
-      // The same animated equalizer ScrobbleListItem/FriendListItem already use for
-      // their own "Now Playing"/"Scrobbling now" chips — this page is the one place
-      // literally called "Now Playing" that hadn't adopted it yet.
-      return <ScrobblingIndicator />;
-    case "paused":
-      return <PauseIcon fontSize="small" />;
-    case "stopped":
-    default:
-      return <StopIcon fontSize="small" />;
-  }
-}
-
-/** The currently-playing track's real album art (via `useTrackImage` — Last.fm's
- * `track.getInfo`) when one is on file, falling back to a gradient/record-icon
- * placeholder otherwise — the same `src`-falls-back-to-children `Avatar` pattern
- * `ScrobbleListItem` already uses for scrobble history's art. */
-function NowPlayingArtwork({
-  imageUrl,
-  title,
-}: {
-  imageUrl: string | undefined;
-  title: string;
-}): JSX.Element {
-  return (
-    <Avatar
-      variant="rounded"
-      src={imageUrl}
-      alt={title}
-      sx={{
-        width: 200,
-        height: 200,
-        flexShrink: 0,
-        borderRadius: 2,
-        boxShadow: 4,
-        background: (theme) =>
-          `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-      }}
-    >
-      <AlbumIcon sx={{ fontSize: 88, color: "rgba(255,255,255,0.85)" }} />
-    </Avatar>
-  );
-}
-
 /**
  * The sidebar's default landing view: whatever `useNowPlaying` currently reports (live,
  * pushed over IPC from the OS-level playback source — see that hook) plus point-in-time
@@ -180,7 +123,13 @@ export function NowPlayingPage(): JSX.Element {
         }}
       >
         <Avatar
-          sx={{ width: 32, height: 32, flexShrink: 0, bgcolor: "action.selected", color: "text.secondary" }}
+          sx={{
+            width: 32,
+            height: 32,
+            flexShrink: 0,
+            bgcolor: "action.selected",
+            color: "text.secondary",
+          }}
         >
           <VolumeUpIcon fontSize="small" />
         </Avatar>

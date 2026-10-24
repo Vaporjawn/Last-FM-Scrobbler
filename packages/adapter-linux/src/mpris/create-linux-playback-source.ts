@@ -11,6 +11,7 @@ import type {
   TrackInfo,
   Unsubscribe,
 } from "@lastfm-scrobbler/shared-types";
+import { tracksEqual } from "./tracks-equal.js";
 
 export interface CreateLinuxPlaybackSourceOptions {
   /** Injectable for testing; defaults to `dbus-next`'s real session bus. */
@@ -26,25 +27,6 @@ export interface CreateLinuxPlaybackSourceOptions {
   /** Injectable clock, forwarded to the internal `PlayerRegistry`; defaults to the real clock. */
   readonly now?: () => number;
 }
-
-function tracksEqual(a: TrackInfo | null, b: TrackInfo | null): boolean {
-  if (a === b) {
-    return true;
-  }
-  if (a === null || b === null) {
-    return false;
-  }
-  return (
-    a.title === b.title &&
-    a.artist === b.artist &&
-    a.album === b.album &&
-    a.albumArtist === b.albumArtist &&
-    a.durationSec === b.durationSec &&
-    a.sourceApp === b.sourceApp &&
-    a.isStream === b.isStream
-  );
-}
-
 /**
  * Creates a `PlaybackSource` backed by MPRIS2 (Media Player Remote Interfacing
  * Specification) over D-Bus — the standard Linux desktop protocol for exposing media

@@ -13,7 +13,7 @@ import type {
   UserProfile,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../shared/ipc-channels.js";
-import { resolveThemeModeFromArgv } from "../shared/initial-theme-mode-argument.js";
+import { resolveThemeModeFromArgv } from "../shared/resolve-theme-mode-from-argv.js";
 import type { AppInfoApi } from "../shared/app-info-api.js";
 import type { ArtistImageApi } from "../shared/artist-image-api.js";
 import type { AuthApi } from "../shared/auth-api.js";
@@ -130,9 +130,7 @@ const librefmApi: LibrefmApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.librefmLogout) as Promise<void>;
   },
   getActiveAccount() {
-    return ipcRenderer.invoke(IPC_CHANNELS.librefmGetActiveAccount) as Promise<
-      string | undefined
-    >;
+    return ipcRenderer.invoke(IPC_CHANNELS.librefmGetActiveAccount) as Promise<string | undefined>;
   },
 };
 
@@ -224,9 +222,10 @@ const artistImageApi: ArtistImageApi = {
 
 const filterApi: FilterApi = {
   validate(expression) {
-    return ipcRenderer.invoke(IPC_CHANNELS.filterValidate, expression) as Promise<
-      FilterValidationResult
-    >;
+    return ipcRenderer.invoke(
+      IPC_CHANNELS.filterValidate,
+      expression,
+    ) as Promise<FilterValidationResult>;
   },
 };
 

@@ -6,6 +6,7 @@ import type {
   ScrobblingClient,
   TrackChangedEvent,
 } from "@lastfm-scrobbler/core";
+import { toOptionalTrackFields } from "./to-optional-track-fields.js";
 
 const DEFAULT_DRAIN_INTERVAL_MS = 60_000;
 const DRAIN_BATCH_SIZE = 50;
@@ -14,7 +15,6 @@ const DRAIN_BATCH_SIZE = 50;
  * default interval) — not on every single retry, which would spam a notification
  * every `drainIntervalMs` for as long as an outage lasts. */
 const FAILURE_NOTIFICATION_THRESHOLD = 3;
-
 /** A scrobble that was actually accepted by at least one connected service in a drain
  * batch — enough identifying info for a "Scrobbled: …" notification, see `onScrobbled`
  * below. */
@@ -22,26 +22,6 @@ export interface ScrobbledTrack {
   readonly artist: string;
   readonly track: string;
 }
-
-/** Builds the optional album/albumArtist/durationSec fields shared by both
- * `client.updateNowPlaying` calls this module makes — `onScrobbleEligible`'s enqueue
- * and `onTrackChanged`'s live "now playing" push both start from the same
- * `TrackChangedEvent`/`ScrobbleEligibleEvent`'s `.track`, and `exactOptionalPropertyTypes`
- * means each optional field must be omitted entirely rather than set to `undefined` —
- * hence the conditional-spread idiom, centralized here so a shape change only needs
- * updating once instead of twice. */
-function toOptionalTrackFields(track: {
-  readonly album?: string;
-  readonly albumArtist?: string;
-  readonly durationSec?: number;
-}): { album?: string; albumArtist?: string; durationSec?: number } {
-  return {
-    ...(track.album ? { album: track.album } : {}),
-    ...(track.albumArtist ? { albumArtist: track.albumArtist } : {}),
-    ...(track.durationSec !== undefined ? { durationSec: track.durationSec } : {}),
-  };
-}
-
 /**
  * One scrobbling destination this module can fan a batch out to — Last.fm (the
  * built-in `accountStore`/`createSessionClient` pair below) plus, optionally, any
@@ -60,7 +40,6 @@ export interface ScrobblingServiceConnection {
    * in `main/index.ts` already relies on). */
   readonly getClient: () => Promise<ScrobblingClient | undefined>;
 }
-
 export interface WireScrobblingOptions {
   readonly queue: ScrobbleQueue;
   /** Reports connectivity outcomes and pending-queue changes for the offline-mode
@@ -104,7 +83,6 @@ export interface WireScrobblingOptions {
    * defaults to a no-op. */
   readonly onScrobbleFailed?: (reason: string) => void;
 }
-
 export interface ScrobblingHandle {
   /** Pass as `Tracker`'s `events.onScrobbleEligible` — enqueues the eligible play. */
   onScrobbleEligible: (event: ScrobbleEligibleEvent) => void;
@@ -126,7 +104,6 @@ export interface ScrobblingHandle {
   drainOnce: () => Promise<void>;
   stop: () => void;
 }
-
 /** A `ScrobblingServiceConnection` plus whichever client `getClient()` resolved to
  * this cycle, once it's known to be connected — narrows away the `undefined` case so
  * downstream code doesn't need to re-check it. */
@@ -134,7 +111,6 @@ interface ConnectedService {
   readonly id: string;
   readonly client: ScrobblingClient;
 }
-
 /**
  * Connects `Tracker`'s scrobble-eligible events to `ScrobbleQueue` (immediate,
  * synchronous enqueue — never lost even if this process crashes right after) and

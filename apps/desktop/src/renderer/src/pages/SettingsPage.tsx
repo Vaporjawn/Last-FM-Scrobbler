@@ -41,8 +41,10 @@ import { useListenBrainzAuth } from "../hooks/use-listenbrainz-auth.js";
 import { useSettings } from "../contexts/settings-context.js";
 import { useUpdates } from "../hooks/use-updates.js";
 import type { PageProps } from "./page-props.js";
-import type { AspectRatioOption } from "../../../shared/settings-api.js";
-import type { UpdateStatus } from "../../../shared/update-status.js";
+import type { AspectRatioOption } from "../../../shared/aspect-ratio-option.js";
+import { buildCreateApiAccountUrl } from "./build-create-api-account-url.js";
+import { describeUpdateStatus } from "./describe-update-status.js";
+import { sectionMatches } from "./section-matches.js";
 
 const ASPECT_RATIO_OPTIONS: readonly {
   readonly value: AspectRatioOption;
@@ -55,65 +57,7 @@ const ASPECT_RATIO_OPTIONS: readonly {
   { value: "9:16", label: "9:16 (vertical)" },
   { value: "9:14", label: "9:14 (vertical, default)" },
 ];
-
-/**
- * Pre-fills Last.fm's "create an API account" form via query string, so all the user
- * has to do is click "Submit" — no typing. **Best-effort, not independently
- * verified**: that form requires being logged in to Last.fm to view at all (Last.fm's
- * own login page handles that redirect before this URL is ever reached — nothing in
- * this app needs to broker it), and its real field `name` attributes couldn't be
- * inspected from here — `name`/`description`/`homepage` are a reasonable guess based
- * on the form's known labels (Application name / description / homepage), not a
- * confirmed contract. If these don't actually populate the form when tested live,
- * Last.fm uses different field names than guessed here; whoever notices should update
- * this against the real page source (view-source once logged in) rather than
- * re-guessing.
- */
-function buildCreateApiAccountUrl(): string {
-  const url = new URL("https://www.last.fm/api/account/create");
-  url.searchParams.set("name", "Last.fm Scrobbler");
-  url.searchParams.set(
-    "description",
-    "Cross-platform desktop scrobbler — reads Now Playing from the OS media session " +
-      "and submits scrobbles to Last.fm.",
-  );
-  url.searchParams.set("homepage", "https://github.com/Vaporjawn/Last-FM-Scrobbler");
-  return url.toString();
-}
-
 const CREATE_API_ACCOUNT_URL = buildCreateApiAccountUrl();
-
-/** Human-readable summary of `UpdateStatus` for the Settings "Updates" row —
- * `undefined` for "idle" (nothing worth saying before the first check has even run). */
-function describeUpdateStatus(status: UpdateStatus): string | undefined {
-  switch (status.phase) {
-    case "idle":
-      return undefined;
-    case "checking":
-      return "Checking for updates…";
-    case "available":
-      return `Update ${status.version} found — downloading…`;
-    case "not-available":
-      return "You're up to date.";
-    case "downloading":
-      return `Downloading update… ${Math.round(status.percent)}%`;
-    case "downloaded":
-      return `Update ${status.version} downloaded — restart to install it.`;
-    case "error":
-      return `Couldn't check for updates: ${status.message}`;
-  }
-}
-
-/** Case-insensitive substring match against every non-empty candidate — used to
- * decide whether a section stays visible for the current search query. Empty query
- * always matches (nothing typed yet = show everything). */
-function sectionMatches(query: string, ...candidates: (string | undefined)[]): boolean {
-  if (!query) {
-    return true;
-  }
-  return candidates.some((candidate) => candidate?.toLowerCase().includes(query));
-}
-
 /**
  * Settings → General, Window, Accounts, and (when needed) a Last.fm API key form.
  * Laid out as a search-filterable card grid — see `SettingsSectionCard`/`SettingsRow`
@@ -168,8 +112,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
   const { settings, updateSettings, resetSettings } = useSettings();
   const avatarsByUsername = useAccountAvatars(accounts);
   const appVersion = useAppVersion();
-  const { status: updateStatus, isChecking: isCheckingForUpdate, checkNow: checkForUpdatesNow } =
-    useUpdates();
+  const {
+    status: updateStatus,
+    isChecking: isCheckingForUpdate,
+    checkNow: checkForUpdatesNow,
+  } = useUpdates();
   const { notify } = useSnackbar();
 
   // `window.platform` is absent outside a real Electron renderer (e.g. component
@@ -197,7 +144,9 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
   // value once it loads (and again after this page's own save updates it) via the
   // effect below; explicit "Save filter" commits it, matching the API-key form's same
   // local-state-plus-explicit-submit pattern just below.
-  const [filterExpressionInput, setFilterExpressionInput] = useState(settings.filterExpression ?? "");
+  const [filterExpressionInput, setFilterExpressionInput] = useState(
+    settings.filterExpression ?? "",
+  );
   const [filterValidationError, setFilterValidationError] = useState<string | undefined>(undefined);
   // Bumped on every window.filter.validate() call (from either handler below) and
   // captured by each call's own closure — a response only gets applied if no newer
@@ -276,7 +225,10 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     void clearAppCredentials().then((result) => {
       notify(
         result.success
-          ? { message: "API key removed. Restart the app for it to take effect.", severity: "success" }
+          ? {
+              message: "API key removed. Restart the app for it to take effect.",
+              severity: "success",
+            }
           : { message: result.error, severity: "error" },
       );
     });
@@ -409,7 +361,10 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     if (!trimmed) {
       setFilterValidationError(undefined);
       handleUpdateSetting({ filterExpression: undefined });
-      notify({ message: "Filter cleared. Restart the app for it to take effect.", severity: "success" });
+      notify({
+        message: "Filter cleared. Restart the app for it to take effect.",
+        severity: "success",
+      });
       return;
     }
     if (!window.filter) {
@@ -687,7 +642,9 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                       handleUpdateSetting({ showTrayIcon: event.target.checked });
                     }}
                     slotProps={{
-                      input: { "aria-label": `Show application icon in the ${isMac ? "menu bar" : "tray"}` },
+                      input: {
+                        "aria-label": `Show application icon in the ${isMac ? "menu bar" : "tray"}`,
+                      },
                     }}
                   />
                 }
@@ -825,7 +782,10 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
           ) : null}
 
           {notificationsVisible ? (
-            <SettingsSectionCard icon={<NotificationsIcon fontSize="small" />} title="Notifications">
+            <SettingsSectionCard
+              icon={<NotificationsIcon fontSize="small" />}
+              title="Notifications"
+            >
               <SettingsRow
                 label="Notify when a track is scrobbled"
                 description="Shows a native notification each time a batch of scrobbles is accepted by Last.fm"
@@ -898,7 +858,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                 error={Boolean(filterValidationError)}
                 helperText={
                   filterValidationError ??
-                  'Fields: artist, title, album, albumArtist, durationSec, sourceApp. Operators: ==, !=, ' +
+                  "Fields: artist, title, album, albumArtist, durationSec, sourceApp. Operators: ==, !=, " +
                     'contains "text", matches /regex/, <, >, <=, >=. Combine with and / or / not. Leave ' +
                     "empty for no filtering."
                 }
@@ -924,7 +884,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
           ) : null}
 
           {accountsVisible ? (
-            <SettingsSectionCard icon={<AccountCircleIcon fontSize="small" />} title="Accounts" fullWidth>
+            <SettingsSectionCard
+              icon={<AccountCircleIcon fontSize="small" />}
+              title="Accounts"
+              fullWidth
+            >
               {isConfigured === undefined ? (
                 <CircularProgress size={24} />
               ) : (
@@ -943,7 +907,9 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                             <SettingsRow
                               key={username}
                               label={username}
-                              description={username === activeAccount ? "Active account" : undefined}
+                              description={
+                                username === activeAccount ? "Active account" : undefined
+                              }
                               leading={
                                 <Avatar
                                   src={avatarsByUsername[username]}
@@ -968,7 +934,9 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                                     }}
                                     name="active-account"
                                     slotProps={{
-                                      input: { "aria-label": `Use ${username} as the active account` },
+                                      input: {
+                                        "aria-label": `Use ${username} as the active account`,
+                                      },
                                     }}
                                   />
                                   <Button
@@ -992,7 +960,12 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                         </Typography>
                       )}
 
-                      <Button variant="contained" onClick={handleLogin} disabled={isLoggingIn} sx={{ mt: 1 }}>
+                      <Button
+                        variant="contained"
+                        onClick={handleLogin}
+                        disabled={isLoggingIn}
+                        sx={{ mt: 1 }}
+                      >
                         {isLoggingIn ? "Waiting for approval on Last.fm…" : "Log in with Last.fm"}
                       </Button>
                       {isLoggingIn ? (
@@ -1004,10 +977,14 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                         // guarantee a background app can steal focus), but the one thing
                         // that's always true is what this line says: come back here yourself
                         // once you've approved it, and it'll already be showing you logged in.
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1, maxWidth: 480 }}>
-                          Click "Allow Access" on the Last.fm page that just opened, then come back to
-                          this window — we'll try to bring it to the front automatically, but if it
-                          doesn't, your profile will already be here waiting for you.
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 1, maxWidth: 480 }}
+                        >
+                          Click "Allow Access" on the Last.fm page that just opened, then come back
+                          to this window — we'll try to bring it to the front automatically, but if
+                          it doesn't, your profile will already be here waiting for you.
                         </Typography>
                       ) : null}
 
@@ -1032,13 +1009,13 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                     <Alert severity="warning" sx={{ mb: 2 }}>
                       Logging in is turned off because secure storage isn't available on this
                       system, so your Last.fm session couldn't be saved safely. On Linux this
-                      usually means no system keyring (such as gnome-keyring or KWallet) is
-                      running — start one, then restart the app.
+                      usually means no system keyring (such as gnome-keyring or KWallet) is running
+                      — start one, then restart the app.
                     </Alert>
                   ) : (
                     <Alert severity="info" sx={{ mb: 2 }}>
-                      Logging in needs a Last.fm API key first — either baked into the build
-                      you're running, or your own free one below.
+                      Logging in needs a Last.fm API key first — either baked into the build you're
+                      running, or your own free one below.
                     </Alert>
                   )}
                 </>
@@ -1066,7 +1043,12 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   label="Libre.fm"
                   description={`Connected as ${librefmActiveAccount}`}
                   control={
-                    <Button size="small" variant="outlined" color="inherit" onClick={handleLibrefmLogout}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="inherit"
+                      onClick={handleLibrefmLogout}
+                    >
                       Disconnect
                     </Button>
                   }
@@ -1085,14 +1067,20 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                     // plus a second "Remove saved key" button can combine to just about
                     // the width of a settings card at this app's narrowest window size
                     // — safe to wrap onto two lines rather than risk overflowing.
-                    <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ alignItems: "center", flexWrap: "wrap" }}
+                    >
                       <Button
                         size="small"
                         variant="outlined"
                         onClick={handleLibrefmLoginOnly}
                         disabled={librefmIsLoggingIn}
                       >
-                        {librefmIsLoggingIn ? "Waiting for approval on Libre.fm…" : "Log in with Libre.fm"}
+                        {librefmIsLoggingIn
+                          ? "Waiting for approval on Libre.fm…"
+                          : "Log in with Libre.fm"}
                       </Button>
                       {librefmCredentialsSource === "user-supplied" ? (
                         <Button
@@ -1124,7 +1112,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                       Enter after typing into either field does nothing, unlike every
                       other text-entry-plus-submit control on this page. */}
                   <Box component="form" onSubmit={handleLibrefmConnect}>
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560, mb: 1 }}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1.5}
+                      sx={{ maxWidth: 560, mb: 1 }}
+                    >
                       <TextField
                         // Deliberately not "Libre.fm API key" — SettingsPage.test.tsx's
                         // existing Last.fm API-key tests query via a bare
@@ -1188,7 +1180,12 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                   label="ListenBrainz"
                   description={`Connected as ${listenBrainzActiveAccount}`}
                   control={
-                    <Button size="small" variant="outlined" color="inherit" onClick={handleListenBrainzDisconnect}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="inherit"
+                      onClick={handleListenBrainzDisconnect}
+                    >
                       Disconnect
                     </Button>
                   }
@@ -1214,7 +1211,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
                       Enter after typing into the token field does nothing, unlike
                       every other text-entry-plus-submit control on this page. */}
                   <Box component="form" onSubmit={handleListenBrainzConnect}>
-                    <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ maxWidth: 560 }}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1.5}
+                      sx={{ maxWidth: 560 }}
+                    >
                       <TextField
                         label="User token"
                         type="password"
@@ -1243,7 +1244,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
           ) : null}
 
           {isConfigured !== undefined && apiKeyVisible ? (
-            <SettingsSectionCard icon={<VpnKeyIcon fontSize="small" />} title="Last.fm API key" fullWidth>
+            <SettingsSectionCard
+              icon={<VpnKeyIcon fontSize="small" />}
+              title="Last.fm API key"
+              fullWidth
+            >
               <Box component="form" onSubmit={handleSaveCredentials}>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                   Don't have one?{" "}

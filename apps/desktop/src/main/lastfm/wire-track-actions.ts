@@ -6,7 +6,7 @@ import {
   type NetworkStatusMonitor,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../validate-ipc-sender.js";
+import { assertTrustedSender } from "../assert-trusted-sender.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
@@ -45,8 +45,7 @@ const NOT_CONFIGURED_MESSAGE =
   "Last.fm API credentials are not configured for this build (LASTFM_API_KEY / " +
   "LASTFM_API_SECRET, or a saved key) — see docs/modules/desktop.md.";
 
-const NO_ACTIVE_ACCOUNT_MESSAGE =
-  "No Last.fm account is active — log in from Settings first.";
+const NO_ACTIVE_ACCOUNT_MESSAGE = "No Last.fm account is active — log in from Settings first.";
 
 /**
  * Wires the signed, per-account track-action IPC surface (love/unlove/addTags — see
@@ -59,9 +58,7 @@ const NO_ACTIVE_ACCOUNT_MESSAGE =
 export function wireTrackActions(options: WireTrackActionsOptions): () => void {
   const { expectedOrigin, accountStore, createSessionClient, networkStatus } = options;
 
-  async function withActiveClient<T>(
-    run: (client: TrackActionsClient) => Promise<T>,
-  ): Promise<T> {
+  async function withActiveClient<T>(run: (client: TrackActionsClient) => Promise<T>): Promise<T> {
     if (!accountStore || !createSessionClient) {
       throw new Error(NOT_CONFIGURED_MESSAGE);
     }
@@ -76,7 +73,9 @@ export function wireTrackActions(options: WireTrackActionsOptions): () => void {
     IPC_CHANNELS.lastfmLoveTrack,
     (event, artist: unknown, track: unknown): Promise<void> => {
       assertTrustedSender(event, expectedOrigin);
-      return withActiveClient((client) => client.love({ artist: String(artist), track: String(track) }));
+      return withActiveClient((client) =>
+        client.love({ artist: String(artist), track: String(track) }),
+      );
     },
   );
 
@@ -84,7 +83,9 @@ export function wireTrackActions(options: WireTrackActionsOptions): () => void {
     IPC_CHANNELS.lastfmUnloveTrack,
     (event, artist: unknown, track: unknown): Promise<void> => {
       assertTrustedSender(event, expectedOrigin);
-      return withActiveClient((client) => client.unlove({ artist: String(artist), track: String(track) }));
+      return withActiveClient((client) =>
+        client.unlove({ artist: String(artist), track: String(track) }),
+      );
     },
   );
 

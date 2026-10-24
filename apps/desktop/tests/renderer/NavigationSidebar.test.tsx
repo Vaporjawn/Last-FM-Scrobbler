@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_APP_SETTINGS, type AppSettings, type AspectRatioOption } from "../../src/shared/settings-api.js";
+import { DEFAULT_APP_SETTINGS, type AppSettings } from "../../src/shared/settings-api.js";
+import { type AspectRatioOption } from "../../src/shared/aspect-ratio-option.js";
 import { NavigationSidebar } from "../../src/renderer/src/components/NavigationSidebar.js";
 import { SettingsContext } from "../../src/renderer/src/contexts/settings-context.js";
 import { ok } from "../../src/renderer/src/hooks/ok.js";
@@ -172,7 +173,9 @@ describe("NavigationSidebar", () => {
       expect(screen.getByText("Last.fm")).toBeInTheDocument();
 
       rerender(
-        <SettingsContext.Provider value={{ ...contextValue, settings: { ...settings, aspectRatio: "9:14" } }}>
+        <SettingsContext.Provider
+          value={{ ...contextValue, settings: { ...settings, aspectRatio: "9:14" } }}
+        >
           <NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />
         </SettingsContext.Provider>,
       );
@@ -198,7 +201,9 @@ describe("NavigationSidebar", () => {
       expect(screen.getByLabelText("Expand sidebar")).toBeInTheDocument();
 
       rerender(
-        <SettingsContext.Provider value={{ ...contextValue, settings: { ...settings, aspectRatio: "16:9" } }}>
+        <SettingsContext.Provider
+          value={{ ...contextValue, settings: { ...settings, aspectRatio: "16:9" } }}
+        >
           <NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} />
         </SettingsContext.Provider>,
       );
@@ -235,7 +240,11 @@ describe("NavigationSidebar", () => {
             resetSettings: vi.fn().mockResolvedValue(ok()),
           }}
         >
-          <NavigationSidebar activeView="now-playing" onSelectView={vi.fn()} onReportBug={vi.fn()} />
+          <NavigationSidebar
+            activeView="now-playing"
+            onSelectView={vi.fn()}
+            onReportBug={vi.fn()}
+          />
         </SettingsContext.Provider>,
       );
 

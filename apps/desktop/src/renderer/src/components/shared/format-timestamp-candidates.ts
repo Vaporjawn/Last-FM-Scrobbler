@@ -1,7 +1,8 @@
-const ONE_MINUTE_MS = 60_000;
-const ONE_HOUR_MS = 60 * ONE_MINUTE_MS;
-const ONE_DAY_MS = 24 * ONE_HOUR_MS;
+import { ONE_HOUR_MS } from "./one-hour-ms.js";
+import { formatRelativeCandidates } from "./format-relative-candidates.js";
+import { formatAbsoluteCandidates } from "./format-absolute-candidates.js";
 
+const ONE_DAY_MS = 24 * ONE_HOUR_MS;
 /**
  * The widest string this module's *terse* (last, most-abbreviated) candidate can
  * realistically produce, in `ch` units (roughly one digit's width in the current
@@ -23,7 +24,6 @@ const ONE_DAY_MS = 24 * ONE_HOUR_MS;
  * word, etc.) — an honest safety margin, not a proof those locales were checked.
  */
 export const TIMESTAMP_CHIP_MIN_WIDTH_CHARS = 9;
-
 /**
  * Renders `timestamp` (Unix seconds) as a series of progressively shorter, always
  * fully-formed strings — never a mid-character truncation — for
@@ -76,47 +76,4 @@ export function formatTimestampCandidates(
   return elapsedMs < ONE_DAY_MS
     ? formatRelativeCandidates(elapsedMs)
     : formatAbsoluteCandidates(timestamp);
-}
-
-function formatRelativeCandidates(elapsedMs: number): readonly [string, string, string, string] {
-  if (elapsedMs < ONE_MINUTE_MS) {
-    return ["Just now", "Just now", "Just now", "Now"];
-  }
-  if (elapsedMs < ONE_HOUR_MS) {
-    const minutes = Math.floor(elapsedMs / ONE_MINUTE_MS);
-    // Same standardized "6h ago" shape as the hour tier below, not a shrinking ladder
-    // of differently-worded lengths — see this function's docstring.
-    const label = `${minutes}m ago`;
-    return [label, label, label, `${minutes}m`];
-  }
-  const hours = Math.floor(elapsedMs / ONE_HOUR_MS);
-  const label = `${hours}h ago`;
-  return [label, label, label, `${hours}h`];
-}
-
-function formatAbsoluteCandidates(timestamp: number): readonly [string, string, string, string] {
-  const date = new Date(timestamp * 1000);
-  return [
-    // Matches the exact original behavior (no explicit options) byte-for-byte, so the
-    // common, plenty-of-room case for an old scrobble renders identically to before
-    // the relative-time tier existed.
-    date.toLocaleString(),
-    date.toLocaleString(undefined, {
-      year: "numeric",
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-    date.toLocaleString(undefined, {
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-    date.toLocaleString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-  ];
 }

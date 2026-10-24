@@ -1,5 +1,6 @@
-export type LogLevel = "none" | "basic" | "debug";
-export type LogSeverity = "debug" | "info" | "warn" | "error";
+import { type LogSeverity } from "./log-severity.js";
+import { type LogLevel } from "./log-level.js";
+import { isEnabled } from "./is-enabled.js";
 
 export interface LogEntry {
   /** Unix milliseconds. */
@@ -8,7 +9,6 @@ export interface LogEntry {
   readonly message: string;
   readonly meta?: Record<string, unknown>;
 }
-
 export interface LoggerOptions {
   /** "none" logs nothing; "basic" skips debug; "debug" logs everything. Default "basic". */
   readonly level?: LogLevel;
@@ -18,19 +18,7 @@ export interface LoggerOptions {
   readonly sink?: (entry: LogEntry) => void;
   readonly now?: () => number;
 }
-
 const DEFAULT_MAX_ENTRIES = 500;
-
-function isEnabled(level: LogLevel, severity: LogSeverity): boolean {
-  if (level === "none") {
-    return false;
-  }
-  if (level === "basic" && severity === "debug") {
-    return false;
-  }
-  return true;
-}
-
 /**
  * Structured logger with a bounded in-memory ring buffer, feeding both live debugging
  * and the bug-report feature's "recent log lines" attachment (see

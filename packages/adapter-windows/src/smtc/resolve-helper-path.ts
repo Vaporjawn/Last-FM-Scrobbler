@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { AdapterWindowsPackageRootNotFoundError } from "./adapter-windows-package-root-not-found-error.js";
+import { findPackageRoot } from "./find-package-root.js";
 
 export interface ResolvedHelperPath {
   /** Absolute path to the (possibly not-yet-built) SmtcHelper.exe. */
@@ -8,22 +9,6 @@ export interface ResolvedHelperPath {
   /** Whether `helperPath` currently exists on disk. */
   readonly helperBuilt: boolean;
 }
-
-/** Walks upward from `startDir` until a directory containing a package.json is found. */
-function findPackageRoot(startDir: string): string | null {
-  let dir = startDir;
-  for (;;) {
-    if (existsSync(join(dir, "package.json"))) {
-      return dir;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) {
-      return null;
-    }
-    dir = parent;
-  }
-}
-
 /**
  * Resolves the path to the compiled `SmtcHelper.exe` (built from
  * `native/SmtcHelper/` via `scripts/build-native.mjs`, a Windows-only step — see

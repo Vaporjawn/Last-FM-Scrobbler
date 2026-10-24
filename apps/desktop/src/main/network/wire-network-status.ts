@@ -3,11 +3,11 @@ import type { BrowserWindow, Tray } from "electron";
 import type { NetworkStatus, NetworkStatusMonitor } from "@lastfm-scrobbler/core";
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
+import { formatTooltip } from "./format-tooltip.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
-
 export interface WireNetworkStatusOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;
@@ -20,24 +20,12 @@ export interface WireNetworkStatusOptions {
    * `syncTrayTooltip()` once right after the tray actually exists to catch up. */
   readonly getTray: () => Tray | undefined;
 }
-
 export interface NetworkStatusHandle {
   /** Re-applies whatever the monitor's current status is to `getTray()`'s current
    * return value — call once right after the tray is created. */
   syncTrayTooltip: () => void;
   stop: () => void;
 }
-
-function formatTooltip(status: NetworkStatus): string {
-  const base = "Last.fm Scrobbler";
-  if (status.online === false) {
-    return status.pendingCount > 0
-      ? `${base} — Offline, ${status.pendingCount} pending`
-      : `${base} — Offline`;
-  }
-  return status.pendingCount > 0 ? `${base} — ${status.pendingCount} pending` : base;
-}
-
 /**
  * Pushes `monitor`'s status to the renderer over `IPC_CHANNELS.networkStatusChanged`
  * (mirrors `wire-updates.ts`'s push pattern exactly) and keeps the tray icon's tooltip

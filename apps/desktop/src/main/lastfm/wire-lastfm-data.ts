@@ -1,7 +1,6 @@
 import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
 import {
-  LastfmApiError,
   reportNetworkOutcome,
   type ArtistInfo,
   type Friend,
@@ -19,31 +18,11 @@ import {
   type UserProfile,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-
-/**
- * Last.fm's own error code for "no such artist/track/user in the catalog" — reused
- * from `LastfmClient.getArtistImageUrl`'s docstring and verified live in
- * `packages/core/tests/lastfm-api/client.test.ts`. This is a routine, expected
- * outcome (the overwhelming majority of local-file/streaming-service metadata is
- * either slightly mismatched or, for badly-tagged files, outright garbage — see the
- * real example below), not a real failure, so it gets the same "resolve gracefully
- * instead of rejecting" treatment `wire-artist-image.ts` already gives it for
- * `getArtistImageUrl`.
- */
-const LASTFM_NOT_FOUND_CODE = 6;
-
-/** True for a `LastfmApiError` whose code means "no such artist/track/user in the
- * catalog" (see `LASTFM_NOT_FOUND_CODE`) — false for anything else, including a
- * non-`LastfmApiError` failure (network down, malformed response, …), which should
- * still propagate to the renderer as a real error. */
-function isNotFoundError(error: unknown): boolean {
-  return error instanceof LastfmApiError && error.code === LASTFM_NOT_FOUND_CODE;
-}
+import { isNotFoundError } from "./is-not-found-error.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
-
 /** The subset of `LastfmClient` this module needs — kept narrow for easy testing. */
 export interface LastfmDataClient {
   getRecentTracks: LastfmClient["getRecentTracks"];
@@ -58,7 +37,6 @@ export interface LastfmDataClient {
   getTopTags: LastfmClient["getTopTags"];
   getTrackInfo: LastfmClient["getTrackInfo"];
 }
-
 export interface WireLastfmDataOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;
@@ -69,11 +47,9 @@ export interface WireLastfmDataOptions {
    * network-status reporting need not supply one. */
   readonly networkStatus?: NetworkStatusMonitor;
 }
-
 const NOT_CONFIGURED_MESSAGE =
   "Last.fm API credentials are not configured for this build (LASTFM_API_KEY / " +
   "LASTFM_API_SECRET) — see docs/modules/desktop.md.";
-
 /**
  * Wires the read-only Last.fm data IPC surface (see `shared/lastfm-api.ts`) to a
  * `LastfmClient`. These are all public, unsigned endpoints — no session key or active

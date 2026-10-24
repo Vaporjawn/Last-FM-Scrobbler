@@ -13,7 +13,6 @@ import List from "@mui/material/List";
 import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import type { RecentTrack } from "@lastfm-scrobbler/core";
 import { AsyncState } from "../components/AsyncState.js";
 import { LoginPrompt } from "../components/LoginPrompt.js";
 import { PageHeader } from "../components/PageHeader.js";
@@ -22,22 +21,11 @@ import { RefreshButton } from "../components/shared/RefreshButton.js";
 import { useAuth } from "../hooks/use-auth.js";
 import { useRecentTracks } from "../hooks/use-recent-tracks.js";
 import type { PageProps } from "./page-props.js";
-
-// Matches track title and artist (the two fields ScrobbleListItem itself leads with)
-// plus album — searching an album name to find every scrobble from it is a real,
-// common use case a plain title/artist match would miss entirely. Same
-// case-insensitive substring convention as FriendsPage's own `matchesSearch`.
-function matchesSearch(track: RecentTrack, query: string): boolean {
-  return (
-    track.track.toLowerCase().includes(query) ||
-    track.artist.toLowerCase().includes(query) ||
-    (track.album?.toLowerCase().includes(query) ?? false)
-  );
-}
+import { matchesRecentTrackSearch } from "./matches-recent-track-search.js";
 
 /**
  * The logged-in account's scrobble history — a paginated, searchable list
- * (title/artist/album, see `matchesSearch`) backed by `useRecentTracks`, with a
+ * (title/artist/album, see `matchesRecentTrackSearch`) backed by `useRecentTracks`, with a
  * "Load more" control for older pages. Each row drills into `ScrobbleDetailPage` via
  * `onSelectScrobble` when given.
  */
@@ -49,7 +37,7 @@ export function ScrobblesPage({ onNavigateToSettings, onSelectScrobble }: PagePr
 
   const visibleTracks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return query ? tracks.filter((track) => matchesSearch(track, query)) : tracks;
+    return query ? tracks.filter((track) => matchesRecentTrackSearch(track, query)) : tracks;
   }, [tracks, searchQuery]);
 
   return (

@@ -10,7 +10,6 @@ import InputAdornment from "@mui/material/InputAdornment";
 import List from "@mui/material/List";
 import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
-import type { Friend } from "@lastfm-scrobbler/core";
 import { AsyncState } from "../components/AsyncState.js";
 import { FriendListItem, FRIEND_COLUMN_WIDTH } from "../components/FriendListItem.js";
 import { LoginPrompt } from "../components/LoginPrompt.js";
@@ -21,13 +20,7 @@ import { useAuth } from "../hooks/use-auth.js";
 import { useFriends } from "../hooks/use-friends.js";
 import { useFriendsActivity } from "../hooks/use-friends-activity.js";
 import type { PageProps } from "./page-props.js";
-
-function matchesSearch(friend: Friend, query: string): boolean {
-  return (
-    friend.username.toLowerCase().includes(query) ||
-    (friend.realName?.toLowerCase().includes(query) ?? false)
-  );
-}
+import { matchesFriendSearch } from "./matches-friend-search.js";
 
 /**
  * The logged-in account's Last.fm friends list — a search box over real-time "who's
@@ -69,7 +62,9 @@ export function FriendsPage({
 
   const visibleFriends = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const matching = query ? friends.filter((friend) => matchesSearch(friend, query)) : friends;
+    const matching = query
+      ? friends.filter((friend) => matchesFriendSearch(friend, query))
+      : friends;
 
     // Friends currently "Scrobbling now" first; everyone else keeps their existing
     // relative order — Array.prototype.sort has been a stable sort since ES2019, so

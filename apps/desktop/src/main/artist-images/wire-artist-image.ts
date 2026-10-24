@@ -1,18 +1,12 @@
 import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
-import { fetchArtistImageUrl, type LastfmClient } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
+import { type ArtistImageLastfmClient } from "./artist-image-lastfm-client.js";
+import { resolveArtistImageUrl } from "./resolve-artist-image-url.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
-
-/** The subset of `LastfmClient` this module needs — kept narrow for easy testing,
- * same convention as `ScrobblingClient` in `main/scrobbling/wire-scrobbling.ts`. */
-export interface ArtistImageLastfmClient {
-  getArtistImageUrl: LastfmClient["getArtistImageUrl"];
-}
-
 export interface WireArtistImageOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;
@@ -29,27 +23,6 @@ export interface WireArtistImageOptions {
    * fallback — `lastfmClient`, if given, already carries its own fetch. */
   readonly fetchImpl?: typeof fetch;
 }
-
-async function resolveArtistImageUrl(
-  artistName: string,
-  lastfmClient: ArtistImageLastfmClient | undefined,
-  fetchImpl: typeof fetch,
-): Promise<string | undefined> {
-  if (lastfmClient) {
-    try {
-      const url = await lastfmClient.getArtistImageUrl(artistName);
-      if (url) {
-        return url;
-      }
-    } catch {
-      // Best-effort — see WireArtistImageOptions.lastfmClient's docstring for why a
-      // failure here (most often: this artist isn't in Last.fm's catalog at all)
-      // falls through to Deezer rather than surfacing as an error.
-    }
-  }
-  return fetchArtistImageUrl(artistName, fetchImpl);
-}
-
 /**
  * Wires the real-artist-photo IPC surface (see `shared/artist-image-api.ts`) —
  * Last.fm's own `artist.getInfo` photo first when `lastfmClient` is given (see that

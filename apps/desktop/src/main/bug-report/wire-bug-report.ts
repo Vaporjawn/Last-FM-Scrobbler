@@ -1,65 +1,19 @@
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../validate-ipc-sender.js";
+import { assertTrustedSender } from "../assert-trusted-sender.js";
+import { isAcceptableRelayUrl } from "./is-acceptable-relay-url.js";
+import { type RelayResponse } from "./relay-response.js";
+import { parseRelayResponse } from "./parse-relay-response.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
-
 /** How long the relay may take to answer before the report is given up on. Without a
  * ceiling a stalled relay leaves the dialog "submitting" forever. */
 const RELAY_TIMEOUT_MS = 30_000;
-
-/**
- * Whether `value` is somewhere reports (and the diagnostics bundled with them: recent log
- * lines) may be sent: an https URL, or plain http only to this machine for development.
- * Anything else — a typo'd scheme, a cleartext remote host — is treated as "not
- * configured" rather than sent in the clear.
- */
-function isAcceptableRelayUrl(value: string | undefined): value is string {
-  if (!value) {
-    return false;
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol === "https:") {
-    return true;
-  }
-  return (
-    parsed.protocol === "http:" &&
-    (parsed.hostname === "localhost" ||
-      parsed.hostname === "127.0.0.1" ||
-      parsed.hostname === "[::1]")
-  );
-}
-
-/** Narrows the relay's reply to the two fields this app uses. The link in it is later
- * shown to the user and opened, so it must be an https URL — whatever the relay (or
- * something impersonating it) sends back. */
-function parseRelayResponse(payload: unknown): RelayResponse {
-  if (typeof payload === "object" && payload !== null) {
-    const { issueUrl, issueNumber } = payload as Record<string, unknown>;
-    if (typeof issueUrl === "string" && typeof issueNumber === "number") {
-      try {
-        if (new URL(issueUrl).protocol === "https:") {
-          return { issueUrl, issueNumber };
-        }
-      } catch {
-        // Not a URL at all — falls through to the error below.
-      }
-    }
-  }
-  throw new Error("The bug report relay sent back a response this app could not understand.");
-}
-
 const NOT_CONFIGURED_MESSAGE =
   "Bug reporting is not configured for this build (BUG_REPORT_RELAY_URL) — see " +
   "docs/modules/desktop.md.";
-
 export interface WireBugReportOptions {
   /** Checked on `bugReportSubmit` specifically (not `bugReportIsConfigured`, a plain
    * read with no side effect) — see `validate-ipc-sender.ts`. Unlike the other
@@ -80,12 +34,6 @@ export interface WireBugReportOptions {
   /** Injectable for testing; defaults to the global `fetch`. */
   readonly fetchImpl?: typeof fetch;
 }
-
-interface RelayResponse {
-  readonly issueUrl: string;
-  readonly issueNumber: number;
-}
-
 /**
  * Wires the bug-report IPC surface (see `shared/bug-report-api.ts`) to
  * `services/bug-report-relay`. The relay itself handles anonymous GitHub issue

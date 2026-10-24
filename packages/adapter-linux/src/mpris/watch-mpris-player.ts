@@ -6,18 +6,8 @@ import { mapMetadataToTrackInfo } from "./map-metadata-to-track-info.js";
 import { mapPlaybackStatus } from "./map-playback-status.js";
 import { MPRIS_PATH, PLAYER_IFACE, PROPERTIES_IFACE } from "./mpris-dbus-names.js";
 import { unwrapVariant } from "./unwrap-variant.js";
-
-/** Coerces a value to a plain object, defaulting to `{}` for anything else (including arrays). */
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function asStringOrUndefined(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
+import { asRecord } from "./as-record.js";
+import { asStringOrUndefined } from "./as-string-or-undefined.js";
 
 /**
  * Connects to one MPRIS player's `Player` interface at `busName`, fetches its current

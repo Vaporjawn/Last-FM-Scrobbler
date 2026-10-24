@@ -4,6 +4,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 import { ScrobblingIndicator } from "../ScrobblingIndicator.js";
 import { TIMESTAMP_CHIP_MIN_WIDTH_CHARS } from "./format-timestamp-candidates.js";
 import { TimestampLabel } from "./TimestampLabel.js";
+import { isSxArray } from "./is-sx-array.js";
 
 // `size="small"` + `variant="outlined"` — the exact variant the timestamp `Chip` below
 // always renders as — pads its `.MuiChip-label` 7px on each side (14px total) plus a
@@ -14,23 +15,9 @@ import { TimestampLabel } from "./TimestampLabel.js";
 // covers its label's content-width floor plus this chrome, not just the content floor
 // alone — see this component's own docstring for why the floor has to live here, on
 // the `Chip` itself, and not only on `TimestampLabel`'s inner element.
-const TIMESTAMP_CHIP_DEFAULT_SX = { minWidth: `calc(${TIMESTAMP_CHIP_MIN_WIDTH_CHARS}ch + 16px)` } as const;
-
-/**
- * A hand-written type guard, not a bare `Array.isArray(value)` check inline — the
- * built-in `Array.isArray` overload in `lib.es5.d.ts` always narrows its true branch
- * to a bare `any[]`, which would leak an implicit `any` into the spread this guards
- * below. Narrows to `SxProps<Theme>`'s own array member (via `Extract`, not a
- * hand-reconstructed element type — see the `as SxProps<Theme>` below for why that's
- * not worth chasing) — a predicate's asserted type has to be a subtype of its
- * parameter's, which a bare `readonly unknown[]` isn't.
- */
-function isSxArray(
-  value: SxProps<Theme> | undefined,
-): value is Extract<SxProps<Theme>, readonly unknown[]> {
-  return Array.isArray(value);
-}
-
+const TIMESTAMP_CHIP_DEFAULT_SX = {
+  minWidth: `calc(${TIMESTAMP_CHIP_MIN_WIDTH_CHARS}ch + 16px)`,
+} as const;
 export interface PlaybackStatusChipProps {
   readonly nowPlaying: boolean;
   /** When this track was scrobbled — ignored while `nowPlaying` is true. Renders
@@ -43,7 +30,6 @@ export interface PlaybackStatusChipProps {
   readonly nowPlayingLabel: string;
   readonly sx?: SxProps<Theme>;
 }
-
 /**
  * A track row's trailing status indicator: a filled, pulsing-dot `Chip` while
  * `nowPlaying`, or a plain outlined `Chip` showing when it was scrobbled otherwise —

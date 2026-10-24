@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evaluate } from "../../src/filters/evaluate.js";
 import type { FilterableTrack } from "../../src/filters/filterable-track.js";
-import type { ComparisonNode } from "../../src/filters/parser.js";
+import type { ComparisonNode } from "../../src/filters/comparison-node.js";
 
 function track(overrides: Partial<FilterableTrack> = {}): FilterableTrack {
   return {

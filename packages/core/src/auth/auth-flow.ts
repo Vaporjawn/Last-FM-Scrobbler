@@ -1,19 +1,18 @@
 import { LastfmApiError } from "../lastfm-api/lastfm-error.js";
 import type { LastfmSession } from "../lastfm-api/types.js";
 import { AuthTimeoutError } from "./auth-timeout-error.js";
+import { defaultSleep } from "./default-sleep.js";
 
 const DEFAULT_POLL_INTERVAL_MS = 3000;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 /** Last.fm error code for "This token has not been authorized [yet]". */
 const TOKEN_NOT_AUTHORIZED_CODE = 14;
-
 /** The subset of `LastfmClient` the auth flow needs — kept narrow for easy testing. */
 export interface AuthFlowClient {
   getAuthToken(): Promise<string>;
   buildAuthUrl(token: string): string;
   getSession(token: string): Promise<LastfmSession>;
 }
-
 export interface AuthFlowOptions {
   readonly client: AuthFlowClient;
   /** Opens the Last.fm authorization page — e.g. Electron's `shell.openExternal`. */
@@ -23,13 +22,6 @@ export interface AuthFlowOptions {
   readonly sleepImpl?: (ms: number) => Promise<void>;
   readonly now?: () => number;
 }
-
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 /**
  * Drives Last.fm's desktop auth flow end to end: get a token, open the browser to
  * Last.fm's own authorization page, then silently poll until the user has clicked

@@ -1,4 +1,5 @@
-import type { AspectRatioOption, WindowBounds } from "../../shared/settings-api.js";
+import type { AspectRatioOption } from "../../shared/aspect-ratio-option.js";
+import type { WindowBounds } from "../../shared/settings-api.js";
 import { computeMinimumSizeForAspectRatio } from "./compute-minimum-size-for-aspect-ratio.js";
 import { computeResizedHeight } from "./compute-resized-height.js";
 import { resolveAspectRatioValue } from "./resolve-aspect-ratio.js";

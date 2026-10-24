@@ -8,7 +8,7 @@ import {
   type NetworkStatusMonitor,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../validate-ipc-sender.js";
+import { assertTrustedSender } from "../assert-trusted-sender.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.

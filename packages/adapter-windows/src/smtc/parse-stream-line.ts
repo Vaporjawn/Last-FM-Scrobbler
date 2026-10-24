@@ -1,8 +1,5 @@
 import type { NowPlayingPayload } from "./now-playing-payload.js";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { isPlainObject } from "./is-plain-object.js";
 
 /**
  * Parses one line of `SmtcHelper` stdout.

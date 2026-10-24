@@ -24,6 +24,7 @@ import { useTopTracks } from "../hooks/use-top-tracks.js";
 import { useUserProfile } from "../hooks/use-user-profile.js";
 import { formatRealNameAndLocation } from "../utils/format-real-name-and-location.js";
 import type { PageProps } from "./page-props.js";
+import { formatMemberSince } from "./format-member-since.js";
 
 /** Matches the reference Last.fm client's own "This Week" row count — 10 for the
  * all-time section (this page's original limit, unchanged) reads as too long a list
@@ -35,15 +36,6 @@ const OVERALL_LIMIT = 10;
  * list than Top Artists' own `OVERALL_LIMIT` keeps the page from growing unreasonably
  * long while still showing a meaningful ranking. */
 const TOP_TRACKS_ALBUMS_LIMIT = 5;
-
-/** "Member since March 2003" — built with the platform's own `Intl.DateTimeFormat`
- * rather than a date-formatting dependency; this app has none, and one label doesn't
- * warrant introducing one. */
-function formatMemberSince(registeredAtUnixSeconds: number): string {
-  const date = new Date(registeredAtUnixSeconds * 1000);
-  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(date);
-}
-
 export interface ProfilePageProps extends PageProps {
   /** Whose profile to show — defaults to the logged-in account when omitted, the
    * original (and still primary) way to reach this page, via the sidebar. `App.tsx`
@@ -60,7 +52,6 @@ export interface ProfilePageProps extends PageProps {
    * as `ScrobbleDetailPage.backLabel`. Has no effect when `onBack` is omitted. */
   readonly backLabel?: string;
 }
-
 /**
  * The account card (avatar, real name/location, scrobble/loved-track stats, member
  * since) plus This Week/Overall Top Artists, Top Tracks, and Top Albums for one

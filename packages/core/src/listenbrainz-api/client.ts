@@ -6,6 +6,8 @@ import type {
   ScrobbleBatchResult,
   ScrobbleSubmission,
 } from "../lastfm-api/types.js";
+import { type TrackMetadata } from "./track-metadata.js";
+import { toTrackMetadata } from "./to-track-metadata.js";
 
 const DEFAULT_BASE_URL = "https://api.listenbrainz.org";
 /** ListenBrainz's own documented per-request limit (`MAX_LISTENS_PER_REQUEST` in their
@@ -14,7 +16,6 @@ const DEFAULT_BASE_URL = "https://api.listenbrainz.org";
  * this is defensive parity with `LastfmClient.scrobble`'s equivalent guard, not
  * expected to trigger in practice. */
 const MAX_LISTENS_PER_REQUEST = 1000;
-
 export interface ListenBrainzClientOptions {
   /** A ListenBrainz user API token — pasted in by the user from their ListenBrainz
    * profile settings page (see `ListenBrainzClient.validateToken`), not obtained via a
@@ -26,30 +27,10 @@ export interface ListenBrainzClientOptions {
   /** Per-request ceiling in milliseconds; defaults to 30 seconds. */
   readonly timeoutMs?: number;
 }
-
-interface TrackMetadata {
-  readonly artist_name: string;
-  readonly track_name: string;
-  readonly release_name?: string;
-}
-
 interface ListenPayload {
   readonly listened_at?: number;
   readonly track_metadata: TrackMetadata;
 }
-
-function toTrackMetadata(submission: {
-  readonly artist: string;
-  readonly track: string;
-  readonly album?: string;
-}): TrackMetadata {
-  return {
-    artist_name: submission.artist,
-    track_name: submission.track,
-    ...(submission.album ? { release_name: submission.album } : {}),
-  };
-}
-
 /**
  * Minimal client for ListenBrainz's `submit-listens` API
  * (https://listenbrainz.readthedocs.io/en/latest/users/api/core.html) — implements

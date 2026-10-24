@@ -1,59 +1,13 @@
 import type { PlaybackState, TrackInfo, Unsubscribe } from "@lastfm-scrobbler/shared-types";
-
-/**
- * Loosely-typed shape of `mediaremote-adapter`'s "get"/"stream" payload. Every field is
- * optional — the adapter only ever guarantees `title`/`artist`/`playing`/`bundleIdentifier`
- * are non-null *when a payload represents valid media*; a track with no title is
- * reported as invalid (empty payload) by design. See vendor/mediaremote-adapter/VENDORED.md.
- */
-interface NowPlayingPayload {
-  readonly title?: string;
-  readonly artist?: string;
-  readonly album?: string;
-  readonly duration?: number;
-  readonly elapsedTime?: number;
-  readonly playbackRate?: number;
-  readonly playing?: boolean;
-  readonly timestamp?: string;
-  readonly bundleIdentifier?: string;
-  readonly radioStationIdentifier?: string;
-  readonly radioStationHash?: string;
-}
+import { type NowPlayingPayload } from "./now-playing-payload.js";
+import { toTrackInfo } from "./to-track-info.js";
+import { trackIdentity } from "./track-identity.js";
 
 interface StreamEvent {
   readonly type: string;
   readonly diff?: boolean;
   readonly payload?: NowPlayingPayload | null;
 }
-
-/** Converts one raw payload into a `TrackInfo`, or `undefined` for an invalid/empty one. */
-function toTrackInfo(payload: NowPlayingPayload): TrackInfo | undefined {
-  if (!payload.title) {
-    return undefined;
-  }
-  // `!== undefined` isn't enough here: the vendored native adapter's diff protocol
-  // legitimately emits a JSON `null` for a field that momentarily disappears while
-  // the track identity stays the same (see stream.m's `createDiff`, which sets a
-  // removed key to `NSNull`) — `duration`/`elapsedTime` are not among the fields it
-  // preserves across polls, so a `{"duration":null}` diff is a real, observed shape,
-  // not a hypothetical one. Passing `null` through as `durationSec` would violate the
-  // `number | undefined` `TrackInfo` contract, so this only accepts a real number.
-  const durationSec = typeof payload.duration === "number" ? payload.duration : undefined;
-  return {
-    title: payload.title,
-    artist: payload.artist ?? "",
-    ...(payload.album !== undefined ? { album: payload.album } : {}),
-    ...(durationSec !== undefined ? { durationSec } : {}),
-    sourceApp: payload.bundleIdentifier ?? "unknown",
-    isStream: Boolean(payload.radioStationIdentifier ?? payload.radioStationHash),
-  };
-}
-
-/** A stable key identifying "the same track" across payload diffs, for change detection. */
-function trackIdentity(track: TrackInfo): string {
-  return `${track.artist}::${track.title}::${track.album ?? ""}`;
-}
-
 /**
  * Parses `mediaremote-adapter`'s newline-delimited JSON stream into `PlaybackSource`
  * events. Kept separate from process-spawning so the parsing logic is testable without

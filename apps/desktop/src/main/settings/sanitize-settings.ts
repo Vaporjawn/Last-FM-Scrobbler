@@ -1,18 +1,11 @@
-import {
-  isAspectRatioOption,
-  type AppSettings,
-  type WindowBounds,
-} from "../../shared/settings-api.js";
+import { isAspectRatioOption } from "../../shared/is-aspect-ratio-option.js";
+import { type AppSettings } from "../../shared/settings-api.js";
+import { parseWindowBounds } from "./parse-window-bounds.js";
 
 /** Longest filter expression kept. Real expressions are a line or two; this only stops a
  * runaway value (a corrupted file, a hostile caller) from being stored and recompiled on
  * every launch. */
 const MAX_FILTER_EXPRESSION_LENGTH = 2_000;
-/** Generous bounds for a window position/size, in pixels — far beyond any real display,
- * but small enough to keep a bad value from reaching the window manager. */
-const MAX_WINDOW_SIZE = 16_384;
-const MAX_WINDOW_COORDINATE = 65_536;
-
 const BOOLEAN_KEYS = [
   "closeToTray",
   "autoUpdateEnabled",
@@ -26,7 +19,6 @@ const BOOLEAN_KEYS = [
   "showDockIcon",
   "showTrayIcon",
 ] as const satisfies readonly (keyof AppSettings)[];
-
 /** Every setting the app defines. Typed as a complete `Record`, so adding a setting to
  * `AppSettings` without deciding how it is validated here fails to compile instead of
  * silently making that setting un-saveable. */
@@ -48,36 +40,12 @@ const SETTING_KEYS: Record<keyof AppSettings, true> = {
   windowBounds: true,
 };
 const KNOWN_KEYS: ReadonlySet<string> = new Set(Object.keys(SETTING_KEYS));
-
 export interface SanitizedSettings {
   /** Only the known settings whose values have the right type and range. */
   readonly accepted: Partial<AppSettings>;
   /** Every key that was dropped: unknown, or a known one with a bad value. */
   readonly rejectedKeys: readonly string[];
 }
-
-function isInteger(value: unknown, limit: number): value is number {
-  return typeof value === "number" && Number.isInteger(value) && Math.abs(value) <= limit;
-}
-
-function parseWindowBounds(value: unknown): WindowBounds | undefined {
-  if (typeof value !== "object" || value === null) {
-    return undefined;
-  }
-  const { x, y, width, height } = value as Record<string, unknown>;
-  if (
-    !isInteger(x, MAX_WINDOW_COORDINATE) ||
-    !isInteger(y, MAX_WINDOW_COORDINATE) ||
-    !isInteger(width, MAX_WINDOW_SIZE) ||
-    !isInteger(height, MAX_WINDOW_SIZE) ||
-    width < 1 ||
-    height < 1
-  ) {
-    return undefined;
-  }
-  return { x, y, width, height };
-}
-
 /**
  * Reduces `raw` — the parsed `settings.json`, or the patch a renderer sent over IPC — to
  * the settings this app actually defines, with the right types and sane ranges. Both

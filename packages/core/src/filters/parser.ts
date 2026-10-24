@@ -1,50 +1,14 @@
 import { FilterSyntaxError } from "./filter-syntax-error.js";
 import { isKnownField } from "./is-known-field.js";
 import { isNumericField } from "./is-numeric-field.js";
-import { tokenize } from "./tokenizer.js";
 import type { Token } from "./tokenizer.js";
-
-export type ComparisonOperator = "==" | "!=" | "matches" | "contains" | "<" | ">" | "<=" | ">=";
+import { type ComparisonOperator } from "./comparison-operator.js";
+import { type AstNode } from "./ast-node.js";
 
 const STRING_OPERATORS = new Set<ComparisonOperator>(["==", "!=", "matches", "contains"]);
 const NUMERIC_OPERATORS = new Set<ComparisonOperator>(["==", "!=", "<", ">", "<=", ">="]);
 const OPERATOR_IDENTS = new Set(["matches", "contains"]);
-
-export interface ComparisonNode {
-  readonly type: "comparison";
-  readonly field: string;
-  readonly operator: ComparisonOperator;
-  readonly value: string | number | RegExp;
-}
-
-export interface AndNode {
-  readonly type: "and";
-  readonly left: AstNode;
-  readonly right: AstNode;
-}
-
-export interface OrNode {
-  readonly type: "or";
-  readonly left: AstNode;
-  readonly right: AstNode;
-}
-
-export interface NotNode {
-  readonly type: "not";
-  readonly operand: AstNode;
-}
-
-export type AstNode = ComparisonNode | AndNode | OrNode | NotNode;
-
-/** Parses a filter expression string into an `AstNode` tree, via `tokenize` followed
- * by the private recursive-descent `Parser` below. Throws `FilterSyntaxError` for
- * invalid syntax, unknown fields, or an operator that doesn't apply to a field's type —
- * see `compileFilter`'s docstring for the full grammar. */
-export function parse(expression: string): AstNode {
-  return new Parser(tokenize(expression)).parseExpression();
-}
-
-class Parser {
+export class Parser {
   private position = 0;
 
   constructor(private readonly tokens: readonly Token[]) {}

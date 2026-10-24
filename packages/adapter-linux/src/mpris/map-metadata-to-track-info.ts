@@ -1,48 +1,7 @@
 import type { TrackInfo } from "@lastfm-scrobbler/shared-types";
-import { unwrapVariant } from "./unwrap-variant.js";
-
-function readString(value: unknown): string | undefined {
-  const unwrapped = unwrapVariant(value);
-  return typeof unwrapped === "string" ? unwrapped : undefined;
-}
-
-/**
- * MPRIS's `xesam:artist`/`xesam:albumArtist` are spec'd as string arrays (`as`), but
- * some real-world players send a plain string instead — this accepts both and joins
- * multi-artist arrays with ", " (matches how Last.fm scrobbles multi-artist tracks).
- */
-function readStringOrStringList(value: unknown): string | undefined {
-  const unwrapped = unwrapVariant(value);
-  if (typeof unwrapped === "string") {
-    return unwrapped;
-  }
-  if (Array.isArray(unwrapped)) {
-    const strings: string[] = [];
-    for (const item of unwrapped as unknown[]) {
-      if (typeof item !== "string") {
-        return undefined;
-      }
-      strings.push(item);
-    }
-    return strings.join(", ");
-  }
-  return undefined;
-}
-
-/** `mpris:length` is microseconds, as a signed 64-bit int — commonly a `bigint`, sometimes a plain `number`. */
-function readDurationSec(value: unknown): number | undefined {
-  const unwrapped = unwrapVariant(value);
-  let micros: number | undefined;
-  if (typeof unwrapped === "bigint") {
-    micros = Number(unwrapped);
-  } else if (typeof unwrapped === "number") {
-    micros = unwrapped;
-  }
-  if (micros === undefined || micros <= 0) {
-    return undefined;
-  }
-  return micros / 1_000_000;
-}
+import { readString } from "./read-string.js";
+import { readStringOrStringList } from "./read-string-or-string-list.js";
+import { readDurationSec } from "./read-duration-sec.js";
 
 /**
  * Maps an MPRIS `Metadata` property (an `a{sv}` dict, values possibly Variant-wrapped)

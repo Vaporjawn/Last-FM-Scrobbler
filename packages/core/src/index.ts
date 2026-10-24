@@ -12,11 +12,9 @@ export {
   isLikelyNonMusicVideo,
 } from "./rules/is-likely-non-music-video.js";
 export { combineFilters } from "./filters/combine-filters.js";
-export type {
-  PendingScrobble,
-  QueuedScrobble,
-  ScrobbleQueueOptions,
-} from "./queue/scrobble-queue.js";
+export type { PendingScrobble } from "./queue/pending-scrobble.js";
+export type { QueuedScrobble } from "./queue/queued-scrobble.js";
+export type { ScrobbleQueueOptions } from "./queue/scrobble-queue.js";
 export { ScrobbleQueue } from "./queue/scrobble-queue.js";
 export { isNetworkError } from "./network/is-network-error.js";
 export type {
@@ -79,4 +77,6 @@ export type {
 } from "./tracker/tracker.js";
 export { computeTrackIdentity } from "./tracker/track-identity.js";
 export { Logger } from "./logging/logger.js";
-export type { LogEntry, LoggerOptions, LogLevel, LogSeverity } from "./logging/logger.js";
+export type { LogEntry, LoggerOptions } from "./logging/logger.js";
+export type { LogLevel } from "./logging/log-level.js";
+export type { LogSeverity } from "./logging/log-severity.js";

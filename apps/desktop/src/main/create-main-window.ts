@@ -13,41 +13,27 @@ import { computeMinimumSizeForAspectRatio } from "./window/compute-minimum-size-
 import { resolveExpectedRendererOrigin } from "./resolve-expected-renderer-origin.js";
 import { hardenWebContents } from "./security/harden-web-contents.js";
 import { wireNowPlaying } from "./playback/wire-now-playing.js";
+import { rectanglesIntersect } from "./rectangles-intersect.js";
 
 /** This window's hardcoded default size, used whenever there's no `initialBounds` to
  * restore (first launch, or nothing ever saved) — see the `width`/`height` usage
  * below. */
 const DEFAULT_WIDTH = 1100;
 const DEFAULT_HEIGHT = 720;
-
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { BrowserWindow, screen, shell } from "electron"`.
 const { BrowserWindow, screen, shell } = electron;
-
 const dirname = fileURLToPath(new URL(".", import.meta.url));
-
 /** This window's real minimum height (see the `minHeight` usage below for why 480
  * specifically). Exported so `main/index.ts`'s aspect-ratio change handler can clamp
  * its own immediate resize to the same real constraint, rather than duplicating the
  * number and risking the two drifting apart. */
 export const MIN_WINDOW_HEIGHT = 480;
-
 /** This window's real minimum width (see the `minWidth` usage below for why 680
  * specifically). Exported for the same reason as `MIN_WINDOW_HEIGHT` — `main/index.ts`'s
  * aspect-ratio change handler needs it to clamp a portrait ratio's (e.g. `"9:16"`)
  * derived width, the same way it already clamps a landscape ratio's derived height. */
 export const MIN_WINDOW_WIDTH = 680;
-
-/** Whether rectangle `a` overlaps rectangle `b` at all (touching edges don't count —
- * matches the everyday sense of "is any part of this actually visible on that
- * screen"). Used below to decide whether a restored window position is still usable. */
-function rectanglesIntersect(
-  a: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-  b: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-): boolean {
-  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-}
-
 export interface CreateMainWindowOptions {
   /** `undefined` on platforms without a working adapter yet — see
    * `playback/create-platform-playback-source.ts`. */
@@ -104,7 +90,6 @@ export interface CreateMainWindowOptions {
    * every caller (including this module's own tests) that doesn't care about theming. */
   readonly initialThemeMode?: ThemeMode;
 }
-
 /**
  * Creates and shows the app's main window, wiring up now-playing IPC against it when a
  * platform playback source is available. See `CreateMainWindowOptions` for what each

@@ -1,24 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AuthApi } from "../../../shared/auth-api.js";
 import type { ActionResult } from "./action-result.js";
-import { fail } from "./fail.js";
-import { ok } from "./ok.js";
-
-export interface AuthState {
-  /** Whether this build has Last.fm API credentials configured at all. `undefined`
-   * while still loading, so callers can distinguish "checking" from "unconfigured". */
-  readonly isConfigured: boolean | undefined;
-  /** Where the active API key/secret came from — `undefined` while still loading. See
-   * `shared/auth-api.ts`. */
-  readonly credentialsSource: "environment" | "user-supplied" | "none" | undefined;
-  readonly accounts: readonly string[];
-  readonly activeAccount: string | undefined;
-  readonly isLoggingIn: boolean;
-  readonly isSavingCredentials: boolean;
-  readonly error: string | undefined;
-}
-
-const NOT_AVAILABLE = "Not available right now.";
+import { type AuthState } from "./auth-state.js";
+import { runAuthAction } from "./run-auth-action.js";
 
 export interface UseAuthResult extends AuthState {
   readonly login: () => Promise<ActionResult>;
@@ -33,7 +16,6 @@ export interface UseAuthResult extends AuthState {
   /** Restarts the app so newly-saved (or cleared) credentials take effect. */
   readonly relaunch: () => Promise<void>;
 }
-
 const INITIAL_STATE: AuthState = {
   isConfigured: undefined,
   credentialsSource: undefined,
@@ -43,40 +25,6 @@ const INITIAL_STATE: AuthState = {
   isSavingCredentials: false,
   error: undefined,
 };
-
-/**
- * Runs one `window.auth` call, refreshes state from it, and folds any failure into
- * `error` — the shape every write action below (`login`/`logout`/`setActiveAccount`/
- * `saveAppCredentials`/`clearAppCredentials`) shares, previously duplicated once per
- * action. `action` receives the already-verified-non-undefined `AuthApi` so callers
- * don't each need their own `!window.auth` guard or a non-null assertion to satisfy
- * it. Loading flags (`isLoggingIn`/`isSavingCredentials`) are the one thing that
- * differs per action, so those stay in each `useCallback` around this call rather
- * than being parameterized here.
- */
-async function runAuthAction(
-  // `Promise<unknown>` rather than `Promise<void>` so callers can pass `auth.login`
-  // (which resolves with `{ username }`) directly instead of needing a `.then(() =>
-  // {})` adapter just to satisfy the type — the result of `action` is intentionally
-  // discarded either way, since every action re-derives fresh state via `refresh()`.
-  action: (auth: AuthApi) => Promise<unknown>,
-  refresh: () => Promise<void>,
-  setState: (updater: (previous: AuthState) => AuthState) => void,
-): Promise<ActionResult> {
-  if (!window.auth) {
-    return fail(NOT_AVAILABLE);
-  }
-  try {
-    await action(window.auth);
-    await refresh();
-    return ok();
-  } catch (error) {
-    const result = fail(error);
-    setState((previous) => ({ ...previous, error: result.error }));
-    return result;
-  }
-}
-
 /**
  * Manages Last.fm account state against `window.auth` (see `src/shared/auth-api.ts`).
  * Returns inert defaults — never throws — when `window.auth` isn't present, which is

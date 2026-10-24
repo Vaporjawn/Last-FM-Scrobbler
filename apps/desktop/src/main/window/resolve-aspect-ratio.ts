@@ -1,4 +1,4 @@
-import type { AspectRatioOption } from "../../shared/settings-api.js";
+import type { AspectRatioOption } from "../../shared/aspect-ratio-option.js";
 
 const ASPECT_RATIO_VALUES: Record<AspectRatioOption, number> = {
   free: 0,

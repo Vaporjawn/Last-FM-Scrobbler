@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ScrobbleQueue } from "../../src/queue/scrobble-queue.js";
-import type { PendingScrobble } from "../../src/queue/scrobble-queue.js";
+import type { PendingScrobble } from "../../src/queue/pending-scrobble.js";
 
 const DAY_SEC = 24 * 60 * 60;
 

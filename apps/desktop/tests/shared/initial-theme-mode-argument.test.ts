@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildInitialThemeModeArgument,
-  resolveThemeModeFromArgv,
-} from "../../src/shared/initial-theme-mode-argument.js";
+import { buildInitialThemeModeArgument } from "../../src/shared/initial-theme-mode-argument.js";
+import { resolveThemeModeFromArgv } from "../../src/shared/resolve-theme-mode-from-argv.js";
 
 describe("buildInitialThemeModeArgument", () => {
   it("builds the flag for dark", () => {

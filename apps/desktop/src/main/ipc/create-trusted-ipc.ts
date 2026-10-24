@@ -1,5 +1,5 @@
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
-import { assertTrustedSender } from "../validate-ipc-sender.js";
+import { assertTrustedSender } from "../assert-trusted-sender.js";
 
 export interface TrustedIpc {
   /**

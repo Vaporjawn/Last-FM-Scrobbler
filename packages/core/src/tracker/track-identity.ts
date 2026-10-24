@@ -1,4 +1,5 @@
 import type { TrackInfo } from "@lastfm-scrobbler/shared-types";
+import { normalize } from "./normalize.js";
 
 /**
  * Bucket width for start-time grouping — see docs/adr/0005. Two reports of the same
@@ -8,11 +9,6 @@ import type { TrackInfo } from "@lastfm-scrobbler/shared-types";
  * gets its own identity.
  */
 const START_TIME_BUCKET_SEC = 5;
-
-function normalize(value: string): string {
-  return value.trim().toLowerCase();
-}
-
 /**
  * A stable identity for "this specific play of this track" — normalized
  * artist/title/album, bucketed by start time. Used by the tracker to distinguish a

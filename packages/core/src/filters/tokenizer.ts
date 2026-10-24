@@ -1,20 +1,18 @@
 import { FilterSyntaxError } from "./filter-syntax-error.js";
+import { readDelimited } from "./read-delimited.js";
 
 export type TokenType =
   "ident" | "string" | "regex" | "number" | "op" | "lparen" | "rparen" | "eof";
-
 export interface Token {
   readonly type: TokenType;
   readonly value: string;
   /** Only set for `type: "regex"` tokens. */
   readonly flags?: string;
 }
-
 const TWO_CHAR_OPERATORS = new Set(["==", "!=", "<=", ">="]);
 const IDENT_START = /[A-Za-z_]/;
 const IDENT_CHAR = /[A-Za-z0-9_]/;
 const DIGIT = /[0-9]/;
-
 /** Lexes a raw filter expression string into a flat `Token[]` (identifiers, string/
  * regex/number literals, operators, parens), terminated by an `eof` token — the input
  * `parse` consumes to build the AST `evaluate` walks. Throws `FilterSyntaxError` on any
@@ -121,36 +119,4 @@ export function tokenize(input: string): Token[] {
 
   tokens.push({ type: "eof", value: "" });
   return tokens;
-}
-
-/** Reads a delimiter-terminated literal body starting at `start` (just past the opening
- * delimiter), supporting `\<delimiter>` and `\\` as escapes so the literal can contain
- * its own delimiter (e.g. a regex matching a URL needs a literal `/`: `/^https:\/\//`)
- * or a literal backslash. Any other backslash sequence (e.g. `\d`, `\s` inside a regex
- * body) is left completely untouched — it's not this lexer's escape to interpret, it's
- * regex syntax that `parser.ts` passes straight into `new RegExp(...)`. */
-function readDelimited(
-  input: string,
-  start: number,
-  delimiter: string,
-): { text: string; next: number } {
-  let j = start;
-  let text = "";
-  let char = input[j];
-  while (char !== undefined && char !== delimiter) {
-    const next = input[j + 1];
-    if (char === "\\" && (next === delimiter || next === "\\")) {
-      text += next;
-      j += 2;
-      char = input[j];
-      continue;
-    }
-    text += char;
-    j += 1;
-    char = input[j];
-  }
-  if (char === undefined) {
-    throw new FilterSyntaxError(`unterminated ${delimiter === '"' ? "string" : "regex"} literal`);
-  }
-  return { text, next: j + 1 };
 }

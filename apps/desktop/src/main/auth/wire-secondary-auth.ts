@@ -8,7 +8,7 @@ import {
   type AuthFlowClient,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../validate-ipc-sender.js";
+import { assertTrustedSender } from "../assert-trusted-sender.js";
 import { createLibrefmAuthFlowClient } from "./create-librefm-auth-flow-client.js";
 import type { ResolvedLibrefmCredentials } from "./resolve-librefm-credentials.js";
 

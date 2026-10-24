@@ -1,58 +1,15 @@
 import type { PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
+import { type PlayerEntry } from "./player-entry.js";
+import { tracksEqual } from "./tracks-equal.js";
+import { isPreferred } from "./is-preferred.js";
 
 export interface ActiveSnapshot {
   readonly track: TrackInfo | null;
   readonly state: PlaybackState;
 }
-
 export interface PlayerRegistryOptions {
   readonly now?: () => number;
 }
-
-interface PlayerEntryBase {
-  readonly track: TrackInfo | null;
-  /** Timestamp of the most recent genuine change to this player's track/state. */
-  readonly lastChangedAt: number;
-}
-
-/** A discriminated union, so "currently playing" statically implies a known start time. */
-type PlayerEntry =
-  | (PlayerEntryBase & {
-      readonly state: "playing";
-      /** Timestamp this player most recently transitioned into "playing". */
-      readonly startedPlayingAt: number;
-    })
-  | (PlayerEntryBase & { readonly state: Exclude<PlaybackState, "playing"> });
-
-/** Whether `entry` should replace `incumbent` as the active player (see ADR 0005). */
-function isPreferred(entry: PlayerEntry, incumbent: PlayerEntry): boolean {
-  if (entry.state === "playing") {
-    return incumbent.state !== "playing" || entry.startedPlayingAt > incumbent.startedPlayingAt;
-  }
-  if (incumbent.state === "playing") {
-    return false;
-  }
-  return entry.lastChangedAt > incumbent.lastChangedAt;
-}
-
-function tracksEqual(a: TrackInfo | null, b: TrackInfo | null): boolean {
-  if (a === b) {
-    return true;
-  }
-  if (a === null || b === null) {
-    return false;
-  }
-  return (
-    a.title === b.title &&
-    a.artist === b.artist &&
-    a.album === b.album &&
-    a.albumArtist === b.albumArtist &&
-    a.durationSec === b.durationSec &&
-    a.sourceApp === b.sourceApp &&
-    a.isStream === b.isStream
-  );
-}
-
 /**
  * Implements docs/adr/0005-multi-source-and-track-identity-policy.md's multi-source
  * arbitration: "an adapter reports whichever session is actively Playing and

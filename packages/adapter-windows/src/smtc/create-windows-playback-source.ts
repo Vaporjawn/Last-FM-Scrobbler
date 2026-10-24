@@ -13,6 +13,7 @@ import { resolveHelperPath, type ResolvedHelperPath } from "./resolve-helper-pat
 import { SmtcHelperNotBuiltError } from "./smtc-helper-not-built-error.js";
 import { spawnSmtcHelper, type SmtcHelperHandle } from "./spawn-smtc-helper.js";
 import type { NowPlayingPayload } from "./now-playing-payload.js";
+import { trackInfoEqual } from "./track-info-equal.js";
 
 export interface CreateWindowsPlaybackSourceOptions {
   /** Injectable for testing; defaults to `node:child_process`'s `spawn`. */
@@ -24,22 +25,6 @@ export interface CreateWindowsPlaybackSourceOptions {
    * `spawnSmtcHelper`'s `onError` docstring. */
   readonly onError?: (error: unknown) => void;
 }
-
-function trackInfoEqual(a: TrackInfo | undefined, b: TrackInfo | undefined): boolean {
-  if (!a || !b) {
-    return false;
-  }
-  return (
-    a.title === b.title &&
-    a.artist === b.artist &&
-    a.album === b.album &&
-    a.albumArtist === b.albumArtist &&
-    a.durationSec === b.durationSec &&
-    a.sourceApp === b.sourceApp &&
-    a.isStream === b.isStream
-  );
-}
-
 /**
  * Creates a `PlaybackSource` backed by Windows's System Media Transport Controls
  * (SMTC), via a small compiled helper process (`native/SmtcHelper`) that talks the

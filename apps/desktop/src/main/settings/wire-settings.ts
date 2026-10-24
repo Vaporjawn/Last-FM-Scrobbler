@@ -1,8 +1,9 @@
 import { createTrustedIpc } from "../ipc/create-trusted-ipc.js";
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { isAspectRatioOption } from "../../shared/settings-api.js";
-import type { AppSettings, AspectRatioOption } from "../../shared/settings-api.js";
+import { isAspectRatioOption } from "../../shared/is-aspect-ratio-option.js";
+import type { AppSettings } from "../../shared/settings-api.js";
+import type { AspectRatioOption } from "../../shared/aspect-ratio-option.js";
 import { sanitizeSettings } from "./sanitize-settings.js";
 import type { SettingsStore } from "./settings-store.js";
 

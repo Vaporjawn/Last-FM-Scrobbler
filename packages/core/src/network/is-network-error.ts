@@ -1,3 +1,4 @@
+import { findErrorCode } from "./find-error-code.js";
 /** Node/undici connection-level error codes that mean "the request never reached a
  * server at all" — as opposed to a server responding with an error, which is an
  * application-level failure (see this file's own docstring below). */
@@ -10,21 +11,6 @@ const NETWORK_ERROR_CODES = new Set([
   "ENETUNREACH",
   "EHOSTUNREACH",
 ]);
-
-/** Recursively walks `error.code` and, failing that, `error.cause` (Node's `fetch`/
- * undici nests the real connection error one or more `.cause` levels below the
- * `TypeError: fetch failed` it actually throws) looking for a string error code. */
-function findErrorCode(error: unknown, depth = 0): string | undefined {
-  if (depth > 5 || error === null || typeof error !== "object") {
-    return undefined;
-  }
-  const withCode = error as { readonly code?: unknown; readonly cause?: unknown };
-  if (typeof withCode.code === "string") {
-    return withCode.code;
-  }
-  return findErrorCode(withCode.cause, depth + 1);
-}
-
 /**
  * True only for a genuine connectivity-level failure — DNS, connection refused,
  * timeout, connection reset — as opposed to an application-level failure where a

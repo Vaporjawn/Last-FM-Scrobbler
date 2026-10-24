@@ -1,28 +1,12 @@
 import Database from "better-sqlite3";
+import { type PendingScrobble } from "./pending-scrobble.js";
+import { type QueuedScrobble } from "./queued-scrobble.js";
+import { type ScrobbleRow } from "./scrobble-row.js";
+import { rowToQueuedScrobble } from "./row-to-queued-scrobble.js";
 
 const DAY_SEC = 24 * 60 * 60;
 const DEFAULT_MAX_AGE_DAYS = 14;
 const DEFAULT_MAX_ROWS = 1000;
-
-/** A scrobble waiting to be submitted to Last.fm. */
-export interface PendingScrobble {
-  readonly artist: string;
-  readonly track: string;
-  readonly album?: string;
-  readonly albumArtist?: string;
-  /** Unix seconds — when the track *started* playing, per Last.fm's scrobble API. */
-  readonly timestamp: number;
-  readonly durationSec?: number;
-}
-
-/** A `PendingScrobble` plus its queue bookkeeping. */
-export interface QueuedScrobble extends PendingScrobble {
-  readonly id: number;
-  readonly enqueuedAt: number;
-  readonly retryCount: number;
-  readonly lastError?: string;
-}
-
 export interface ScrobbleQueueOptions {
   /** SQLite database file path, or ":memory:" for an ephemeral in-memory queue. */
   readonly databasePath: string;
@@ -31,35 +15,6 @@ export interface ScrobbleQueueOptions {
   /** Row count above which `evictOverflow` starts dropping the oldest entries. */
   readonly maxRows?: number;
 }
-
-interface ScrobbleRow {
-  id: number;
-  artist: string;
-  track: string;
-  album: string | null;
-  album_artist: string | null;
-  timestamp: number;
-  duration_sec: number | null;
-  enqueued_at: number;
-  retry_count: number;
-  last_error: string | null;
-}
-
-function rowToQueuedScrobble(row: ScrobbleRow): QueuedScrobble {
-  return {
-    id: row.id,
-    artist: row.artist,
-    track: row.track,
-    ...(row.album !== null ? { album: row.album } : {}),
-    ...(row.album_artist !== null ? { albumArtist: row.album_artist } : {}),
-    timestamp: row.timestamp,
-    ...(row.duration_sec !== null ? { durationSec: row.duration_sec } : {}),
-    enqueuedAt: row.enqueued_at,
-    retryCount: row.retry_count,
-    ...(row.last_error !== null ? { lastError: row.last_error } : {}),
-  };
-}
-
 /**
  * Persistent offline cache for scrobbles that couldn't be submitted immediately (no
  * network, Last.fm temporarily unavailable, rate limited, ...). See

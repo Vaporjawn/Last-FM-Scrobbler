@@ -1,4 +1,4 @@
-import { isTrustedUrl } from "../validate-ipc-sender.js";
+import { isTrustedUrl } from "../is-trusted-url.js";
 import { isSafeExternalUrl } from "../window/is-safe-external-url.js";
 
 export interface HardenWebContentsOptions {

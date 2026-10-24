@@ -22,11 +22,13 @@ import type {
   TrackRef,
   UserProfile,
 } from "./types.js";
+import { isErrorPayload } from "./is-error-payload.js";
+import { pickLargestImageUrl } from "./pick-largest-image-url.js";
+import { type LastfmImageJson } from "./lastfm-image-json.js";
 
 const DEFAULT_BASE_URL = "https://ws.audioscrobbler.com/2.0/";
 const DEFAULT_AUTH_URL = "https://www.last.fm/api/auth/";
 const MAX_SCROBBLE_BATCH_SIZE = 50;
-
 /** Last.fm's own shared "no photo" placeholder for `artist.getInfo`'s `image` array —
  * verified live against the real API: every size's `#text` points to this exact same
  * generic graphic, regardless of which artist was requested, a known, long-standing
@@ -34,7 +36,6 @@ const MAX_SCROBBLE_BATCH_SIZE = 50;
  * writeup and citation). Used by `getArtistImageUrl` to filter it out rather than
  * returning it as if it were a real photo. */
 const LASTFM_ARTIST_IMAGE_PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
-
 export interface LastfmClientOptions {
   readonly apiKey: string;
   readonly apiSecret: string;
@@ -55,23 +56,10 @@ export interface LastfmClientOptions {
   /** Per-request ceiling in milliseconds; defaults to 30 seconds. */
   readonly timeoutMs?: number;
 }
-
 interface RequestOptions {
   readonly httpMethod: "GET" | "POST";
   readonly signed: boolean;
 }
-
-/** Narrow, structural check — real Last.fm errors always have both fields. */
-function isErrorPayload(value: unknown): value is { error: number; message: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "error" in value &&
-    "message" in value &&
-    typeof (value as { error: unknown }).error === "number"
-  );
-}
-
 /**
  * Thin wrapper over the Last.fm/Audioscrobbler REST API (auth, scrobbling, and the
  * read-only profile/artist/track lookups the renderer's pages need) — every write call
@@ -643,7 +631,6 @@ export class LastfmClient {
     };
   }
 }
-
 interface RecentTrackJson {
   /** `extended=1` (always requested by `getRecentTracks` — see there) reshapes this
    * from the bare `{ "#text": ... }` used everywhere else in this client into an
@@ -658,30 +645,25 @@ interface RecentTrackJson {
    * track, `"0"` otherwise. */
   readonly loved?: string;
 }
-
 interface ScrobbleResponseItemJson {
   readonly track: { readonly "#text": string };
   readonly ignoredMessage: { readonly code: string };
 }
-
 interface TopArtistJson {
   readonly name: string;
   readonly playcount: string;
 }
-
 interface TopTrackJson {
   readonly name: string;
   readonly artist: { readonly name: string };
   readonly playcount: string;
 }
-
 interface TopAlbumJson {
   readonly name: string;
   readonly artist: { readonly name: string };
   readonly playcount: string;
   readonly image?: readonly LastfmImageJson[];
 }
-
 interface FriendJson {
   readonly name: string;
   readonly realname?: string;
@@ -693,37 +675,10 @@ interface FriendJson {
    * (same convention as every other optional Last.fm user field this client parses). */
   readonly country?: string;
 }
-
-interface LastfmImageJson {
-  readonly size: string;
-  readonly "#text": string;
-}
-
-/** Picks the largest non-empty image URL out of a Last.fm `image` array. Last.fm
- * returns an empty `#text` (not a missing entry) for every size when there's no real
- * image to serve, so this has to check for that rather than just taking the first
- * entry — an empty string is still "present". `undefined` if every size is empty, the
- * array is empty, or missing entirely. */
-function pickLargestImageUrl(images: readonly LastfmImageJson[] | undefined): string | undefined {
-  if (!images) {
-    return undefined;
-  }
-  const bySize = new Map(images.map((image) => [image.size, image["#text"]]));
-  for (const size of ["mega", "extralarge", "large", "medium", "small"]) {
-    const url = bySize.get(size);
-    if (url) {
-      return url;
-    }
-  }
-  // Fallback for any size label not in the list above, in case Last.fm ever adds one.
-  return images.find((image) => image["#text"])?.["#text"];
-}
-
 interface SimilarArtistJson {
   readonly name: string;
   readonly match: string;
 }
-
 interface TopTagJson {
   readonly name: string;
 }
