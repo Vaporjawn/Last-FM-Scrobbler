@@ -24,13 +24,37 @@ const args = process.platform === "linux" ? ["--no-sandbox"] : [];
 const app = await electron.launch({ executablePath, args, timeout: 60_000 });
 
 try {
-  const window = await app.firstWindow();
-  await window.getByRole("heading", { name: "Now Playing" }).waitFor({ timeout: 45_000 });
+  // `app.firstWindow()` is not reliably the main window: the app also creates a hidden
+  // tray popover window, and which one Playwright reports first varies by platform
+  // (the first dry run found the heading on Linux but not on macOS/Windows). Poll every
+  // window until one actually renders the Now Playing heading.
+  const deadline = Date.now() + 60_000;
+  let mainWindow;
+  while (!mainWindow && Date.now() < deadline) {
+    for (const candidate of app.windows()) {
+      const heading = candidate.getByRole("heading", { name: "Now Playing" });
+      if (await heading.isVisible().catch(() => false)) {
+        mainWindow = candidate;
+        break;
+      }
+    }
+    if (!mainWindow) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  if (!mainWindow) {
+    const seen = await Promise.all(
+      app.windows().map(async (w) => `${w.url()} :: ${await w.title().catch(() => "?")}`),
+    );
+    throw new Error(`No window rendered the Now Playing heading. Windows: ${seen.join(" | ")}`);
+  }
   console.log("ok: packaged app launched and rendered the Now Playing view");
 
   if (process.env.SMOKE_EXPECT_LASTFM_LOGIN === "1") {
-    await window.getByText("Settings", { exact: true }).first().click();
-    await window.getByRole("button", { name: "Log in with Last.fm" }).waitFor({ timeout: 30_000 });
+    await mainWindow.getByRole("button", { name: "Settings", exact: true }).click();
+    await mainWindow
+      .getByRole("button", { name: "Log in with Last.fm" })
+      .waitFor({ timeout: 30_000 });
     console.log("ok: Settings offers 'Log in with Last.fm' (baked key reached the build)");
   }
 } finally {
