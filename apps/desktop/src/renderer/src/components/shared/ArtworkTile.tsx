@@ -5,6 +5,11 @@ import ButtonBase from "@mui/material/ButtonBase";
 import ImageListItem from "@mui/material/ImageListItem";
 import ImageListItemBar from "@mui/material/ImageListItemBar";
 
+/**
+ * Props for `ArtworkTile`: the artwork and its caption (title and pre-formatted subtitle),
+ * the fallback content for when there is no artwork, and an optional link target with its
+ * accessible name.
+ */
 export interface ArtworkTileProps {
   readonly imageUrl: string | undefined;
   readonly title: string;

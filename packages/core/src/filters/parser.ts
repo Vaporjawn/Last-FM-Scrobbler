@@ -8,11 +8,28 @@ import { type AstNode } from "./ast-node.js";
 const STRING_OPERATORS = new Set<ComparisonOperator>(["==", "!=", "matches", "contains"]);
 const NUMERIC_OPERATORS = new Set<ComparisonOperator>(["==", "!=", "<", ">", "<=", ">="]);
 const OPERATOR_IDENTS = new Set(["matches", "contains"]);
+/**
+ * Recursive-descent parser turning the `Token[]` from `tokenize` into an `AstNode`
+ * tree. Precedence, loosest to tightest: `or`, `and`, `not`, then a parenthesised group
+ * or a single `field operator value` comparison. `and` / `or` are left-associative.
+ * Every failure is reported as a `FilterSyntaxError`.
+ */
 export class Parser {
   private position = 0;
 
+  /**
+   * Creates a parser positioned at the first token; call `parseExpression` to run it.
+   *
+   * @param tokens - Output of `tokenize`; must end with an `eof` token.
+   */
   constructor(private readonly tokens: readonly Token[]) {}
 
+  /**
+   * Parses the whole token stream as one expression.
+   *
+   * @throws FilterSyntaxError - On any grammar error, or when tokens remain after a
+   * complete expression (e.g. a stray `)`).
+   */
   parseExpression(): AstNode {
     const node = this.parseOr();
     const trailing = this.peek();
@@ -22,6 +39,7 @@ export class Parser {
     return node;
   }
 
+  /** Parses `and`-groups joined by `or` into a left-nested chain of `or` nodes. */
   private parseOr(): AstNode {
     let left = this.parseAnd();
     while (this.isKeyword("or")) {
@@ -32,6 +50,7 @@ export class Parser {
     return left;
   }
 
+  /** Parses `not`-terms joined by `and` into a left-nested chain; binds tighter than `or`. */
   private parseAnd(): AstNode {
     let left = this.parseNot();
     while (this.isKeyword("and")) {
@@ -42,6 +61,7 @@ export class Parser {
     return left;
   }
 
+  /** Parses an optional `not` prefix; recurses so `not not x` is accepted. */
   private parseNot(): AstNode {
     if (this.isKeyword("not")) {
       this.advance();
@@ -50,6 +70,7 @@ export class Parser {
     return this.parsePrimary();
   }
 
+  /** Parses a parenthesised sub-expression, or else a single comparison. */
   private parsePrimary(): AstNode {
     if (this.peek().type === "lparen") {
       this.advance();
@@ -63,6 +84,11 @@ export class Parser {
     return this.parseComparison();
   }
 
+  /**
+   * Parses `field operator value`, checking that the field exists and that the operator
+   * suits the field's type (numeric fields take comparison operators, string fields take
+   * `==`, `!=`, `matches` and `contains`) before reading the value.
+   */
   private parseComparison(): AstNode {
     const fieldToken = this.advance();
     if (fieldToken.type !== "ident") {
@@ -88,6 +114,10 @@ export class Parser {
     return { type: "comparison", field, operator, value };
   }
 
+  /**
+   * Consumes the operator token: either a symbol token (`==`, `<`, ...) or one of the
+   * word operators `matches` / `contains`, which the tokenizer emits as plain identifiers.
+   */
   private parseOperator(): ComparisonOperator {
     const token = this.advance();
     if (token.type === "op") {
@@ -99,6 +129,14 @@ export class Parser {
     throw new FilterSyntaxError(`unexpected token "${token.value}"`);
   }
 
+  /**
+   * Consumes the right-hand side and converts it to the type `operator` and the field
+   * need: a compiled `RegExp` for `matches` (which demands a regex literal), a `number`
+   * for numeric fields, otherwise a string literal.
+   *
+   * @throws FilterSyntaxError - When the token kind does not fit; an invalid regex body
+   * makes `new RegExp` throw its own `SyntaxError` instead.
+   */
   private parseValue(
     operator: ComparisonOperator,
     numericField: boolean,
@@ -126,6 +164,7 @@ export class Parser {
     return token.value;
   }
 
+  /** Returns the current token without consuming it. */
   private peek(): Token {
     const token = this.tokens[this.position];
     /* v8 ignore start -- @preserve
@@ -139,6 +178,12 @@ export class Parser {
     return token;
   }
 
+  /**
+   * Consumes and returns the current token.
+   *
+   * @throws FilterSyntaxError - If only the `eof` token is left, i.e. the expression
+   * ended where more input was required.
+   */
   private advance(): Token {
     const token = this.peek();
     if (token.type !== "eof") {
@@ -148,6 +193,7 @@ export class Parser {
     throw new FilterSyntaxError("unexpected end of expression");
   }
 
+  /** Whether the current token is the identifier `keyword` (`and`, `or` or `not`); consumes nothing. */
   private isKeyword(keyword: string): boolean {
     const token = this.peek();
     return token.type === "ident" && token.value === keyword;

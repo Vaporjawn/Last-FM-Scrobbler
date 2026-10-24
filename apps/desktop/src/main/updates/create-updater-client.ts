@@ -2,6 +2,7 @@ import electronUpdater from "electron-updater";
 import type { Logger } from "@lastfm-scrobbler/core";
 import type { UpdaterClient } from "./updater-client.js";
 
+/** Options for `createUpdaterClient`: the logger electron-updater reports through. */
 export interface CreateUpdaterClientOptions {
   /** Forwarded to electron-updater's own `.logger` — never logs credentials (there
    * aren't any involved here), just check/download progress and errors. */

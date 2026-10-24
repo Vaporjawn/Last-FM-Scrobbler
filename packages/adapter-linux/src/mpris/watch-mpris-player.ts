@@ -37,6 +37,7 @@ export async function watchMprisPlayer(
   let currentMetadata = asRecord(unwrapVariant(initial.Metadata));
   let currentStatus = asStringOrUndefined(unwrapVariant(initial.PlaybackStatus));
 
+  /** Maps the latest cached metadata and status to a `TrackInfo`/`PlaybackState` and hands them to `onUpdate`. */
   const emit = (): void => {
     onUpdate(mapMetadataToTrackInfo(currentMetadata, sourceApp), mapPlaybackStatus(currentStatus));
   };
@@ -67,6 +68,12 @@ export async function watchMprisPlayer(
     }
   }
 
+  /**
+   * Handles `PropertiesChanged(interface, changed, invalidated)`: ignores other
+   * interfaces, caches new `Metadata`/`PlaybackStatus` values from `changed`, and emits.
+   * If either property is listed as invalidated, the value is re-fetched instead (which
+   * emits once it arrives).
+   */
   const listener = (
     interfaceName: string,
     changed: Record<string, unknown>,

@@ -12,6 +12,12 @@
 export class ListenBrainzApiError extends Error {
   readonly code: number;
 
+  /**
+   * Creates the error for a failed ListenBrainz response.
+   *
+   * @param code - The HTTP status of the failed response.
+   * @param message - The error text from the response body, or a generic fallback.
+   */
   constructor(code: number, message: string) {
     super(message);
     this.name = "ListenBrainzApiError";

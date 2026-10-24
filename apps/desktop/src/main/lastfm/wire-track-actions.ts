@@ -6,7 +6,7 @@ import {
   type NetworkStatusMonitor,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../assert-trusted-sender.js";
+import { assertTrustedSender } from "../security/assert-trusted-sender.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
@@ -19,9 +19,13 @@ export interface TrackActionsClient {
   addTags: LastfmClient["addTags"];
 }
 
+/**
+ * Options for `wireTrackActions`: the trusted origin, the account store that supplies the
+ * active session key, and the factory that builds a client signed with it.
+ */
 export interface WireTrackActionsOptions {
   /** The origin (dev) or `file:` URL (packaged) every call on this file's channels
-   * must genuinely come from — see `validate-ipc-sender.ts` and
+   * must genuinely come from — see `security/assert-trusted-sender.ts` and
    * `resolve-expected-renderer-origin.ts`. Every handler below checks it first: these
    * calls are signed with the active account's real Last.fm session key, so they're
    * exactly the kind of higher-privilege operation Electron's security checklist
@@ -58,6 +62,12 @@ const NO_ACTIVE_ACCOUNT_MESSAGE = "No Last.fm account is active — log in from 
 export function wireTrackActions(options: WireTrackActionsOptions): () => void {
   const { expectedOrigin, accountStore, createSessionClient, networkStatus } = options;
 
+  /**
+   * Runs `run` with a client signed as the currently active account, reporting the outcome to
+   * the network status monitor. Rejects when login is unavailable this run (no credentials or
+   * no secure storage) or when no account is active; the account is looked up per call, so a
+   * switch of the active account applies to the next action without re-wiring.
+   */
   async function withActiveClient<T>(run: (client: TrackActionsClient) => Promise<T>): Promise<T> {
     if (!accountStore || !createSessionClient) {
       throw new Error(NOT_CONFIGURED_MESSAGE);

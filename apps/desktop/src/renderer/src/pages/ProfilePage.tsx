@@ -36,6 +36,11 @@ const OVERALL_LIMIT = 10;
  * list than Top Artists' own `OVERALL_LIMIT` keeps the page from growing unreasonably
  * long while still showing a meaningful ranking. */
 const TOP_TRACKS_ALBUMS_LIMIT = 5;
+
+/**
+ * Props for `ProfilePage`: the shared page props plus which account to show and the
+ * optional back-navigation controls used when drilling in from the Friends page.
+ */
 export interface ProfilePageProps extends PageProps {
   /** Whose profile to show — defaults to the logged-in account when omitted, the
    * original (and still primary) way to reach this page, via the sidebar. `App.tsx`
@@ -131,6 +136,7 @@ export function ProfilePage({
     topAlbumsRefreshing ||
     profileRefreshing ||
     lovedTracksRefreshing;
+  /** Re-fetches all six data sources on this page (both Top Artists lists, Top Tracks, Top Albums, profile, loved-track count). */
   const refetchAll = (): void => {
     refetchWeekArtists();
     refetchOverallArtists();
@@ -177,6 +183,7 @@ export function ProfilePage({
     );
   }
 
+  /** Applies the list/tiles choice from the Top Artists `Select`, shared by both Top Artists sections. */
   const handleViewModeChange = (event: SelectChangeEvent<TopArtistsViewMode>): void => {
     setViewMode(event.target.value);
   };

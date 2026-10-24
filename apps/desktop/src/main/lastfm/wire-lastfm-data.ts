@@ -37,6 +37,8 @@ export interface LastfmDataClient {
   getTopTags: LastfmClient["getTopTags"];
   getTrackInfo: LastfmClient["getTrackInfo"];
 }
+
+/** Options for `wireLastfmData`: the trusted origin, the (optional) client and network reporting. */
 export interface WireLastfmDataOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;

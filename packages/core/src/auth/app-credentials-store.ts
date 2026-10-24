@@ -8,6 +8,7 @@ export interface AppCredentials {
 
 const APP_CREDENTIALS_KEY = "app-credentials";
 
+/** Construction options for `AppCredentialsStore`. */
 export interface AppCredentialsStoreOptions {
   /** Same reasoning and same default (`""`, fully backward compatible) as
    * `AccountStoreOptions.namespace` — lets a second instance (e.g. for a
@@ -32,20 +33,29 @@ export class AppCredentialsStore {
   private readonly storage: SecretStorage;
   private readonly key: string;
 
+  /**
+   * Creates a store over `storage`; nothing is read or written until a method is called.
+   *
+   * @param storage - Secret store the key/secret pair is written to.
+   * @param options - Optional key namespace so several services can share `storage`.
+   */
   constructor(storage: SecretStorage, options: AppCredentialsStoreOptions = {}) {
     this.storage = storage;
     this.key = `${options.namespace ?? ""}${APP_CREDENTIALS_KEY}`;
   }
 
+  /** The saved key/secret pair, or `undefined` when the user has not supplied one yet. */
   async get(): Promise<AppCredentials | undefined> {
     const raw = await this.storage.get(this.key);
     return raw ? (JSON.parse(raw) as AppCredentials) : undefined;
   }
 
+  /** Saves `credentials`, replacing any pair already stored under this store's key. */
   async set(credentials: AppCredentials): Promise<void> {
     await this.storage.set(this.key, JSON.stringify(credentials));
   }
 
+  /** Removes the saved key/secret pair so the service reads as unconfigured again. */
   async clear(): Promise<void> {
     await this.storage.delete(this.key);
   }

@@ -2,6 +2,10 @@ import { sessionBus as dbusSessionBus, type MessageBus } from "dbus-next";
 import { normalizeDbusAddress } from "./normalize-dbus-address.js";
 import { resolveSessionBusAddress } from "./resolve-session-bus-address.js";
 
+/**
+ * Seams for `createDefaultSessionBus`, so tests can supply a fake `dbus-next` connection
+ * and a fixed bus address without touching the real session bus or the environment.
+ */
 export interface CreateDefaultSessionBusDependencies {
   /** Injectable for testing; defaults to `dbus-next`'s real `sessionBus`. */
   readonly sessionBus?: typeof dbusSessionBus;

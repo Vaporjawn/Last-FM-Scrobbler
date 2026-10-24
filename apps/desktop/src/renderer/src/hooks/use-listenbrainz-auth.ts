@@ -3,6 +3,10 @@ import type { ActionResult } from "./action-result.js";
 import { fail } from "./fail.js";
 import { ok } from "./ok.js";
 
+/**
+ * The ListenBrainz connection state `useListenBrainzAuth` exposes: the connected account
+ * (if any), whether a connect attempt is in flight, and the latest error message.
+ */
 export interface ListenBrainzAuthState {
   /** The connected ListenBrainz account's username, or `undefined` if none is
    * connected. `undefined` also covers "still loading" — unlike `useAuth`'s
@@ -17,6 +21,10 @@ export interface ListenBrainzAuthState {
 
 const NOT_AVAILABLE = "Not available right now.";
 
+/**
+ * What `useListenBrainzAuth` returns: the current `ListenBrainzAuthState` plus `connect`
+ * and `disconnect`, each resolving to an `ActionResult` rather than rejecting.
+ */
 export interface UseListenBrainzAuthResult extends ListenBrainzAuthState {
   /** Validates `token` and connects the account it belongs to. */
   readonly connect: (token: string) => Promise<ActionResult>;

@@ -19,6 +19,7 @@ export interface SafeStorageLike {
   decryptString(encrypted: Buffer): string;
 }
 
+/** Where `ElectronSecretStorage` keeps its file and which `safeStorage` encrypts the values. */
 export interface ElectronSecretStorageOptions {
   /** Where to persist the encrypted key-value store, e.g. `app.getPath("userData")/secrets.json`. */
   readonly filePath: string;
@@ -45,6 +46,13 @@ export class ElectronSecretStorage implements SecretStorage {
   private readonly filePath: string;
   private readonly safeStorage: SafeStorageLike;
 
+  /**
+   * Creates the storage over the given file and `safeStorage`; nothing is read or written yet.
+   *
+   * @throws When `safeStorage` reports that OS-level encryption is unavailable, so secrets are
+   * never written unencrypted. Callers such as `createAccountStore` catch this and disable the
+   * features that need persistent secrets.
+   */
   constructor(options: ElectronSecretStorageOptions) {
     if (!options.safeStorage.isEncryptionAvailable()) {
       throw new Error(
@@ -67,6 +75,7 @@ export class ElectronSecretStorage implements SecretStorage {
     });
   }
 
+  /** Decrypts and returns the value stored under `key`, or `undefined` when there is none. */
   get(key: string): Promise<string | undefined> {
     return this.run(() => {
       const encoded = this.readFile()[key];
@@ -76,6 +85,7 @@ export class ElectronSecretStorage implements SecretStorage {
     });
   }
 
+  /** Encrypts `value` and saves it under `key`, replacing any previous value, in the secrets file. */
   set(key: string, value: string): Promise<void> {
     return this.run(() => {
       const file = this.readFile();
@@ -84,6 +94,7 @@ export class ElectronSecretStorage implements SecretStorage {
     });
   }
 
+  /** Removes the entry for `key`; the file is only rewritten when the key was actually present. */
   delete(key: string): Promise<void> {
     return this.run(() => {
       const file = this.readFile();
@@ -94,10 +105,16 @@ export class ElectronSecretStorage implements SecretStorage {
     });
   }
 
+  /** Lists every stored key; values stay encrypted and are not decrypted. */
   list(): Promise<readonly string[]> {
     return this.run(() => Object.keys(this.readFile()));
   }
 
+  /**
+   * Reads the secrets file into a null-prototype map of still-encrypted values. A missing file
+   * reads as empty; a file that is not valid JSON or not a plain object is moved aside (see
+   * `setCorruptFileAside`) and also reads as empty. Non-string entries are dropped.
+   */
   private readFile(): SecretsFile {
     if (!existsSync(this.filePath)) {
       return Object.create(null) as SecretsFile;

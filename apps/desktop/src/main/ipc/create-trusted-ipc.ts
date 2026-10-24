@@ -1,6 +1,7 @@
 import type { IpcMain, IpcMainInvokeEvent } from "electron";
-import { assertTrustedSender } from "../assert-trusted-sender.js";
+import { assertTrustedSender } from "../security/assert-trusted-sender.js";
 
+/** The registration surface `createTrustedIpc` returns; handlers added through it are origin-checked. */
 export interface TrustedIpc {
   /**
    * Like `ipcMain.handle`, but the handler only runs for a call that comes from this app's

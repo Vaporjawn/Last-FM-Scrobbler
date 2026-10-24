@@ -1,12 +1,15 @@
 import { createContext, useContext } from "react";
 
+/** The visual tone of a snackbar message, matching the severities of MUI's `Alert`. */
 export type SnackbarSeverity = "success" | "error" | "info" | "warning";
 
+/** A button shown inside a snackbar: its text and the callback run when it is clicked. */
 export interface SnackbarAction {
   readonly label: string;
   readonly onClick: () => void;
 }
 
+/** What a caller passes to `notify`: the message text plus optional severity, action and display duration. */
 export interface NotifyOptions {
   readonly message: string;
   /** Default `"info"`. */
@@ -18,12 +21,17 @@ export interface NotifyOptions {
   readonly autoHideDurationMs?: number;
 }
 
+/** The value `SnackbarProvider` publishes through `SnackbarContext`: the `notify` function. */
 export interface SnackbarContextValue {
   /** Queues a transient message — see `SnackbarProvider` for the actual queuing/display
    * behavior (one at a time, first in first out). */
   readonly notify: (options: NotifyOptions) => void;
 }
 
+/**
+ * React context carrying `notify` from `SnackbarProvider`; `undefined` when no provider is
+ * mounted. Read it through `useSnackbar`, which supplies a no-op fallback.
+ */
 export const SnackbarContext = createContext<SnackbarContextValue | undefined>(undefined);
 
 const NOOP_SNACKBAR: SnackbarContextValue = { notify: () => undefined };

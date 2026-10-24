@@ -1,6 +1,7 @@
 import type { AppCredentials, AppCredentialsStore } from "@lastfm-scrobbler/core";
 import { readBakedLastfmCredentials } from "./read-baked-lastfm-credentials.js";
 
+/** Inputs to `resolveLastfmCredentials`; every field is injectable so tests control the sources. */
 export interface ResolveLastfmCredentialsOptions {
   /** Injectable for testing; defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -10,6 +11,7 @@ export interface ResolveLastfmCredentialsOptions {
   readonly appCredentialsStore?: AppCredentialsStore | undefined;
 }
 
+/** A Last.fm API key/secret pair together with the place it was resolved from. */
 export interface ResolvedLastfmCredentials extends AppCredentials {
   /** Where these credentials came from — lets the UI explain why login is (or isn't)
    * available, and whether the active key is one the end user can change/clear

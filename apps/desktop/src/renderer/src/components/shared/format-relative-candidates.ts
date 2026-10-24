@@ -1,6 +1,13 @@
 import { ONE_MINUTE_MS } from "./one-minute-ms.js";
 import { ONE_HOUR_MS } from "./one-hour-ms.js";
 
+/**
+ * Formats an elapsed duration (milliseconds, under a day in practice) as four "time ago"
+ * strings ordered from most detailed to most terse: "Just now" under a minute, "Nm ago"
+ * under an hour and "Nh ago" beyond that, each with a bare "Now"/"Nm"/"Nh" as the last
+ * entry. The first three slots are identical by design: the unit abbreviation is already
+ * as short as the phrase usefully gets, so only the final fallback drops "ago".
+ */
 export function formatRelativeCandidates(
   elapsedMs: number,
 ): readonly [string, string, string, string] {

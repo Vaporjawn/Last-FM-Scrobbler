@@ -40,6 +40,7 @@ const SETTING_KEYS: Record<keyof AppSettings, true> = {
   windowBounds: true,
 };
 const KNOWN_KEYS: ReadonlySet<string> = new Set(Object.keys(SETTING_KEYS));
+/** The result of `sanitizeSettings`: the settings that passed validation and the keys that did not. */
 export interface SanitizedSettings {
   /** Only the known settings whose values have the right type and range. */
   readonly accepted: Partial<AppSettings>;

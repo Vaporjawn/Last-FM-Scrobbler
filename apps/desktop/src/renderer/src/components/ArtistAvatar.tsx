@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import Avatar from "@mui/material/Avatar";
 import { useArtistImage } from "../hooks/use-artist-image.js";
 
+/** Props for `ArtistAvatar`: the artist to show a photo for and the avatar's diameter. */
 export interface ArtistAvatarProps {
   readonly name: string;
   readonly size?: number;

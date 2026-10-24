@@ -7,6 +7,10 @@ import type { TopTrack } from "@lastfm-scrobbler/core";
 import { AsyncState } from "./AsyncState.js";
 import { TopTrackListItem } from "./TopTrackListItem.js";
 
+/**
+ * Props for `TopTracksSection`: its heading, the tracks and their loading/error state,
+ * and the message shown when there are no tracks. There is no view mode; the section is list-only.
+ */
 export interface TopTracksSectionProps {
   readonly title: string;
   readonly tracks: readonly TopTrack[];

@@ -1,5 +1,13 @@
 import { decodeEscapes } from "./decode-escapes.js";
 
+/**
+ * Rewrites a single `;`-separated D-Bus address candidate (as split by
+ * `normalizeDbusAddress`) so that `unix:path=<p>` becomes `unix:socket=<p>` and
+ * `unix:abstract=<name>` becomes `unix:socket=\0<name>`; the leading NUL is how Node's
+ * `net` module addresses a Linux abstract-namespace socket. Values are `%XX`-decoded
+ * first. Non-`unix` transports, other parameters (such as `guid=`) and malformed
+ * parameters without an `=` are returned untouched.
+ */
 export function normalizeCandidate(candidate: string): string {
   const separator = candidate.indexOf(":");
   if (separator === -1 || candidate.slice(0, separator).toLowerCase() !== "unix") {

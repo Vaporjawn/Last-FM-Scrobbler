@@ -3,8 +3,10 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import { useTheme } from "@mui/material/styles";
 
+/** The persistence states a settings change moves through: done, in flight, or failed. */
 export type SettingsSaveState = "saved" | "saving" | "error";
 
+/** Props for `SettingsSaveStatus`: which of the three save states to display. */
 export interface SettingsSaveStatusProps {
   readonly state: SettingsSaveState;
 }

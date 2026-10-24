@@ -13,6 +13,10 @@ import { TrackLoveTagControls } from "./shared/TrackLoveTagControls.js";
  * reads at list scale instead of looking like a favicon. */
 const AVATAR_SIZE = 56;
 
+/**
+ * Props for `ScrobbleListItem`: the history entry to render and an optional callback
+ * that makes the row open that track's detail view.
+ */
 export interface ScrobbleListItemProps {
   readonly track: RecentTrack;
   /** Opens `ScrobbleDetailPage` for this track when given — the avatar/text portion of

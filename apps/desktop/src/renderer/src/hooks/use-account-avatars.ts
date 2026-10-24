@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { fetchEachWithLimit } from "./fetch-each-with-limit.js";
 
+/**
+ * Profile-photo URLs keyed by username. A missing key or an `undefined` value means the
+ * photo is still loading, the lookup failed, or the account has no photo.
+ */
 export type AccountAvatarMap = Readonly<Record<string, string | undefined>>;
 
 /** Maximum number of `getUserInfo` calls this hook allows in flight at once — same

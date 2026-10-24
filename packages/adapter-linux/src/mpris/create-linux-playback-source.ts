@@ -13,6 +13,7 @@ import type {
 } from "@lastfm-scrobbler/shared-types";
 import { tracksEqual } from "./tracks-equal.js";
 
+/** Options for `createLinuxPlaybackSource`; every field is optional and mainly exists for tests and hosts. */
 export interface CreateLinuxPlaybackSourceOptions {
   /** Injectable for testing; defaults to `dbus-next`'s real session bus. */
   readonly sessionBus?: () => MessageBus;
@@ -23,6 +24,10 @@ export interface CreateLinuxPlaybackSourceOptions {
    * crashes the packaged Electron app (see that function's docstring).
    */
   readonly busAddress?: string;
+  /**
+   * Receives non-fatal failures (bus connection errors, a player that could not be
+   * watched, a failed startup). Without it these are swallowed rather than thrown.
+   */
   readonly onError?: (error: unknown) => void;
   /** Injectable clock, forwarded to the internal `PlayerRegistry`; defaults to the real clock. */
   readonly now?: () => number;
@@ -65,6 +70,11 @@ export function createLinuxPlaybackSource(
   let epoch = 0;
   const watchTokens = new Map<string, symbol>();
 
+  /**
+   * Recomputes the registry's active player and notifies listeners of whatever differs
+   * from the last emission: state listeners when the state changed, track listeners when
+   * the track changed to a non-null value (a change to "no track" is never sent to them).
+   */
   function emitIfChanged(): void {
     const active = registry.getActive();
 
@@ -81,6 +91,12 @@ export function createLinuxPlaybackSource(
     lastEmitted = active;
   }
 
+  /**
+   * Starts watching one MPRIS player and feeds its updates into the registry. Replaces any
+   * existing watcher for the same bus name. If the source was torn down, or the player was
+   * unwatched, while the asynchronous setup was in flight, the fresh watcher is released
+   * immediately instead of being registered.
+   */
   async function watchPlayer(
     busName: string,
     activeBus: MessageBus,
@@ -92,6 +108,7 @@ export function createLinuxPlaybackSource(
 
     const token = Symbol(busName);
     watchTokens.set(busName, token);
+    /** True while this watch attempt is still the wanted one for its bus name and session. */
     const isCurrent = (): boolean => sessionEpoch === epoch && watchTokens.get(busName) === token;
 
     try {
@@ -116,6 +133,11 @@ export function createLinuxPlaybackSource(
     }
   }
 
+  /**
+   * Stops watching a player that left the bus, invalidates any watch attempt still in
+   * flight for it, drops it from the registry, and emits so listeners see the new
+   * active player (or "stopped" if none remain).
+   */
   function unwatchPlayer(busName: string): void {
     watchTokens.delete(busName);
     playerWatchers.get(busName)?.();
@@ -124,6 +146,12 @@ export function createLinuxPlaybackSource(
     emitIfChanged();
   }
 
+  /**
+   * Opens the session bus, watches every MPRIS player already running, then subscribes to
+   * player start/stop so later arrivals and departures are tracked. The lifecycle
+   * subscription is made after the initial listing; each step re-checks `sessionEpoch`
+   * so a teardown that happened mid-await abandons the rest of the startup.
+   */
   async function start(sessionEpoch: number): Promise<void> {
     const activeBus = getSessionBus();
     bus = activeBus;
@@ -161,6 +189,7 @@ export function createLinuxPlaybackSource(
     lifecycleUnsubscribe = unsubscribeLifecycle;
   }
 
+  /** Kicks off `start` for the current epoch once; later calls are no-ops until teardown. */
   function ensureStarted(): void {
     if (starting) {
       return;
@@ -170,6 +199,12 @@ export function createLinuxPlaybackSource(
     });
   }
 
+  /**
+   * Tears everything down once the last track and state listener has unsubscribed:
+   * bumps the epoch (so in-flight async steps abandon themselves), releases the lifecycle
+   * and per-player watchers, clears the registry, disconnects the bus, and resets the
+   * source so the next subscription starts fresh.
+   */
   function stopIfNoSubscribers(): void {
     if (trackListeners.size > 0 || stateListeners.size > 0) {
       return;

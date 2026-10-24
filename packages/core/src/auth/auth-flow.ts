@@ -13,6 +13,11 @@ export interface AuthFlowClient {
   buildAuthUrl(token: string): string;
   getSession(token: string): Promise<LastfmSession>;
 }
+/**
+ * Construction options for `AuthFlow`. Only `client` and `openUrl` are required; the
+ * poll interval defaults to 3 seconds and the overall timeout to 5 minutes, and
+ * `sleepImpl` / `now` exist so tests can drive the polling loop without real time.
+ */
 export interface AuthFlowOptions {
   readonly client: AuthFlowClient;
   /** Opens the Last.fm authorization page — e.g. Electron's `shell.openExternal`. */
@@ -36,6 +41,7 @@ export class AuthFlow {
   private readonly sleepImpl: (ms: number) => Promise<void>;
   private readonly now: () => number;
 
+  /** Applies the option defaults (3 s poll, 5 min timeout, real sleep and clock). */
   constructor(options: AuthFlowOptions) {
     this.client = options.client;
     this.openUrl = options.openUrl;
@@ -45,6 +51,15 @@ export class AuthFlow {
     this.now = options.now ?? (() => Date.now());
   }
 
+  /**
+   * Requests a token, opens the authorization URL, then calls `getSession` every poll
+   * interval until it succeeds. Last.fm answers with error 14 ("token not authorized")
+   * until the user approves, so only that error keeps the loop going.
+   *
+   * @returns The session issued once the user has approved the token.
+   * @throws AuthTimeoutError - When the deadline passes while the token is still unapproved.
+   * @throws Error - Any other failure (including other Last.fm errors) is rethrown immediately.
+   */
   async authenticate(): Promise<LastfmSession> {
     const token = await this.client.getAuthToken();
     await this.openUrl(this.client.buildAuthUrl(token));

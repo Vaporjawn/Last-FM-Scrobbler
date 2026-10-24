@@ -1,6 +1,11 @@
 /** Thrown by `createWindowsPlaybackSource` when `SmtcHelper.exe` hasn't been compiled
  * yet at the resolved helper path. */
 export class SmtcHelperNotBuiltError extends Error {
+  /**
+   * Builds a message naming the missing executable and the command that compiles it.
+   *
+   * @param helperPath The location where the helper was expected.
+   */
   constructor(helperPath: string) {
     super(
       `SmtcHelper.exe has not been built yet (expected at "${helperPath}"). Run ` +

@@ -18,9 +18,11 @@ export interface ActionSuccess {
   readonly success: true;
 }
 
+/** The failed outcome of an action, carrying a user-presentable message in `error`. */
 export interface ActionFailure {
   readonly success: false;
   readonly error: string;
 }
 
+/** Either outcome of an async hook action; narrow on `success` to reach `error`. */
 export type ActionResult = ActionSuccess | ActionFailure;

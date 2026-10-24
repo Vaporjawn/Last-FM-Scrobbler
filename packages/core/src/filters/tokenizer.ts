@@ -1,8 +1,16 @@
 import { FilterSyntaxError } from "./filter-syntax-error.js";
 import { readDelimited } from "./read-delimited.js";
 
+/**
+ * Lexical categories produced by `tokenize`. Keywords (`and`, `or`, `not`) and the word
+ * operators (`matches`, `contains`) are not separate types: they arrive as `ident`.
+ */
 export type TokenType =
   "ident" | "string" | "regex" | "number" | "op" | "lparen" | "rparen" | "eof";
+/**
+ * One lexed unit of a filter expression. `value` is the unescaped text (string/regex
+ * bodies without their delimiters, numbers as written, empty for `eof`).
+ */
 export interface Token {
   readonly type: TokenType;
   readonly value: string;

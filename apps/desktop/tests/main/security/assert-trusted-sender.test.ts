@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { assertTrustedSender } from "../../src/main/assert-trusted-sender.js";
-import { isTrustedUrl } from "../../src/main/is-trusted-url.js";
+import { assertTrustedSender } from "../../../src/main/security/assert-trusted-sender.js";
+import { isTrustedUrl } from "../../../src/main/security/is-trusted-url.js";
 
 describe("assertTrustedSender", () => {
   describe("dev-style origin (http)", () => {

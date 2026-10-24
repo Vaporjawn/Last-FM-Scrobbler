@@ -3,6 +3,7 @@ import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
+/** Props for `PageHeader`: the page title, an optional subtitle (stacked or inline) and an optional trailing action. */
 export interface PageHeaderProps {
   readonly title: string;
   /** Optional context line — e.g. "Showing recent activity for {username}" or a

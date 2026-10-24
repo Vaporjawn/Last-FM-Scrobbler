@@ -1,3 +1,7 @@
+/**
+ * One play to record via `track.scrobble`: the track's identity plus the time it
+ * started. Optional metadata that is `undefined` is simply not sent.
+ */
 export interface ScrobbleSubmission {
   readonly artist: string;
   readonly track: string;
@@ -10,6 +14,11 @@ export interface ScrobbleSubmission {
   readonly mbid?: string;
 }
 
+/**
+ * The track to announce through `track.updateNowPlaying`. Same metadata as
+ * `ScrobbleSubmission` minus the timestamp, since a now-playing update describes what
+ * is playing right now rather than a finished play.
+ */
 export interface NowPlayingSubmission {
   readonly artist: string;
   readonly track: string;
@@ -20,12 +29,22 @@ export interface NowPlayingSubmission {
   readonly mbid?: string;
 }
 
+/**
+ * The result of a completed auth flow (`auth.getSession`): the account name and the
+ * long-lived session key that signs that user's write calls, plus whether the account
+ * has a Last.fm subscription.
+ */
 export interface LastfmSession {
   readonly username: string;
   readonly sessionKey: string;
   readonly isSubscriber: boolean;
 }
 
+/**
+ * Outcome of one scrobble within a `track.scrobble` batch. `retryable` is true only for
+ * ignore codes that are transient (such as the daily limit), so the queue knows whether
+ * to keep the entry or drop it.
+ */
 export interface ScrobbleResultItem {
   readonly track: string;
   /** 0 when accepted; see isRetryableScrobbleIgnoreCode for the ignore code meanings. */
@@ -33,17 +52,26 @@ export interface ScrobbleResultItem {
   readonly retryable: boolean;
 }
 
+/**
+ * Result of submitting a batch of scrobbles: Last.fm's accepted and ignored totals plus
+ * the per-track breakdown in `results`. An empty batch yields zeroes and no results.
+ */
 export interface ScrobbleBatchResult {
   readonly accepted: number;
   readonly ignored: number;
   readonly results: readonly ScrobbleResultItem[];
 }
 
+/** Minimal identity of a track (artist and title), as `love`, `unlove` and `addTags` need to address it. */
 export interface TrackRef {
   readonly artist: string;
   readonly track: string;
 }
 
+/**
+ * One entry of a user's recent-listening history (`user.getRecentTracks`). The track
+ * that is playing right now is included with `nowPlaying: true` and no timestamp.
+ */
 export interface RecentTrack {
   readonly artist: string;
   readonly track: string;
@@ -60,6 +88,7 @@ export interface RecentTrack {
   readonly loved: boolean;
 }
 
+/** One row of a user's top-artists ranking (`user.getTopArtists`): name and play count, with no image (see `ArtistInfo`). */
 export interface TopArtist {
   readonly name: string;
   readonly playCount: number;
@@ -70,6 +99,7 @@ export interface TopArtist {
  * which is why every existing caller of that method simply never passed one. */
 export type TopArtistsPeriod = "overall" | "7day" | "1month" | "3month" | "6month" | "12month";
 
+/** One row of a user's top-tracks ranking (`user.getTopTracks`): title, artist and play count. */
 export interface TopTrack {
   readonly name: string;
   readonly artist: string;
@@ -87,6 +117,7 @@ export interface TopTrack {
  * rather than redeclared per entity type. */
 export type TopTracksPeriod = TopArtistsPeriod;
 
+/** One row of a user's top-albums ranking (`user.getTopAlbums`): album, artist, play count and cover art when available. */
 export interface TopAlbum {
   readonly name: string;
   readonly artist: string;
@@ -102,8 +133,13 @@ export interface TopAlbum {
   readonly imageUrl?: string;
 }
 
+/** Time window accepted by `user.getTopAlbums`; the same values as `TopArtistsPeriod`. */
 export type TopAlbumsPeriod = TopArtistsPeriod;
 
+/**
+ * A Last.fm user's public profile (`user.getInfo`), as shown on a profile view. Fields
+ * Last.fm leaves blank are omitted rather than set to empty strings.
+ */
 export interface UserProfile {
   readonly username: string;
   readonly realName?: string;
@@ -145,6 +181,7 @@ export interface UserProfile {
   readonly registeredAt?: number;
 }
 
+/** One entry of a user's friends list (`user.getFriends`); blank Last.fm fields are omitted. */
 export interface Friend {
   readonly username: string;
   readonly realName?: string;
@@ -168,6 +205,11 @@ export interface Friend {
   readonly isSubscriber: boolean;
 }
 
+/**
+ * Artist details from `artist.getInfo`: bio summary, global listener and play counts,
+ * and optionally the requesting user's own play count. Deliberately carries no image,
+ * for the reason in the note after the fields.
+ */
 export interface ArtistInfo {
   readonly name: string;
   readonly bioSummary?: string;
@@ -193,11 +235,17 @@ export interface ArtistInfo {
   // from Deezer's public artist search instead.
 }
 
+/** An artist Last.fm considers similar to another (`artist.getSimilar`), with its numeric `match` similarity score. */
 export interface SimilarArtist {
   readonly name: string;
   readonly match: number;
 }
 
+/**
+ * Track details from `track.getInfo` for a track-detail view: global listener and play
+ * counts, cover art, the track's Last.fm page URL, and (when a username was supplied)
+ * that user's play count and loved status.
+ */
 export interface TrackDetail {
   readonly artist: string;
   readonly track: string;

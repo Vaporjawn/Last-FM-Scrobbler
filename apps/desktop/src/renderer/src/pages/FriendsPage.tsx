@@ -55,6 +55,7 @@ export function FriendsPage({
   // current activity are two independent fetches (see useFriendsActivity's own
   // docstring for why activity isn't just folded into useFriends), but from the
   // user's point of view "refresh Friends" means both at once.
+  /** Re-fetches both the friend list and every friend's recent activity, for the header's refresh button. */
   const refetchAll = (): void => {
     refetchFriends();
     refetchActivity();

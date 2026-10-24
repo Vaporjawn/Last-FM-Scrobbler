@@ -165,6 +165,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
 
   const q = query.trim().toLowerCase();
 
+  /**
+   * Submits the Last.fm API key/secret form: saves the pair, clears the inputs on success,
+   * and shows a long-lived snackbar with a "Restart now" action because the new
+   * credentials only apply after the app restarts.
+   */
   const handleSaveCredentials = (event: SubmitEvent<HTMLFormElement>): void => {
     event.preventDefault();
     void (async () => {
@@ -187,6 +192,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     })();
   };
 
+  /** Starts the Last.fm browser login; on success it confirms with a snackbar and jumps to the Profile page. */
   const handleLogin = (): void => {
     // Once `AuthFlow` confirms the session (the user approved access on Last.fm in
     // their browser), jump straight to Profile so they see confirmation of who
@@ -201,6 +207,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Logs the given Last.fm account out and reports the outcome in a snackbar. */
   const handleLogout = (username: string): void => {
     void logout(username).then((result) => {
       notify(
@@ -211,6 +218,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Makes the given saved account the active one and reports the outcome in a snackbar. */
   const handleSetActiveAccount = (username: string): void => {
     void setActiveAccount(username).then((result) => {
       notify(
@@ -221,6 +229,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Removes the saved user-supplied Last.fm API key/secret; the app must restart for that to apply. */
   const handleClearAppCredentials = (): void => {
     void clearAppCredentials().then((result) => {
       notify(
@@ -234,6 +243,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /**
+   * Submits the Libre.fm key/secret form. Saves the pair and, only if that succeeds, logs
+   * in straight away, so one "Connect" click covers both steps. The inputs are cleared once
+   * the login succeeds.
+   */
   const handleLibrefmConnect = (event: SubmitEvent<HTMLFormElement>): void => {
     event.preventDefault();
     // Unlike Last.fm's two-step "save a key, then separately log in" flow, Libre.fm's
@@ -258,6 +272,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Logs in to Libre.fm with credentials that already exist, skipping the key/secret form. */
   const handleLibrefmLoginOnly = (): void => {
     // Used when credentials are already available (baked into this build via
     // LIBREFM_API_KEY/LIBREFM_API_SECRET, or previously saved) — no key/secret form
@@ -272,6 +287,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Disconnects the Libre.fm account and reports the outcome in a snackbar. */
   const handleLibrefmLogout = (): void => {
     void librefmLogout().then((result) => {
       notify(
@@ -282,6 +298,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Removes the saved Libre.fm API key/secret pair and reports the outcome in a snackbar. */
   const handleLibrefmClearCredentials = (): void => {
     void librefmClearCredentials().then((result) => {
       notify(
@@ -292,6 +309,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Submits the ListenBrainz token form, clearing the input on success and reporting the outcome in a snackbar. */
   const handleListenBrainzConnect = (event: SubmitEvent<HTMLFormElement>): void => {
     event.preventDefault();
     void listenBrainzConnect(listenBrainzToken).then((result) => {
@@ -304,6 +322,7 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /** Disconnects the ListenBrainz account and reports the outcome in a snackbar. */
   const handleListenBrainzDisconnect = (): void => {
     void listenBrainzDisconnect().then((result) => {
       notify(
@@ -314,6 +333,10 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /**
+   * Persists a partial settings change while driving the header's save-status indicator:
+   * "saving" immediately, then "saved" on success or "error" (plus an error snackbar) on failure.
+   */
   const handleUpdateSetting = (patch: Parameters<typeof updateSettings>[0]): void => {
     setSaveState("saving");
     void updateSettings(patch).then((result) => {
@@ -326,6 +349,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /**
+   * Confirmed action behind the reset dialog: restores every setting to its default, keeps
+   * the dialog's buttons busy while the request runs, then closes the dialog and updates the
+   * save-status indicator and snackbar with the outcome.
+   */
   const handleResetToDefaults = (): void => {
     setResetting(true);
     void resetSettings().then((result) => {
@@ -341,6 +369,11 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /**
+   * Validates the draft filter expression when its field loses focus, so a syntax error
+   * shows up before the user tries to save. A response that a newer validation call has
+   * superseded is ignored, so a slow answer for old text cannot overwrite the current state.
+   */
   const handleFilterExpressionBlur = (): void => {
     const trimmed = filterExpressionInput.trim();
     if (!trimmed || !window.filter) {
@@ -356,6 +389,12 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /**
+   * Saves the draft filter expression. An empty draft clears the saved filter. Otherwise
+   * the text is re-validated first (even if the blur check already ran, since the user may
+   * click Save straight after pasting) and is persisted only when valid. Either way the app
+   * must restart before the new filter applies, so the snackbar offers "Restart now".
+   */
   const handleSaveFilterExpression = (): void => {
     const trimmed = filterExpressionInput.trim();
     if (!trimmed) {
@@ -396,6 +435,10 @@ export function SettingsPage({ onNavigateToProfile }: PageProps): JSX.Element {
     });
   };
 
+  /**
+   * Triggers an immediate update check. The snackbar only reports whether the check itself
+   * ran; whether an update exists shows up separately through the update status text.
+   */
   const handleCheckForUpdatesNow = (): void => {
     void checkForUpdatesNow().then((result) => {
       notify(

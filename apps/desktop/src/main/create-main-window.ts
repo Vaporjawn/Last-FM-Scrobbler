@@ -34,6 +34,12 @@ export const MIN_WINDOW_HEIGHT = 480;
  * aspect-ratio change handler needs it to clamp a portrait ratio's (e.g. `"9:16"`)
  * derived width, the same way it already clamps a landscape ratio's derived height. */
 export const MIN_WINDOW_WIDTH = 680;
+
+/**
+ * Inputs to `createMainWindow`: the playback source and the scrobbling/filter hooks wired to the
+ * now-playing feed, plus the persisted window state (bounds, aspect ratio, theme) restored at
+ * creation time.
+ */
 export interface CreateMainWindowOptions {
   /** `undefined` on platforms without a working adapter yet — see
    * `playback/create-platform-playback-source.ts`. */

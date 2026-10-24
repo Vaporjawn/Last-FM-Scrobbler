@@ -4,6 +4,7 @@ import electron from "electron";
 // than `import { Notification } from "electron"`.
 const { Notification } = electron;
 
+/** The content and optional icon and click handler of a notification passed to `showNotification`. */
 export interface ShowNotificationOptions {
   readonly title: string;
   readonly body: string;

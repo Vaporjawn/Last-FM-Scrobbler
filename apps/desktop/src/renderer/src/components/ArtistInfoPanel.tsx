@@ -14,6 +14,11 @@ import { StatBox } from "./shared/StatBox.js";
 
 const SIMILAR_ARTIST_AVATAR_SIZE = 72;
 
+/**
+ * Props for `ArtistInfoPanel`. The caller owns fetching: it passes the artist's
+ * name, the fetched info and similar artists, and the loading/error state that decides
+ * whether the panel shows a placeholder, an error, or the content.
+ */
 export interface ArtistInfoPanelProps {
   readonly artistName: string;
   readonly info: ArtistInfo | undefined;

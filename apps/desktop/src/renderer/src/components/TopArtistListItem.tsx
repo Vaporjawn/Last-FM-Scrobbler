@@ -13,6 +13,7 @@ const AVATAR_SIZE = 48;
  * avatar + the two gaps between them — see the Stack below). */
 const BAR_INDENT_PX = 20 + 12 + AVATAR_SIZE + 12;
 
+/** Props for `TopArtistListItem`: the artist, its rank, and the list's max play count for the bar scale. */
 export interface TopArtistListItemProps {
   readonly artist: TopArtist;
   /** 1-based position in the list — shown as a plain rank number, not an index. */

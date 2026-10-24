@@ -3,6 +3,11 @@ import MusicNoteIcon from "@mui/icons-material/MusicNote";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import Avatar from "@mui/material/Avatar";
 
+/**
+ * Props for `TrackArtworkAvatar`: the album art URL and the title used as its alt text,
+ * whether the track is currently playing (which styles the fallback), the avatar size,
+ * and whether it must resist flex shrinking.
+ */
 export interface TrackArtworkAvatarProps {
   readonly imageUrl: string | undefined;
   readonly title: string;

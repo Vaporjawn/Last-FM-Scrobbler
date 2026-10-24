@@ -8,7 +8,7 @@ import {
   type NetworkStatusMonitor,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../assert-trusted-sender.js";
+import { assertTrustedSender } from "../security/assert-trusted-sender.js";
 
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
@@ -23,9 +23,14 @@ const NO_APP_CREDENTIALS_STORAGE_MESSAGE =
   "Can't save a Last.fm API key on this system — secure storage isn't available " +
   "(see docs/modules/desktop.md).";
 
+/**
+ * Everything `wireAuth` needs: the trusted renderer origin, the Last.fm account store and auth
+ * client (either may be `undefined` when login isn't available this run), and the callbacks the
+ * app hooks into the login flow.
+ */
 export interface WireAuthOptions {
   /** The origin (dev) or `file:` URL (packaged) every call on this file's channels
-   * must genuinely come from — see `validate-ipc-sender.ts` and
+   * must genuinely come from — see `security/assert-trusted-sender.ts` and
    * `resolve-expected-renderer-origin.ts`. This is this module's highest-privilege
    * surface (login, logout, saving/clearing a Last.fm API key), so every handler
    * below checks it first, before doing anything else. */

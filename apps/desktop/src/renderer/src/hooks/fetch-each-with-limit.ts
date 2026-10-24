@@ -30,6 +30,12 @@ export function fetchEachWithLimit<Item, Result>(
   // to plain `Item` once `done` is `false`, with no unsafe access or assertion needed.
   const iterator = items[Symbol.iterator]();
 
+  /**
+   * One pool worker: claims the next unclaimed item, fetches it, reports its settled
+   * outcome through `onSettled` and then recurses to claim another, resolving once the
+   * shared iterator is exhausted. A rejection is converted into a settled result here, so
+   * it can never break the worker's own chain.
+   */
   function runWorker(): Promise<void> {
     const next = iterator.next();
     if (next.done === true) {

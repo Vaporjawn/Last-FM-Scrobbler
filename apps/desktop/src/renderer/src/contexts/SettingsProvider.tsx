@@ -2,6 +2,7 @@ import type { JSX, ReactNode } from "react";
 import { useSettingsState } from "../hooks/use-settings-state.js";
 import { SettingsContext } from "./settings-context.js";
 
+/** Props for `SettingsProvider`: the subtree that should read the shared settings state. */
 export interface SettingsProviderProps {
   readonly children: ReactNode;
 }

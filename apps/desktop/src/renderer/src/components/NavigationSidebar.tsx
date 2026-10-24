@@ -13,6 +13,11 @@ import { CollapseToggle } from "./CollapseToggle.js";
 
 const WIDTH_EXPANDED = 200;
 const WIDTH_COLLAPSED = 64;
+
+/**
+ * Props for `NavigationSidebar`: which view is currently shown, the callback invoked when
+ * a destination is picked, and an optional bug-report trigger.
+ */
 export interface NavigationSidebarProps {
   readonly activeView: ViewId;
   readonly onSelectView: (view: ViewId) => void;

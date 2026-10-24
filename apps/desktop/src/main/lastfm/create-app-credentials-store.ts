@@ -4,8 +4,11 @@ import {
   type SafeStorageLike,
 } from "../secret-storage/electron-secret-storage.js";
 
+/** Where and how `createAppCredentialsStore` persists the user-supplied API key and secret. */
 export interface CreateAppCredentialsStoreOptions {
+  /** File the encrypted key/secret pair is written to. */
   readonly filePath: string;
+  /** Electron's `safeStorage` (or a stand-in), used to encrypt values with OS-level keys. */
   readonly safeStorage: SafeStorageLike;
 }
 

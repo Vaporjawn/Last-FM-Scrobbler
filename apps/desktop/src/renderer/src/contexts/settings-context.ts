@@ -3,6 +3,10 @@ import { DEFAULT_APP_SETTINGS } from "../../../shared/settings-api.js";
 import { fail } from "../hooks/fail.js";
 import type { UseSettingsResult } from "../hooks/use-settings-state.js";
 
+/**
+ * React context carrying the shared settings state published by `SettingsProvider`;
+ * `undefined` when no provider is mounted. Read it through `useSettings`, which supplies a fallback.
+ */
 export const SettingsContext = createContext<UseSettingsResult | undefined>(undefined);
 
 const NOT_AVAILABLE = "Not available right now.";

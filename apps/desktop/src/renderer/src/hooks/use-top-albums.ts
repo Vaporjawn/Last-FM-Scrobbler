@@ -1,6 +1,7 @@
 import type { TopAlbum, TopAlbumsPeriod } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/** What `useTopAlbums` returns: the user's top albums plus loading, refreshing and error state and a `refetch`. */
 export interface TopAlbumsState {
   readonly albums: readonly TopAlbum[];
   readonly loading: boolean;

@@ -5,6 +5,10 @@ import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 import { alpha } from "@mui/material/styles";
 
+/**
+ * Props for `SettingsSectionCard`: the header (icon badge, title, optional description),
+ * whether the card spans the full grid width, and the section content as children.
+ */
 export interface SettingsSectionCardProps {
   /** Small MUI icon element shown in the rounded badge next to the title — matches
    * the icon-badge treatment `ArtistAvatar`/`ScrobbleListItem` already use for

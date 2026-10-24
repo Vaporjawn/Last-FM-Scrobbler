@@ -3,6 +3,11 @@ import type { ActionResult } from "./action-result.js";
 import { type AuthState } from "./auth-state.js";
 import { runAuthAction } from "./run-auth-action.js";
 
+/**
+ * What `useAuth` returns: the current `AuthState` plus the actions that change it (log in
+ * or out, switch the active account, manage a user-supplied API key, relaunch the app).
+ * All but `relaunch` resolve to an `ActionResult` rather than rejecting.
+ */
 export interface UseAuthResult extends AuthState {
   readonly login: () => Promise<ActionResult>;
   readonly logout: (username: string) => Promise<ActionResult>;

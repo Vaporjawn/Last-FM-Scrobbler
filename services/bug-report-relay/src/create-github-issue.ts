@@ -8,6 +8,11 @@ const USER_AGENT = "lastfm-scrobbler-bug-report-relay";
 /** GitHub normally answers in well under a second; a stalled call must not pin the request. */
 const GITHUB_TIMEOUT_MS = 10_000;
 
+/**
+ * The two fields of GitHub's "create an issue" response this relay needs: the issue's
+ * browser URL and its number, which `index.ts` returns to the reporter. The remaining
+ * fields of the real response are ignored.
+ */
 interface GitHubCreateIssueResponse {
   readonly html_url: string;
   readonly number: number;

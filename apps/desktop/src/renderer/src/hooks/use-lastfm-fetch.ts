@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNetworkStatus } from "./use-network-status.js";
 
+/** The internal state `useLastfmFetch` tracks: the data and the loading, refreshing and error flags. */
 interface FetchState<TData> {
   readonly data: TData;
   readonly loading: boolean;
@@ -12,6 +13,7 @@ interface FetchState<TData> {
   readonly error: string | undefined;
 }
 
+/** What `useLastfmFetch` returns: the fetch state plus a `refetch` that re-runs the same call on demand. */
 export interface LastfmFetchState<TData> extends FetchState<TData> {
   /** Re-runs the same `call` this hook was given, without waiting for `deps` to
    * change. A no-op while `call` is `undefined` (fetching isn't currently possible)

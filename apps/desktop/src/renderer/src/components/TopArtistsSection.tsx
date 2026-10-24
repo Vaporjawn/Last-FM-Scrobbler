@@ -8,8 +8,14 @@ import { AsyncState } from "./AsyncState.js";
 import { TopArtistListItem } from "./TopArtistListItem.js";
 import { TopArtistTile } from "./TopArtistTile.js";
 
+/** How a Top Artists section lays out its artists: ranked rows with bars, or a photo grid. */
 export type TopArtistsViewMode = "list" | "tiles";
 
+/**
+ * Props for `TopArtistsSection`: its heading, the artists and their loading/error state,
+ * the view mode (chosen by the parent, which shares one selector across sections), and
+ * the message shown when there are no artists.
+ */
 export interface TopArtistsSectionProps {
   readonly title: string;
   readonly artists: readonly TopArtist[];

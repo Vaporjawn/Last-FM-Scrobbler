@@ -20,7 +20,7 @@ const { app } = electron;
 // create-main-window.ts's own `dirname` — this doesn't change over the app's
 // lifetime) and passed to `startApplication`, which hands it to every `wire*` call so their
 // handlers can verify a call's `senderFrame` genuinely is this app's own renderer, not some
-// other page (see assert-trusted-sender.ts).
+// other page (see security/assert-trusted-sender.ts).
 const dirname = fileURLToPath(new URL(".", import.meta.url));
 const expectedRendererOrigin = resolveExpectedRendererOrigin(
   dirname,

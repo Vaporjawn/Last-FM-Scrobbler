@@ -5,6 +5,11 @@ import { STRING_FIELD_ACCESSORS } from "./string-field-accessors.js";
 import { evaluateNumeric } from "./evaluate-numeric.js";
 import { evaluateString } from "./evaluate-string.js";
 
+/**
+ * Evaluates one leaf comparison against a track, dispatching on the field's type: a
+ * field with a numeric accessor goes to `evaluateNumeric`, anything else is read as a
+ * string (empty string if the field has no string accessor) for `evaluateString`.
+ */
 export function evaluateComparison(node: ComparisonNode, track: FilterableTrack): boolean {
   const numericAccessor = NUMERIC_FIELD_ACCESSORS[node.field];
   if (numericAccessor) {

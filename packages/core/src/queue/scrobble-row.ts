@@ -1,3 +1,4 @@
+/** A `pending_scrobbles` table row exactly as better-sqlite3 returns it (snake_case columns, `null` for unset values); `rowToQueuedScrobble` converts it. */
 export interface ScrobbleRow {
   id: number;
   artist: string;

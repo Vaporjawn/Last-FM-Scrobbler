@@ -2,6 +2,7 @@ import type { JSX } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
+/** Props for `StatBox`: the pre-formatted value, its caption, and the value's typography size. */
 export interface StatBoxProps {
   /** Already formatted for display (e.g. `count.toLocaleString()`) — this component
    * doesn't know or care whether the underlying value is a number, since every call

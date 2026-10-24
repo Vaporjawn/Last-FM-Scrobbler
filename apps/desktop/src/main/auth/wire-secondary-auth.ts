@@ -8,7 +8,7 @@ import {
   type AuthFlowClient,
 } from "@lastfm-scrobbler/core";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../assert-trusted-sender.js";
+import { assertTrustedSender } from "../security/assert-trusted-sender.js";
 import { createLibrefmAuthFlowClient } from "./create-librefm-auth-flow-client.js";
 import type { ResolvedLibrefmCredentials } from "./resolve-librefm-credentials.js";
 
@@ -26,6 +26,11 @@ const LISTENBRAINZ_NOT_CONFIGURED_MESSAGE =
   "ListenBrainz isn't available this run — secure account storage couldn't be set up " +
   "on this system.";
 
+/**
+ * Everything `wireSecondaryAuth` needs for the Libre.fm and ListenBrainz account handlers: the
+ * trusted renderer origin, each service's account store, Libre.fm's credential lookup, and the
+ * injectable client factories and login callbacks.
+ */
 export interface WireSecondaryAuthOptions {
   /** Same trusted-sender check every handler in `wire-auth.ts` uses — see that
    * module's docstring. */

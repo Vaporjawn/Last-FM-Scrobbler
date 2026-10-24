@@ -22,7 +22,7 @@ describe("resolveExpectedRendererOrigin", () => {
     expect(result.startsWith("file://")).toBe(true);
     expect(result.endsWith("/out/renderer/index.html")).toBe(true);
     // The one thing this function exists to get right: it must NOT be the degenerate
-    // RFC-6454 origin every file: URL shares — see validate-ipc-sender.ts's docstring.
+    // RFC-6454 origin every file: URL shares — see security/assert-trusted-sender.ts's docstring.
     expect(result).not.toBe("null");
   });
 

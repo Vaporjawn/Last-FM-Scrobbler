@@ -91,6 +91,10 @@ export function useShrinkToFitIndex(candidateCount: number): {
   }, []);
 
   useLayoutEffect(() => {
+    /**
+     * Bumps the resize tick whenever the browser window is resized, so the index restarts
+     * from the longest candidate and shrinks again against the new width.
+     */
     const handleWindowResize = (): void => {
       setResizeTick((tick) => tick + 1);
     };

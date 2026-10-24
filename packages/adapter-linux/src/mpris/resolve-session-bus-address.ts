@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 import { getCurrentUserId } from "./get-current-user-id.js";
 
+/**
+ * Seams for `resolveSessionBusAddress`, so tests can supply a fake environment, user id
+ * and file-existence check instead of reading the real machine.
+ */
 export interface ResolveSessionBusAddressOptions {
   /** Injectable for testing; defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;

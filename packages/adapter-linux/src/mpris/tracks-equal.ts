@@ -1,5 +1,10 @@
 import type { TrackInfo } from "@lastfm-scrobbler/shared-types";
 
+/**
+ * Structural equality of two `TrackInfo` values (or two `null`s), comparing every field.
+ * Used to suppress redundant updates when a player re-sends metadata that has not
+ * actually changed.
+ */
 export function tracksEqual(a: TrackInfo | null, b: TrackInfo | null): boolean {
   if (a === b) {
     return true;

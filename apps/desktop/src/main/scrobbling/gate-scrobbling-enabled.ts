@@ -1,5 +1,6 @@
 import type { ScrobbleEligibleEvent, TrackChangedEvent } from "@lastfm-scrobbler/core";
 
+/** The two scrobbling callbacks to guard and the live check that decides whether they may run. */
 export interface GateScrobblingEnabledOptions {
   /** The real `Tracker` callback that would otherwise reach
    * `main/scrobbling/wire-scrobbling.ts`'s `ScrobblingHandle.onScrobbleEligible` (a
@@ -15,6 +16,7 @@ export interface GateScrobblingEnabledOptions {
   readonly isScrobblingEnabled: () => boolean;
 }
 
+/** The guarded counterparts of the two tracker callbacks, to be passed to the tracker instead. */
 export interface GatedScrobblingCallbacks {
   readonly onScrobbleEligible: (event: ScrobbleEligibleEvent) => void;
   readonly onTrackChanged: (event: TrackChangedEvent) => void;

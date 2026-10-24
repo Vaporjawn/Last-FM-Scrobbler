@@ -1,6 +1,7 @@
 import type { TopArtist, TopArtistsPeriod } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/** What `useTopArtists` returns: the user's top artists plus loading, refreshing and error state and a `refetch`. */
 export interface TopArtistsState {
   readonly artists: readonly TopArtist[];
   readonly loading: boolean;

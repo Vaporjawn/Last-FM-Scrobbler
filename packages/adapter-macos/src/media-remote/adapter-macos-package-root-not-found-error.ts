@@ -2,6 +2,11 @@
  * walking upward from the running code's own directory — see `find-package-root.ts`'s
  * docstring for when this can happen. */
 export class AdapterMacosPackageRootNotFoundError extends Error {
+  /**
+   * Builds the error message from the directory the upward search started in.
+   *
+   * @param startDir The directory the `package.json` search began from.
+   */
   constructor(startDir: string) {
     super(
       `Could not locate the @lastfm-scrobbler/adapter-macos package root by walking up ` +

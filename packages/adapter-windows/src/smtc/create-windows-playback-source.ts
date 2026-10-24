@@ -15,11 +15,13 @@ import { spawnSmtcHelper, type SmtcHelperHandle } from "./spawn-smtc-helper.js";
 import type { NowPlayingPayload } from "./now-playing-payload.js";
 import { trackInfoEqual } from "./track-info-equal.js";
 
+/** Options for `createWindowsPlaybackSource`; every field is optional and mainly exists for tests and hosts. */
 export interface CreateWindowsPlaybackSourceOptions {
   /** Injectable for testing; defaults to `node:child_process`'s `spawn`. */
   readonly spawnImpl?: typeof nodeSpawn;
   /** Injectable for testing; defaults to the real filesystem-based resolver. */
   readonly resolveHelperPathImpl?: (startDir: string) => ResolvedHelperPath;
+  /** Receives each line the helper writes to stderr; lines are discarded when omitted. */
   readonly onStderr?: (line: string) => void;
   /** Called when the helper process fails to spawn or exits unexpectedly — see
    * `spawnSmtcHelper`'s `onError` docstring. */
@@ -54,6 +56,12 @@ export function createWindowsPlaybackSource(
   let lastEmittedTrack: TrackInfo | undefined;
   let lastEmittedState: PlaybackState | undefined;
 
+  /**
+   * Applies one helper report (`null` meaning SMTC has no current session): stores it for
+   * `getPosition`, then notifies track listeners only when the track differs from the last
+   * one emitted and state listeners only when the derived state changed. Deduplication
+   * matters because the helper reports on every timeline tick, not just real changes.
+   */
   function handleEvent(payload: NowPlayingPayload | null): void {
     latestPayload = payload;
 
@@ -84,6 +92,11 @@ export function createWindowsPlaybackSource(
     }
   }
 
+  /**
+   * Spawns the SMTC helper if it is not already running, locating it relative to this
+   * package's root. Throws `SmtcHelperNotBuiltError` when the executable has not been
+   * compiled. Clears its handle when the helper exits so a later call can respawn it.
+   */
   function ensureStarted(): void {
     if (helperHandle) {
       return;
@@ -137,6 +150,10 @@ export function createWindowsPlaybackSource(
     }
   }
 
+  /**
+   * Stops the helper and clears the cached payload and deduplication baseline once the
+   * last track and state listener has unsubscribed, so a later subscription starts clean.
+   */
   function stopIfNoSubscribers(): void {
     if (trackListeners.size === 0 && stateListeners.size === 0) {
       helperHandle?.stop();

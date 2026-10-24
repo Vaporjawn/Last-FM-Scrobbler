@@ -3,6 +3,7 @@ import { fetchEachWithLimit } from "./fetch-each-with-limit.js";
 import type { FriendActivityState } from "./friend-activity-state.js";
 import { useNetworkStatus } from "./use-network-status.js";
 
+/** Each friend's most recent activity state, keyed by username. */
 export type FriendsActivityMap = Readonly<Record<string, FriendActivityState>>;
 
 /** Maximum number of `getRecentTracks` calls this hook allows in flight at once — see
@@ -11,6 +12,7 @@ export type FriendsActivityMap = Readonly<Record<string, FriendActivityState>>;
  * fire one simultaneous unsigned request per friend on every Friends page visit. */
 const MAX_CONCURRENT_REQUESTS = 8;
 
+/** What `useFriendsActivity` returns: the per-friend activity map and a `refetch` that reloads all of it. */
 export interface FriendsActivityResult {
   readonly activityByUsername: FriendsActivityMap;
   /** Re-fetches every given friend's most recent activity from scratch — every entry

@@ -4,6 +4,11 @@ import Avatar from "@mui/material/Avatar";
 import Badge from "@mui/material/Badge";
 import { deriveBadgeSizing } from "./derive-badge-sizing.js";
 
+/**
+ * Props for `SubscriberAvatar`: the photo and its alt text, the avatar size, whether to
+ * add the subscriber badge, and the fallback-letter appearance (initial, colors, font size)
+ * used when there is no photo.
+ */
 export interface SubscriberAvatarProps {
   readonly src: string | undefined;
   readonly alt: string;

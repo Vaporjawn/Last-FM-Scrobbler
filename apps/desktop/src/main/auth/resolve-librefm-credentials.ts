@@ -1,6 +1,7 @@
 import type { AppCredentials, AppCredentialsStore } from "@lastfm-scrobbler/core";
 import { readBakedLibrefmCredentials } from "./read-baked-librefm-credentials.js";
 
+/** Inputs to `resolveLibrefmCredentials`; every field is injectable so tests control the sources. */
 export interface ResolveLibrefmCredentialsOptions {
   /** Injectable for testing; defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -10,6 +11,7 @@ export interface ResolveLibrefmCredentialsOptions {
   readonly librefmAppCredentialsStore?: AppCredentialsStore | undefined;
 }
 
+/** A Libre.fm API key/secret pair together with the place it was resolved from. */
 export interface ResolvedLibrefmCredentials extends AppCredentials {
   /** Where these credentials came from — same reasoning and same shape as
    * `resolve-lastfm-credentials.ts`'s `ResolvedLastfmCredentials.source`, just for

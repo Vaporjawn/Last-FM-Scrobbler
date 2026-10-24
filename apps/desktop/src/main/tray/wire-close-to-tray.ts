@@ -9,8 +9,11 @@ export interface CloseToTrayWindow {
   readonly hide: () => void;
 }
 
+/** Options for `wireCloseToTray`: the window to guard, the setting to consult and the quit flag. */
 export interface WireCloseToTrayOptions {
+  /** The window whose close is intercepted. */
   readonly window: CloseToTrayWindow;
+  /** Read on every close, so toggling `closeToTray` applies without a restart. */
   readonly settingsStore: Pick<SettingsStore, "get">;
   /**
    * Returns whether the app is in the middle of actually quitting (via the tray's

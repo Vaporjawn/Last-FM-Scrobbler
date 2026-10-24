@@ -3,6 +3,11 @@ import { type NowPlayingPayload } from "./now-playing-payload.js";
 import { toTrackInfo } from "./to-track-info.js";
 import { trackIdentity } from "./track-identity.js";
 
+/**
+ * One JSON line emitted by `mediaremote-adapter.pl stream`. Only events of type `"data"`
+ * are acted on; when `diff` is true the payload holds just the fields that changed since
+ * the previous event, otherwise it is a full snapshot.
+ */
 interface StreamEvent {
   readonly type: string;
   readonly diff?: boolean;
@@ -22,11 +27,13 @@ export class NowPlayingStreamParser {
   private readonly trackListeners = new Set<(track: TrackInfo) => void>();
   private readonly stateListeners = new Set<(state: PlaybackState) => void>();
 
+  /** Registers a listener called whenever the stream reports a track with a new identity. */
   onTrackChanged(callback: (track: TrackInfo) => void): Unsubscribe {
     this.trackListeners.add(callback);
     return () => this.trackListeners.delete(callback);
   }
 
+  /** Registers a listener called whenever the derived state moves between playing, paused and stopped. */
   onPlaybackStateChanged(callback: (state: PlaybackState) => void): Unsubscribe {
     this.stateListeners.add(callback);
     return () => this.stateListeners.delete(callback);
@@ -51,6 +58,12 @@ export class NowPlayingStreamParser {
     }
   }
 
+  /**
+   * Estimates the current playback position in seconds: the last reported `elapsedTime`,
+   * advanced by the wall-clock time since the payload was captured (scaled by
+   * `playbackRate`) while playing, and clamped to `[0, duration]`. Returns 0 when no
+   * numeric `elapsedTime` is known.
+   */
   getPosition(): number {
     const { elapsedTime, timestamp, playbackRate, duration } = this.currentPayload;
     // Same reasoning as `toTrackInfo`'s `durationSec` guard above: a mid-track diff

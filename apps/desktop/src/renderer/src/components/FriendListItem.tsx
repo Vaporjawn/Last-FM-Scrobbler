@@ -34,6 +34,10 @@ const AVATAR_SIZE = 48;
  * sync on the value. */
 export const FRIEND_COLUMN_WIDTH = 190;
 
+/**
+ * Props for `FriendListItem`: the friend to show, their already-fetched recent activity,
+ * and optional navigation callbacks for the two independently clickable halves of the row.
+ */
 export interface FriendListItemProps {
   readonly friend: Friend;
   /** This friend's most recent activity — fetched by `FriendsPage` (via

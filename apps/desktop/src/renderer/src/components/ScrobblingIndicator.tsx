@@ -9,6 +9,7 @@ const bounce = keyframes`
   50% { transform: scaleY(1); }
 `;
 
+/** Props for `ScrobblingIndicator`: the icon's pixel size and a forwarded root class name. */
 export interface ScrobblingIndicatorProps {
   /** Square footprint in px — defaults to a size that reads well as a small `Chip`'s
    * `icon`, its only current use (see FriendListItem/ScrobbleListItem). */

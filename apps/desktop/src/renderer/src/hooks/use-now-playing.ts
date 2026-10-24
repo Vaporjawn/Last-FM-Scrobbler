@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import type { PlaybackState, TrackInfo } from "@lastfm-scrobbler/shared-types";
 
+/**
+ * What `useNowPlaying` returns: the track currently reported by the desktop player (if
+ * any), its playback state, and the elapsed position in seconds.
+ */
 export interface NowPlayingState {
   readonly track: TrackInfo | undefined;
   readonly state: PlaybackState;

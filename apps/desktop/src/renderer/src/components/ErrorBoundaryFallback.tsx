@@ -1,6 +1,13 @@
 import { type JSX } from "react";
 import { resolveErrorBoundaryColors } from "./resolve-error-boundary-colors.js";
 
+/**
+ * The full-window "Something went wrong" screen `ErrorBoundary` shows after a crash: a
+ * short explanation, the error's message in a scrollable block, and a Reload button that
+ * reloads the window. Built from plain elements and inline styles because MUI's theme
+ * context may not exist when the crash happened above it; the light/dark colors come
+ * from `resolveErrorBoundaryColors` instead.
+ */
 export function ErrorBoundaryFallback({ error }: { readonly error: Error }): JSX.Element {
   // Reads the same `data-theme` attribute `renderer/public/theme-init.js` sets on
   // `<html>` before React ever mounts (see `renderer/index.html`) — not React

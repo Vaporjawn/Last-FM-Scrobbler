@@ -1,3 +1,8 @@
+/**
+ * The Libre.fm authentication state `useLibrefmAuth` exposes: whether API credentials
+ * exist and where they came from, the single connected account, in-flight flags for login
+ * and credential saving, and the latest error message.
+ */
 export interface LibrefmAuthState {
   /** Whether a Libre.fm API key/secret pair is available at all right now (baked in
    * or saved). `undefined` while still loading, so callers can distinguish "checking"

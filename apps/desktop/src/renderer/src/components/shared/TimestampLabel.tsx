@@ -6,6 +6,7 @@ import {
   TIMESTAMP_CHIP_MIN_WIDTH_CHARS,
 } from "./format-timestamp-candidates.js";
 
+/** Props for `TimestampLabel`: the scrobble time to render. */
 export interface TimestampLabelProps {
   /** Unix seconds. */
   readonly timestamp: number;

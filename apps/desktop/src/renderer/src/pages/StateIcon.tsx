@@ -4,6 +4,11 @@ import StopIcon from "@mui/icons-material/Stop";
 import type { PlaybackState } from "@lastfm-scrobbler/shared-types";
 import { ScrobblingIndicator } from "../components/ScrobblingIndicator.js";
 
+/**
+ * The icon for a playback state on the Now Playing page: the animated equalizer while
+ * playing, a pause glyph when paused, and a stop glyph when stopped (also the fallback
+ * for any unrecognized state).
+ */
 export function StateIcon({ state }: { state: PlaybackState }): JSX.Element {
   switch (state) {
     case "playing":

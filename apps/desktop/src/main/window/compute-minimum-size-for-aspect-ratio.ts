@@ -1,3 +1,4 @@
+/** The width and height, in pixels, to enforce as a window's minimum size. */
 export interface MinimumWindowSize {
   readonly width: number;
   readonly height: number;

@@ -4,6 +4,10 @@ import type { ActionResult } from "./action-result.js";
 import { fail } from "./fail.js";
 import { ok } from "./ok.js";
 
+/**
+ * What `useUpdates` returns: the auto-updater's current status, whether a manual check is
+ * in progress, the latest error, and the `checkNow` action.
+ */
 export interface UseUpdatesResult {
   readonly status: UpdateStatus;
   readonly isChecking: boolean;

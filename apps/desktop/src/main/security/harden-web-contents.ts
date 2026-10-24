@@ -1,6 +1,7 @@
-import { isTrustedUrl } from "../is-trusted-url.js";
+import { isTrustedUrl } from "./is-trusted-url.js";
 import { isSafeExternalUrl } from "../window/is-safe-external-url.js";
 
+/** The page `hardenWebContents` allows a window to stay on and how it opens links elsewhere. */
 export interface HardenWebContentsOptions {
   /** The renderer page this window is allowed to show — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 /**
- * Computes the value `validate-ipc-sender.ts`'s `assertTrustedSender` should treat as
+ * Computes the value `security/assert-trusted-sender.ts`'s `assertTrustedSender` should treat as
  * "this app's own renderer" — mirrors `create-main-window.ts`'s own dev/packaged
  * branch (`devServerUrl` from `ELECTRON_RENDERER_URL`, else `renderer/index.html` next
  * to `rendererDirname`) exactly, so this always agrees with whichever page
@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
  * plain `URL#origin`. Packaged returns the renderer's real `file:` URL rather than the
  * string `"null"` that URL's own RFC-6454 `origin` getter would report for it (every
  * `file:` URL reports that same origin, regardless of path — see
- * `validate-ipc-sender.ts`'s docstring) precisely so `assertTrustedSender` has a real
+ * `security/assert-trusted-sender.ts`'s docstring) precisely so `assertTrustedSender` has a real
  * pathname to compare against instead.
  */
 export function resolveExpectedRendererOrigin(

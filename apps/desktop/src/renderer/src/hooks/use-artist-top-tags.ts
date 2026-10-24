@@ -1,5 +1,9 @@
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/**
+ * What `useArtistTopTags` returns: the artist's popular tag names, a manual-refresh flag
+ * and a `refetch`. There is no loading or error field, as failures resolve to an empty list.
+ */
 export interface ArtistTopTagsState {
   readonly tags: readonly string[];
   readonly refreshing: boolean;

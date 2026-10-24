@@ -1,5 +1,11 @@
 import type { ComparisonNode } from "./comparison-node.js";
 
+/**
+ * Applies a string operator (`==`, `!=`, `matches`, `contains`) to a track's field
+ * value. Comparisons are case-sensitive unless the regex carries the `i` flag. Returns
+ * `false` when the node's value has the wrong type for the operator or the operator is
+ * not a string one, rather than throwing.
+ */
 export function evaluateString(fieldValue: string, node: ComparisonNode): boolean {
   switch (node.operator) {
     case "==":

@@ -1,12 +1,16 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { ErrorBoundaryFallback } from "./ErrorBoundaryFallback.js";
 
+/** Props for `ErrorBoundary`: the subtree whose render-time errors it should catch. */
 export interface ErrorBoundaryProps {
   readonly children: ReactNode;
 }
+
+/** State for `ErrorBoundary`: the caught error, or `undefined` while the subtree is healthy. */
 interface ErrorBoundaryState {
   readonly error: Error | undefined;
 }
+
 /**
  * Catches any otherwise-uncaught error thrown while rendering, committing, or in a
  * lifecycle method anywhere in `children` — error boundaries can only be class
@@ -26,10 +30,15 @@ interface ErrorBoundaryState {
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public override state: ErrorBoundaryState = { error: undefined };
 
+  /**
+   * React calls this during rendering after a descendant throws; the returned state flips
+   * `render` over to the fallback screen on the very next pass, before any commit.
+   */
   public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { error };
   }
 
+  /** Logs the caught error and the React component stack that led to it to the console. */
   public override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // React already logs its own "An error occurred in the <X> component" message
     // with the component stack — this adds one explicit, greppable line rather than
@@ -39,6 +48,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     console.error("ErrorBoundary caught an error:", error, errorInfo.componentStack);
   }
 
+  /** Renders the children untouched until an error is caught, then the fallback screen. */
   public override render(): ReactNode {
     const { error } = this.state;
     if (!error) {

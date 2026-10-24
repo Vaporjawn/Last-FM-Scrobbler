@@ -8,22 +8,26 @@ import type {
   Unsubscribe,
 } from "@lastfm-scrobbler/shared-types";
 
+/** Emitted when `Tracker` sees a genuinely new play begin (not a filtered or duplicate report); consumers use it to show or send "now playing". */
 export interface TrackChangedEvent {
   readonly track: TrackInfo;
   /** Unix seconds — becomes the scrobble's timestamp if this play stays eligible. */
   readonly startedAt: number;
 }
 
+/** Emitted once per play, when enough of the track has been played to count as a scrobble; `startedAt` is the timestamp to submit it with. */
 export interface ScrobbleEligibleEvent {
   readonly track: TrackInfo;
   readonly startedAt: number;
 }
 
+/** Callbacks the host passes to `Tracker`; both are optional and invoked synchronously from the tracker's own calls. */
 export interface TrackerEvents {
   readonly onTrackChanged?: (event: TrackChangedEvent) => void;
   readonly onScrobbleEligible?: (event: ScrobbleEligibleEvent) => void;
 }
 
+/** Construction options for `Tracker`: the playback source to observe, the event callbacks, an optional exclusion filter, and an injectable clock (Unix seconds) for tests. */
 export interface TrackerOptions {
   readonly source: PlaybackSource;
   readonly events: TrackerEvents;
@@ -56,6 +60,7 @@ export class Tracker {
   private lastAccumulatedAt = 0;
   private alreadyEligible = false;
 
+  /** Stores the options only; nothing is subscribed until `start()`. The clock defaults to wall-clock Unix seconds. */
   constructor(options: TrackerOptions) {
     this.source = options.source;
     this.events = options.events;
@@ -63,6 +68,7 @@ export class Tracker {
     this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
   }
 
+  /** Subscribes to the source's track-changed and playback-state events. Calling it twice without `stop()` in between leaves the first subscriptions unreleased. */
   start(): void {
     this.unsubscribeTrack = this.source.onTrackChanged((track) => {
       this.handleTrackChanged(track);
@@ -72,6 +78,7 @@ export class Tracker {
     });
   }
 
+  /** Unsubscribes from the source. Per-play state is kept, so `tick()` could still report a track already being timed. */
   stop(): void {
     this.unsubscribeTrack?.();
     this.unsubscribeState?.();
@@ -88,6 +95,14 @@ export class Tracker {
     this.checkEligibility();
   }
 
+  /**
+   * Starts a new play. A track matching the exclusion filter clears the current play
+   * (so nothing is tracked or reported until the next track). Otherwise the track's
+   * identity is compared to the current one and a repeat report of the same play is
+   * ignored; a new play resets the played-time counter and eligibility flag and fires
+   * `onTrackChanged`. The play's start time is when the event was received, not any
+   * time the source supplied.
+   */
   private handleTrackChanged(track: TrackInfo): void {
     if (this.filter?.test(track)) {
       this.currentTrack = undefined;
@@ -111,6 +126,11 @@ export class Tracker {
     this.events.onTrackChanged?.({ track, startedAt: nowSec });
   }
 
+  /**
+   * Keeps the played-time counter honest across play/pause: time up to the change is
+   * banked while the state was `playing`, and the accumulation point is restarted when
+   * playback resumes so paused time is never counted.
+   */
   private handlePlaybackStateChanged(state: PlaybackState): void {
     if (this.playbackState === "playing") {
       // Covers both a real transition out of "playing" (pause/stop) *and* a
@@ -127,12 +147,14 @@ export class Tracker {
     this.playbackState = state;
   }
 
+  /** Adds the seconds elapsed since the last accumulation point to `playedSec` (never negative, so a clock step backwards cannot subtract time) and moves the point to now. */
   private accumulate(): void {
     const nowSec = this.now();
     this.playedSec += Math.max(0, nowSec - this.lastAccumulatedAt);
     this.lastAccumulatedAt = nowSec;
   }
 
+  /** Fires `onScrobbleEligible` the first time the current play satisfies `isEligibleForScrobble`; the `alreadyEligible` flag keeps it to once per play. */
   private checkEligibility(): void {
     if (!this.currentTrack || this.alreadyEligible) {
       return;

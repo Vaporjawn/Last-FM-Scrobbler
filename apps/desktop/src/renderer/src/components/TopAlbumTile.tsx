@@ -3,6 +3,7 @@ import AlbumIcon from "@mui/icons-material/Album";
 import type { TopAlbum } from "@lastfm-scrobbler/core";
 import { ArtworkTile } from "./shared/ArtworkTile.js";
 
+/** Props for `TopAlbumTile`: the album whose cover, name and play count the tile shows. */
 export interface TopAlbumTileProps {
   readonly album: TopAlbum;
 }

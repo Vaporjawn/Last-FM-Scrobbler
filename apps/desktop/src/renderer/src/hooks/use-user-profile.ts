@@ -1,6 +1,7 @@
 import type { UserProfile } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/** What `useUserProfile` returns: the Last.fm profile (or `undefined`) plus loading, refreshing and error state and a `refetch`. */
 export interface UserProfileState {
   readonly profile: UserProfile | undefined;
   readonly loading: boolean;

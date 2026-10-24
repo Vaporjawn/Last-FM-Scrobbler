@@ -28,6 +28,7 @@ const BROWSER_SOURCE_APP_TOKENS = [
  * → Filter) for anyone who wants it tighter or looser than this default. */
 export const DEFAULT_NON_MUSIC_VIDEO_THRESHOLD_SEC = 900; // 15 minutes
 
+/** The two facts `isLikelyNonMusicVideo` inspects: which app the play came from and how long the media is. */
 export interface LikelyNonMusicVideoInput {
   readonly sourceApp: string;
   /** Omitted (not just missing on `TrackInfo`) tracks — e.g. live radio streams with
@@ -37,6 +38,7 @@ export interface LikelyNonMusicVideoInput {
   readonly durationSec?: number;
 }
 
+/** Tuning for `isLikelyNonMusicVideo`; `thresholdSec` overrides `DEFAULT_NON_MUSIC_VIDEO_THRESHOLD_SEC`. */
 export interface LikelyNonMusicVideoOptions {
   readonly thresholdSec?: number;
 }

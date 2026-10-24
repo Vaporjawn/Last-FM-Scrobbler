@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { NetworkStatus } from "@lastfm-scrobbler/core";
 
+/** What `useNetworkStatus` returns: the latest connectivity and pending-scrobble status from the main process. */
 export interface UseNetworkStatusResult {
   readonly status: NetworkStatus;
 }

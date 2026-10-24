@@ -61,6 +61,7 @@ export function createSecretStores(userDataDir: string, logger: Logger): SecretS
   // on every login/is-configured/credentials-source check — see that function's
   // resolveLibrefmCredentials option for why: unlike Last.fm's environment path,
   // Libre.fm needs no relaunch for a newly-saved key to apply.
+  /** Looks up the current Libre.fm API key/secret on every call (see the comment above). */
   const resolveLibrefmAppCredentials = (): Promise<ResolvedLibrefmCredentials | undefined> =>
     resolveLibrefmCredentials({ librefmAppCredentialsStore });
 

@@ -3,6 +3,11 @@ import type { ActionResult } from "./action-result.js";
 import { fail } from "./fail.js";
 import { ok } from "./ok.js";
 
+/**
+ * What `useTrackActions` returns: the track's loved state, an in-flight flag, the latest
+ * error, and the `toggleLove` and `addTags` actions, each resolving to an `ActionResult`
+ * rather than rejecting.
+ */
 export interface UseTrackActionsResult {
   /**
    * Reflects `initialLoved` (see below) plus any clicks made in this session. For the

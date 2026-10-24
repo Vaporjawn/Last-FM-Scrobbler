@@ -2,6 +2,10 @@ import type { JSX } from "react";
 import Paper from "@mui/material/Paper";
 import Typography from "@mui/material/Typography";
 
+/**
+ * Props for `ListenedToCallout`: the artist and track names used in the sentence, the
+ * active account's play count for each, and an optional top margin.
+ */
 export interface ListenedToCalloutProps {
   readonly artistName: string;
   readonly trackName: string;

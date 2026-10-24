@@ -21,7 +21,7 @@ const { app } = electron;
 
 /** What `startApplication` needs from the entry module. */
 export interface StartApplicationOptions {
-  /** The origin every IPC call must genuinely come from; see `validate-ipc-sender`. */
+  /** The origin every IPC call must genuinely come from; see `security/assert-trusted-sender.ts`. */
   readonly expectedRendererOrigin: string;
   readonly logger: Logger;
   /**
@@ -63,6 +63,7 @@ export async function startApplication(options: StartApplicationOptions): Promis
   // silently disappears) if nothing holds a reference to it.
   let isQuitting = false;
   let tray: Electron.Tray | undefined = undefined;
+  /** Flags that the app is really quitting, so closing the window is no longer turned into a hide. */
   const markQuitting = (): void => {
     isQuitting = true;
   };
@@ -87,6 +88,11 @@ export async function startApplication(options: StartApplicationOptions): Promis
   wireBugReportDiagnostics(expectedRendererOrigin, logger);
 
   const onTrayHide = createTrayHideHandler(settingsStore, notificationIconOption);
+  /**
+   * Builds a fully wired main window with the scrobbling hooks and close-to-tray behavior
+   * attached. Used for the first window and again when the lifecycle handlers need a new one;
+   * `startHidden` creates it without showing it (a login-triggered launch).
+   */
   const createWindow = (startHidden?: boolean): Electron.BrowserWindow =>
     createAndWireMainWindow({
       settingsStore,
@@ -106,7 +112,9 @@ export async function startApplication(options: StartApplicationOptions): Promis
       app.getLoginItemSettings().wasOpenedAtLogin,
     ),
   );
+  /** Live accessor for the current main window, which is replaced if the window is recreated. */
   const getMainWindow = (): Electron.BrowserWindow => mainWindow;
+  /** Live accessor for the tray, which is `undefined` until it is created (or when disabled). */
   const getTray = (): Electron.Tray | undefined => tray;
 
   const networkStatusHandle = wireMainWindowServices({

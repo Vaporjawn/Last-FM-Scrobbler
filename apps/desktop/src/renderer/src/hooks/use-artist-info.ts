@@ -1,11 +1,16 @@
 import type { ArtistInfo, SimilarArtist } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/** The combined result of the artist-info and similar-artists lookups, which are fetched together. */
 interface ArtistInfoData {
   readonly info: ArtistInfo | undefined;
   readonly similarArtists: readonly SimilarArtist[];
 }
 
+/**
+ * What `useArtistInfo` returns: the artist's info and similar artists plus the fetch's
+ * loading, refreshing and error state and a manual `refetch`.
+ */
 export interface ArtistInfoState extends ArtistInfoData {
   readonly loading: boolean;
   /** True only while a manual `refetch()` is in flight — see

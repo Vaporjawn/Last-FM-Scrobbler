@@ -5,6 +5,7 @@ import { parse } from "./parse.js";
 export type { FilterableTrack } from "./filterable-track.js";
 export { FilterSyntaxError } from "./filter-syntax-error.js";
 
+/** A pre-parsed filter: `test` reports whether a track matches (and so should be excluded from scrobbling). */
 export interface CompiledFilter {
   test(track: FilterableTrack): boolean;
 }

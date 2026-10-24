@@ -18,6 +18,12 @@ import { isSxArray } from "./is-sx-array.js";
 const TIMESTAMP_CHIP_DEFAULT_SX = {
   minWidth: `calc(${TIMESTAMP_CHIP_MIN_WIDTH_CHARS}ch + 16px)`,
 } as const;
+
+/**
+ * Props for `PlaybackStatusChip`: whether the track is playing right now, the scrobble
+ * time shown otherwise, the label used for the playing state, and an optional `sx`
+ * override merged onto the chip.
+ */
 export interface PlaybackStatusChipProps {
   readonly nowPlaying: boolean;
   /** When this track was scrobbled — ignored while `nowPlaying` is true. Renders

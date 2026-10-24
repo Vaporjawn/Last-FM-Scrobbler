@@ -12,6 +12,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
  * rather than folding it into this union. */
 export type ViewId = "now-playing" | "scrobbles" | "profile" | "friends" | "settings";
 
+/** One sidebar destination: the view it routes to plus the label and icon shown for it. */
 export interface NavItem {
   readonly id: ViewId;
   readonly label: string;
@@ -28,6 +29,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { id: "friends", label: "Friends", icon: <PeopleIcon /> },
 ];
 
+/** The Settings destination, kept apart from `NAV_ITEMS` so the sidebar can pin it beneath a divider. */
 export const SETTINGS_ITEM: NavItem = {
   id: "settings",
   label: "Settings",

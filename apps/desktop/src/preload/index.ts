@@ -37,6 +37,7 @@ const nowPlayingApi: NowPlayingApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.nowPlayingGetCurrent) as Promise<NowPlayingSnapshot>;
   },
   onTrackChanged(callback) {
+    /** Drops the IPC event and hands the renderer just the new track. */
     const listener = (_event: Electron.IpcRendererEvent, track: TrackInfo): void => {
       callback(track);
     };
@@ -46,6 +47,7 @@ const nowPlayingApi: NowPlayingApi = {
     };
   },
   onPlaybackStateChanged(callback) {
+    /** Drops the IPC event and hands the renderer just the new playback state. */
     const listener = (_event: Electron.IpcRendererEvent, state: PlaybackState): void => {
       callback(state);
     };
@@ -55,6 +57,7 @@ const nowPlayingApi: NowPlayingApi = {
     };
   },
   onPositionChanged(callback) {
+    /** Drops the IPC event and hands the renderer just the new playback position in seconds. */
     const listener = (_event: Electron.IpcRendererEvent, positionSec: number): void => {
       callback(positionSec);
     };
@@ -260,6 +263,7 @@ const updatesApi: UpdatesApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.updatesCheckNow) as Promise<void>;
   },
   onStatusChanged(callback) {
+    /** Drops the IPC event and hands the renderer just the new update status. */
     const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus): void => {
       callback(status);
     };
@@ -275,6 +279,7 @@ const networkStatusApi: NetworkStatusApi = {
     return ipcRenderer.invoke(IPC_CHANNELS.networkStatusGetStatus) as Promise<NetworkStatus>;
   },
   onStatusChanged(callback) {
+    /** Drops the IPC event and hands the renderer just the new network status. */
     const listener = (_event: Electron.IpcRendererEvent, status: NetworkStatus): void => {
       callback(status);
     };

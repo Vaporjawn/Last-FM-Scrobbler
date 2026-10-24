@@ -15,6 +15,7 @@ import { NowPlayingStreamParser } from "./now-playing-stream-parser.js";
 
 const PERL_BIN = "/usr/bin/perl";
 
+/** Options for createMacosPlaybackSource; every field is optional and mainly exists for tests and hosts. */
 export interface CreateMacosPlaybackSourceOptions {
   /** Injectable for testing; defaults to `node:child_process`'s `spawn`. */
   readonly spawnImpl?: typeof nodeSpawn;
@@ -80,6 +81,12 @@ export function createMacosPlaybackSource(
   let child: ChildProcessWithoutNullStreams | undefined;
   let subscriberCount = 0;
 
+  /**
+   * Spawns the perl mediaremote-adapter helper in "stream" mode if it is not already
+   * running, wiring its stdout lines into the parser and its error/exit events into
+   * the onError callback. A no-op while a child exists; once an exit has cleared the
+   * child, calling it again respawns the helper.
+   */
   function ensureStarted(): void {
     if (child) {
       return;
@@ -115,6 +122,10 @@ export function createMacosPlaybackSource(
     });
   }
 
+  /**
+   * Kills the helper process and resets the parser once the last subscriber has
+   * unsubscribed, so an unused source holds no child process or native framework handle.
+   */
   function stopIfNoSubscribers(): void {
     if (subscriberCount === 0 && child) {
       child.kill();

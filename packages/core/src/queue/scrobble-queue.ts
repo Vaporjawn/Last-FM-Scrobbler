@@ -7,6 +7,7 @@ import { rowToQueuedScrobble } from "./row-to-queued-scrobble.js";
 const DAY_SEC = 24 * 60 * 60;
 const DEFAULT_MAX_AGE_DAYS = 14;
 const DEFAULT_MAX_ROWS = 1000;
+/** Construction options for `ScrobbleQueue`: where the SQLite file lives and the eviction limits (14 days / 1000 rows by default). */
 export interface ScrobbleQueueOptions {
   /** SQLite database file path, or ":memory:" for an ephemeral in-memory queue. */
   readonly databasePath: string;
@@ -25,6 +26,11 @@ export class ScrobbleQueue {
   private readonly maxAgeDays: number;
   private readonly maxRows: number;
 
+  /**
+   * Opens (creating if needed) the SQLite database in WAL journal mode and ensures the
+   * `pending_scrobbles` table and its `timestamp` index exist. Opening is synchronous,
+   * so an unusable path throws from the constructor.
+   */
   constructor(options: ScrobbleQueueOptions) {
     this.db = new Database(options.databasePath);
     this.maxAgeDays = options.maxAgeDays ?? DEFAULT_MAX_AGE_DAYS;
@@ -48,6 +54,10 @@ export class ScrobbleQueue {
     `);
   }
 
+  /**
+   * Inserts a scrobble with `retryCount` 0 and the current time as `enqueuedAt`, and
+   * returns it with its new row id. Duplicates are not detected; each call adds a row.
+   */
   enqueue(scrobble: PendingScrobble): QueuedScrobble {
     const enqueuedAt = Math.floor(Date.now() / 1000);
     const result = this.db
@@ -74,6 +84,11 @@ export class ScrobbleQueue {
     };
   }
 
+  /**
+   * Reads up to `limit` queued scrobbles, oldest play first (by `timestamp`). Despite
+   * the name this does not delete them: callers `remove` the ones that were submitted
+   * or `recordFailure` the ones that were not, so a crash mid-submit loses nothing.
+   */
   dequeueBatch(limit: number): QueuedScrobble[] {
     const rows = this.db
       .prepare<{ limit: number }, ScrobbleRow>(
@@ -83,6 +98,7 @@ export class ScrobbleQueue {
     return rows.map(rowToQueuedScrobble);
   }
 
+  /** Deletes the rows with the given ids (e.g. after they were accepted); ids that no longer exist are ignored and an empty list does nothing. */
   remove(ids: readonly number[]): void {
     if (ids.length === 0) {
       return;
@@ -91,6 +107,12 @@ export class ScrobbleQueue {
     this.db.prepare(`DELETE FROM pending_scrobbles WHERE id IN (${placeholders})`).run(...ids);
   }
 
+  /**
+   * Handles a scrobble whose submission failed. A retryable failure keeps the row,
+   * increments `retry_count` and stores `reason` as `last_error` so it is attempted
+   * again later; a non-retryable one deletes the row, since resubmitting would fail the
+   * same way.
+   */
   recordFailure(
     id: number,
     options: { readonly retryable: boolean; readonly reason: string },
@@ -132,6 +154,7 @@ export class ScrobbleQueue {
     return result.changes;
   }
 
+  /** Number of scrobbles currently waiting in the queue (the pending count shown in the network status). */
   count(): number {
     const row = this.db.prepare("SELECT COUNT(*) AS count FROM pending_scrobbles").get() as {
       count: number;
@@ -139,6 +162,7 @@ export class ScrobbleQueue {
     return row.count;
   }
 
+  /** Closes the SQLite connection; the queue must not be used afterwards. */
   close(): void {
     this.db.close();
   }

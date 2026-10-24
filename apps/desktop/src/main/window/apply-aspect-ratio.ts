@@ -13,6 +13,7 @@ export interface AspectRatioTargetWindow {
   readonly setSize: (width: number, height: number) => void;
 }
 
+/** Size floors and the current display's work area, which `applyAspectRatio` uses to size the window. */
 export interface ApplyAspectRatioOptions {
   /** This app's real, content-driven size floors — see `create-main-window.ts`'s
    * `minWidth`/`minHeight` for why these specific numbers. Not necessarily what ends

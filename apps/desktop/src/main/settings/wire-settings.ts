@@ -11,9 +11,14 @@ import type { SettingsStore } from "./settings-store.js";
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
 
+/**
+ * Options for `wireSettings`: the settings store behind the IPC handlers and the optional
+ * callbacks that apply a changed setting to the running app straight away.
+ */
 export interface WireSettingsOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;
+  /** The store the get, set and reset handlers read from and write to. */
   readonly store: SettingsStore;
   /** Called immediately whenever a `set()` patch changes `aspectRatio` — lets the
    * caller apply the new ratio to the already-open window

@@ -8,6 +8,7 @@ import type { FilterValidationResult } from "../../shared/filter-api.js";
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
 
+/** Options for `wireFilterValidation`: just the renderer origin its IPC calls must come from. */
 export interface WireFilterValidationOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;

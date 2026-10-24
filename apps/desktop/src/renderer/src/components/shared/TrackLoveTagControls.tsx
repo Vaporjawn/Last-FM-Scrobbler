@@ -13,6 +13,11 @@ import Tooltip from "@mui/material/Tooltip";
 import { useSnackbar } from "../../contexts/snackbar-context.js";
 import { useTrackActions } from "../../hooks/use-track-actions.js";
 
+/**
+ * Props for `TrackLoveTagControls`: the artist and track the actions apply to, an optional
+ * initial loved state, an optional per-instance label for assistive tech, and which side
+ * the tag popover opens toward.
+ */
 export interface TrackLoveTagControlsProps {
   readonly artist: string;
   readonly track: string;
@@ -60,11 +65,13 @@ export function TrackLoveTagControls({
   const [tagInput, setTagInput] = useState("");
   const { notify } = useSnackbar();
 
+  /** Dismisses the tag popover and clears whatever was typed into it. */
   const closeTagPopover = (): void => {
     setTagAnchor(null);
     setTagInput("");
   };
 
+  /** Flips the track's loved state and reports the outcome in a snackbar (success or the error message). */
   const handleToggleLove = (): void => {
     // Capture the pre-toggle value now — `loved` won't reflect the flip until a render
     // after this promise resolves, so reading it inside `.then()` would race.
@@ -78,6 +85,10 @@ export function TrackLoveTagControls({
     });
   };
 
+  /**
+   * Submits the parsed tags and reports the outcome in a snackbar. The popover closes
+   * only on success, so a failed request leaves the typed input in place for a retry.
+   */
   const handleAddTags = (tags: readonly string[]): void => {
     void addTags(tags).then((result) => {
       // Only close (and discard the typed input) on success — closing unconditionally
@@ -95,6 +106,11 @@ export function TrackLoveTagControls({
     });
   };
 
+  /**
+   * Handles the tag form's submit (button click or Enter): prevents the browser's default
+   * form navigation, splits the input on commas, trims each tag, drops empty entries and
+   * hands the rest to `handleAddTags`.
+   */
   const handleTagFormSubmit = (event: SubmitEvent<HTMLFormElement>): void => {
     event.preventDefault();
     const tags = tagInput

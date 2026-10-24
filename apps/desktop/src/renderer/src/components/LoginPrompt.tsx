@@ -4,6 +4,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 
+/** Props for `LoginPrompt`: the explanatory text and where the "Go to Settings" button leads. */
 export interface LoginPromptProps {
   /** View-specific reason, e.g. "...to see your scrobble history." */
   readonly message: string;

@@ -5,6 +5,7 @@ import Chip from "@mui/material/Chip";
 import Tooltip from "@mui/material/Tooltip";
 import { useNetworkStatus } from "../hooks/use-network-status.js";
 
+/** Props for `NetworkStatusChip`: only whether the sidebar it lives in is collapsed. */
 export interface NetworkStatusChipProps {
   /** Icon-only when true (matches `SidebarButton`/`NavButton`'s own `collapsed`
    * convention) — an accessible label is still provided via `Chip`'s own `aria-label`

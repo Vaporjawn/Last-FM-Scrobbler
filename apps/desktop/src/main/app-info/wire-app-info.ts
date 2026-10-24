@@ -6,6 +6,7 @@ import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
 
+/** Dependencies `wireAppInfo` needs: the accepted renderer origin and the app-level callbacks. */
 export interface WireAppInfoOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;

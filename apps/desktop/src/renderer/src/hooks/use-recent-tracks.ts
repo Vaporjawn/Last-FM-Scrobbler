@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RecentTrack } from "@lastfm-scrobbler/core";
 
+/**
+ * What `useRecentTracks` returns: the accumulated scrobble history across all loaded pages,
+ * separate flags for the first-page load, load-more and manual refresh, whether more pages
+ * remain, and the `loadMore` and `refetch` actions.
+ */
 export interface RecentTracksState {
   readonly tracks: readonly RecentTrack[];
   /** True only while the first page (of a fresh `username`/`limit`) is in flight —

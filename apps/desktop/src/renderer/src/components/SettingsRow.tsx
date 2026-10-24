@@ -2,6 +2,10 @@ import type { JSX, ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
+/**
+ * Props for `SettingsRow`: the row's label and optional description text, an optional
+ * leading visual, and the control rendered on the trailing edge.
+ */
 export interface SettingsRowProps {
   readonly label: string;
   readonly description?: ReactNode;

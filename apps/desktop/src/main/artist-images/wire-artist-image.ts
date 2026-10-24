@@ -7,6 +7,8 @@ import { resolveArtistImageUrl } from "./resolve-artist-image-url.js";
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
+
+/** Options for `wireArtistImage`: the accepted renderer origin and the optional photo sources. */
 export interface WireArtistImageOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;

@@ -1,10 +1,16 @@
 import type { SecretStorage } from "./secret-storage.js";
 
+/**
+ * One connected Last.fm-protocol account as `AccountStore` persists it (serialized to
+ * JSON under the account's key): the username and the long-lived session key obtained
+ * from the auth flow, which is what signs authenticated calls on the user's behalf.
+ */
 export interface StoredAccount {
   readonly username: string;
   readonly sessionKey: string;
 }
 
+/** Construction options for `AccountStore`. */
 export interface AccountStoreOptions {
   /**
    * Prefixes every key this store writes to `storage` — lets multiple `AccountStore`
@@ -35,15 +41,23 @@ export class AccountStore {
   private readonly namespace: string;
   private pending: Promise<void> = Promise.resolve();
 
+  /**
+   * Creates a store over `storage`; nothing is read or written until a method is called.
+   *
+   * @param storage - Secret store the accounts are written to.
+   * @param options - Optional key namespace; see `AccountStoreOptions.namespace`.
+   */
   constructor(storage: SecretStorage, options: AccountStoreOptions = {}) {
     this.storage = storage;
     this.namespace = options.namespace ?? "";
   }
 
+  /** Builds the storage key holding one account's JSON: namespace + `"account:"` + username. */
   private accountKey(username: string): string {
     return `${this.namespace}${ACCOUNT_KEY_PREFIX}${username}`;
   }
 
+  /** The (namespaced) storage key whose value is the username of the active account. */
   private get activeAccountKey(): string {
     return `${this.namespace}${ACTIVE_ACCOUNT_KEY}`;
   }
@@ -65,10 +79,20 @@ export class AccountStore {
     return run;
   }
 
+  /**
+   * Saves `account` (overwriting any stored account with the same username). If no
+   * account existed before, it also becomes the active one; otherwise the active
+   * account is left unchanged.
+   */
   addAccount(account: StoredAccount): Promise<void> {
     return this.serialize(() => this.addAccountUnlocked(account));
   }
 
+  /**
+   * Deletes the named account. If it was the active one, the first remaining account
+   * (in storage listing order) becomes active, or the active marker is cleared when
+   * none are left.
+   */
   removeAccount(username: string): Promise<void> {
     return this.serialize(() => this.removeAccountUnlocked(username));
   }
@@ -91,6 +115,7 @@ export class AccountStore {
     });
   }
 
+  /** Body of `addAccount`; callers must already hold the `serialize` queue. */
   private async addAccountUnlocked(account: StoredAccount): Promise<void> {
     const existing = await this.listAccounts();
     await this.storage.set(this.accountKey(account.username), JSON.stringify(account));
@@ -100,6 +125,7 @@ export class AccountStore {
     }
   }
 
+  /** Body of `removeAccount`; callers must already hold the `serialize` queue. */
   private async removeAccountUnlocked(username: string): Promise<void> {
     await this.storage.delete(this.accountKey(username));
 
@@ -114,6 +140,11 @@ export class AccountStore {
     }
   }
 
+  /**
+   * Reads every account stored under this store's namespace, by scanning the storage
+   * keys for the account prefix. Not queued, so it reflects whatever is on disk at the
+   * moment it runs.
+   */
   async listAccounts(): Promise<readonly StoredAccount[]> {
     const keys = await this.storage.list();
     const prefix = `${this.namespace}${ACCOUNT_KEY_PREFIX}`;
@@ -130,6 +161,7 @@ export class AccountStore {
     return accounts;
   }
 
+  /** The active account, or `undefined` when none is marked active or its record is missing. */
   async getActiveAccount(): Promise<StoredAccount | undefined> {
     const activeUsername = await this.storage.get(this.activeAccountKey);
     if (!activeUsername) {
@@ -139,6 +171,12 @@ export class AccountStore {
     return raw ? (JSON.parse(raw) as StoredAccount) : undefined;
   }
 
+  /**
+   * Switches the active account.
+   *
+   * @throws Error - When no stored account has that username (the active marker is not
+   * changed in that case).
+   */
   setActiveAccount(username: string): Promise<void> {
     return this.serialize(async () => {
       const raw = await this.storage.get(this.accountKey(username));

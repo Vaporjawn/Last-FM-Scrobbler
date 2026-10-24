@@ -4,6 +4,7 @@ import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
 import { SnackbarContext, type NotifyOptions } from "./snackbar-context.js";
 
+/** A pending message plus a unique, increasing key so each one remounts its `Snackbar` afresh. */
 interface QueuedSnackbar extends NotifyOptions {
   readonly key: number;
 }
@@ -13,6 +14,7 @@ const DEFAULT_DURATION_MS = 4000;
  * routine success confirmation. */
 const ERROR_DURATION_MS = 8000;
 
+/** Props for `SnackbarProvider`: the subtree whose descendants may call `notify`. */
 export interface SnackbarProviderProps {
   readonly children: ReactNode;
 }

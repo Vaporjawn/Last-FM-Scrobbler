@@ -5,6 +5,12 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Tooltip from "@mui/material/Tooltip";
 
+/**
+ * A single sidebar entry: an icon plus label on a `ListItemButton`. When `collapsed` the
+ * visible label is dropped and shown as a right-hand tooltip instead (the button keeps an
+ * `aria-label` either way), and the button is wrapped in a `ListItem` so the surrounding
+ * `<ul>` only contains `<li>` children.
+ */
 export function SidebarButton({
   label,
   icon,

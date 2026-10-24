@@ -33,6 +33,11 @@ export function TrayPopover(): JSX.Element {
   const theme = useMemo(() => createAppTheme(settings.themeMode), [settings.themeMode]);
   const { track } = useNowPlaying();
 
+  /**
+   * Asks the main process to bring the full app window to the front, over the
+   * preload-exposed `window.appInfo` IPC bridge. The optional chaining keeps the popover
+   * rendering (the button simply does nothing) if that bridge is absent.
+   */
   const handleOpenApp = (): void => {
     void window.appInfo?.showMainWindow();
   };

@@ -4,6 +4,13 @@
  * misconfiguration, reported as a 500), without ever leaking `message` — which may
  * echo GitHub's own error detail — to an anonymous, unauthenticated caller. */
 export class GitHubIssueCreationError extends Error {
+  /**
+   * Records the HTTP status alongside the diagnostic message so callers can branch on it.
+   *
+   * @param status The HTTP status GitHub answered with (the 2xx status for a malformed
+   * success body).
+   * @param message Diagnostic text for server-side logs; never relay it to the caller.
+   */
   constructor(
     public readonly status: number,
     message: string,

@@ -12,6 +12,7 @@ const AVATAR_SIZE = 48;
 /** Same indent-math approach as `TopArtistListItem`'s own `BAR_INDENT_PX`. */
 const BAR_INDENT_PX = 20 + 12 + AVATAR_SIZE + 12;
 
+/** Props for `TopAlbumListItem`: the album, its rank, and the list's max play count for the bar scale. */
 export interface TopAlbumListItemProps {
   readonly album: TopAlbum;
   /** 1-based position in the list — shown as a plain rank number, not an index. */

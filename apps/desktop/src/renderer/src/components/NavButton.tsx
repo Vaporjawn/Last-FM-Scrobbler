@@ -2,6 +2,11 @@ import { type JSX } from "react";
 import { type NavItem } from "./nav-items.js";
 import { SidebarButton } from "./SidebarButton.js";
 
+/**
+ * One destination button in the navigation sidebar: adapts a `NavItem` (label and icon)
+ * onto the generic `SidebarButton`, which owns the expanded and icon-only collapsed
+ * rendering.
+ */
 export function NavButton({
   item,
   selected,

@@ -5,6 +5,12 @@ import { isInteger } from "./is-integer.js";
  * but small enough to keep a bad value from reaching the window manager. */
 const MAX_WINDOW_SIZE = 16_384;
 const MAX_WINDOW_COORDINATE = 65_536;
+
+/**
+ * Validates an untrusted value (from `settings.json` or an IPC patch) as window bounds:
+ * integer `x`/`y`/`width`/`height` within the limits above and a positive size. Returns a
+ * clean copy of the four fields, or `undefined` if anything is missing or out of range.
+ */
 export function parseWindowBounds(value: unknown): WindowBounds | undefined {
   if (typeof value !== "object" || value === null) {
     return undefined;

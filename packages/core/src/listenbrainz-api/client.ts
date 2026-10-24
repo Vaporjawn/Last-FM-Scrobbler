@@ -16,6 +16,7 @@ const DEFAULT_BASE_URL = "https://api.listenbrainz.org";
  * this is defensive parity with `LastfmClient.scrobble`'s equivalent guard, not
  * expected to trigger in practice. */
 const MAX_LISTENS_PER_REQUEST = 1000;
+/** Construction options for `ListenBrainzClient`: the user's API token is required; base URL, `fetch` and timeout can be overridden (tests, self-hosted servers). */
 export interface ListenBrainzClientOptions {
   /** A ListenBrainz user API token — pasted in by the user from their ListenBrainz
    * profile settings page (see `ListenBrainzClient.validateToken`), not obtained via a
@@ -27,6 +28,10 @@ export interface ListenBrainzClientOptions {
   /** Per-request ceiling in milliseconds; defaults to 30 seconds. */
   readonly timeoutMs?: number;
 }
+/**
+ * One element of the `payload` array in a `submit-listens` request body. `listened_at`
+ * (Unix seconds) is present for a finished listen and left out for a `playing_now` update.
+ */
 interface ListenPayload {
   readonly listened_at?: number;
   readonly track_metadata: TrackMetadata;
@@ -57,6 +62,7 @@ export class ListenBrainzClient implements ScrobblingClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
 
+  /** Applies defaults: the public ListenBrainz API URL, the global `fetch`, and the shared default request timeout. */
   constructor(options: ListenBrainzClientOptions) {
     this.token = options.token;
     this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
@@ -64,6 +70,16 @@ export class ListenBrainzClient implements ScrobblingClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
+  /**
+   * Sends one authenticated call (`Authorization: Token ...`) to `path` under the base
+   * URL and returns the parsed JSON body. The HTTP status decides success: any non-2xx
+   * response becomes a `ListenBrainzApiError` carrying that status and the best message
+   * found in the body. A body that is not JSON is tolerated (treated as empty) so it
+   * cannot mask the real status error.
+   *
+   * @throws ListenBrainzApiError - On a non-2xx response.
+   * @throws Error - Network failure or timeout, propagated from `fetch`.
+   */
   private async request<T>(
     path: string,
     init: {
@@ -95,6 +111,13 @@ export class ListenBrainzClient implements ScrobblingClient {
     return payload as T;
   }
 
+  /**
+   * Posts to `/1/submit-listens` with `listen_type: "playing_now"` and a single payload
+   * entry. Only artist, track and album are sent; ListenBrainz's metadata mapping
+   * ignores the other submission fields.
+   *
+   * @throws ListenBrainzApiError - If ListenBrainz answers with a non-2xx status.
+   */
   async updateNowPlaying(submission: NowPlayingSubmission): Promise<void> {
     const payload: ListenPayload[] = [{ track_metadata: toTrackMetadata(submission) }];
     await this.request("/1/submit-listens", {
@@ -104,6 +127,16 @@ export class ListenBrainzClient implements ScrobblingClient {
     });
   }
 
+  /**
+   * Posts the batch to `/1/submit-listens` as `listen_type: "single"`, using each
+   * submission's timestamp as `listened_at`. ListenBrainz does not report per-listen
+   * outcomes, so a successful call marks every item accepted (none ignored, none
+   * retryable) and any failure rejects the whole batch. An empty batch returns an empty
+   * result without a request.
+   *
+   * @throws Error - If the batch exceeds 1000 listens, the per-request limit.
+   * @throws ListenBrainzApiError - If ListenBrainz answers with a non-2xx status.
+   */
   async scrobble(submissions: readonly ScrobbleSubmission[]): Promise<ScrobbleBatchResult> {
     if (submissions.length === 0) {
       return { accepted: 0, ignored: 0, results: [] };

@@ -6,6 +6,7 @@ import { TRAY_POPOVER_SIZE } from "./tray-popover-size.js";
 // than `import { Menu, Tray, nativeImage } from "electron"`.
 const { Menu, Tray, nativeImage } = electron;
 
+/** Options for `createTray`: the icon, the menu actions and the optional mini-player popover. */
 export interface CreateTrayOptions {
   /** See `main/tray/resolve-tray-icon-path.ts`. */
   readonly iconPath: string;

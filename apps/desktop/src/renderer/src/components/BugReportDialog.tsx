@@ -12,6 +12,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useBugReport } from "../hooks/use-bug-report.js";
 
+/** Props for `BugReportDialog`: the dialog is controlled, so the caller owns its open state. */
 export interface BugReportDialogProps {
   readonly open: boolean;
   readonly onClose: () => void;

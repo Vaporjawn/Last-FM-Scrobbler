@@ -3,11 +3,14 @@ import { type PlayerEntry } from "./player-entry.js";
 import { tracksEqual } from "./tracks-equal.js";
 import { isPreferred } from "./is-preferred.js";
 
+/** What `PlayerRegistry` currently considers the winning player: its track (if any) and playback state. */
 export interface ActiveSnapshot {
   readonly track: TrackInfo | null;
   readonly state: PlaybackState;
 }
+/** Construction options for `PlayerRegistry`. */
 export interface PlayerRegistryOptions {
+  /** Clock returning seconds; injectable so tests control ordering. Defaults to wall-clock seconds. */
   readonly now?: () => number;
 }
 /**
@@ -22,10 +25,17 @@ export class PlayerRegistry {
   private readonly now: () => number;
   private readonly players = new Map<string, PlayerEntry>();
 
+  /** Creates an empty registry; see `PlayerRegistryOptions` for the injectable clock. */
   constructor(options: PlayerRegistryOptions = {}) {
     this.now = options.now ?? (() => Date.now() / 1000);
   }
 
+  /**
+   * Records the latest track and state of the player at `busName`. An update identical to
+   * what is stored is ignored, so `lastChangedAt` only moves on a genuine change. A player
+   * that stays in "playing" keeps its original `startedPlayingAt`, which is what the
+   * "most recently started wins" rule compares.
+   */
   update(busName: string, track: TrackInfo | null, state: PlaybackState): void {
     const existing = this.players.get(busName);
     const nowSec = this.now();
@@ -46,6 +56,7 @@ export class PlayerRegistry {
     }
   }
 
+  /** Forgets one player, for example because its bus name disappeared. */
   remove(busName: string): void {
     this.players.delete(busName);
   }
@@ -55,6 +66,7 @@ export class PlayerRegistry {
     this.players.clear();
   }
 
+  /** The winning player's track and state, or no track and "stopped" when nothing is registered. */
   getActive(): ActiveSnapshot {
     const best = this.findActiveEntry();
     if (!best) {
@@ -68,6 +80,7 @@ export class PlayerRegistry {
     return this.findActiveEntry()?.[0] ?? null;
   }
 
+  /** Scans every registered player and returns the `[busName, entry]` pair that `isPreferred` ranks highest. */
   private findActiveEntry(): [string, PlayerEntry] | undefined {
     let best: [string, PlayerEntry] | undefined;
 

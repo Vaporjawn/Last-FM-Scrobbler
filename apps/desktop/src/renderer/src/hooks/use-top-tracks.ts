@@ -1,6 +1,7 @@
 import type { TopTrack, TopTracksPeriod } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/** What `useTopTracks` returns: the user's top tracks plus loading, refreshing and error state and a `refetch`. */
 export interface TopTracksState {
   readonly tracks: readonly TopTrack[];
   readonly loading: boolean;

@@ -1,3 +1,4 @@
+/** A screen rectangle in pixels: top-left corner plus size (same fields as Electron's `Rectangle`). */
 export interface Rectangle {
   readonly x: number;
   readonly y: number;
@@ -5,6 +6,7 @@ export interface Rectangle {
   readonly height: number;
 }
 
+/** A width and height in pixels. */
 export interface Size {
   readonly width: number;
   readonly height: number;

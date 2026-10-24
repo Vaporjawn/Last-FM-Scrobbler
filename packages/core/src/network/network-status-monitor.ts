@@ -20,10 +20,12 @@ export interface QueueCountSource {
   count(): number;
 }
 
+/** Construction options for `NetworkStatusMonitor`: the queue whose size is reported as the pending count. */
 export interface NetworkStatusMonitorOptions {
   readonly queue: QueueCountSource;
 }
 
+/** Callback invoked with the fresh `NetworkStatus` whenever the monitor emits a change. */
 type Listener = (status: NetworkStatus) => void;
 
 /**
@@ -42,10 +44,12 @@ export class NetworkStatusMonitor {
   private lastSyncedAt: number | null = null;
   private readonly listeners = new Set<Listener>();
 
+  /** Starts in the "not yet known" state (`online: null`, never synced). */
   constructor(options: NetworkStatusMonitorOptions) {
     this.queue = options.queue;
   }
 
+  /** Marks the network as reachable, stamps `lastSyncedAt` with the current time (Unix seconds) and notifies subscribers. */
   reportSuccess(): void {
     this.online = true;
     this.lastSyncedAt = Math.floor(Date.now() / 1000);
@@ -69,6 +73,7 @@ export class NetworkStatusMonitor {
     this.emit();
   }
 
+  /** A snapshot of the current state; the pending count is read live from the queue on each call. */
   getStatus(): NetworkStatus {
     return {
       online: this.online,
@@ -77,6 +82,12 @@ export class NetworkStatusMonitor {
     };
   }
 
+  /**
+   * Registers `listener` to receive each status change (it is not called with the
+   * current status on subscribe).
+   *
+   * @returns A function that removes the listener again.
+   */
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => {
@@ -84,6 +95,7 @@ export class NetworkStatusMonitor {
     };
   }
 
+  /** Takes one fresh status snapshot and hands the same object to every subscriber. */
   private emit(): void {
     const status = this.getStatus();
     for (const listener of this.listeners) {

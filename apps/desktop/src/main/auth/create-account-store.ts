@@ -4,8 +4,11 @@ import {
   type SafeStorageLike,
 } from "../secret-storage/electron-secret-storage.js";
 
+/** Where and how `createAccountStore` persists the encrypted account sessions. */
 export interface CreateAccountStoreOptions {
+  /** File the encrypted secrets are written to (inside the app's user-data directory). */
   readonly filePath: string;
+  /** Electron's `safeStorage` (or a stand-in), used to encrypt values with OS-level keys. */
   readonly safeStorage: SafeStorageLike;
 }
 

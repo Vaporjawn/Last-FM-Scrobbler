@@ -3,12 +3,15 @@ import { dirname } from "node:path";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "../../shared/settings-api.js";
 import { sanitizeSettings } from "./sanitize-settings.js";
 
+/** Configuration for `createSettingsStore`: where the settings JSON file lives. */
 export interface SettingsStoreOptions {
   /** Where to persist settings as JSON, e.g. `app.getPath("userData")/settings.json`. */
   readonly filePath: string;
 }
 
+/** Synchronous, file-backed access to the persisted `AppSettings`, as created by `createSettingsStore`. */
 export interface SettingsStore {
+  /** Reads the current settings from disk, falling back to defaults for anything missing or invalid. */
   get(): AppSettings;
   /** Merges `patch` into the persisted settings, writes it to disk, and returns the
    * full updated settings. */
@@ -35,6 +38,10 @@ export interface SettingsStore {
 export function createSettingsStore(options: SettingsStoreOptions): SettingsStore {
   const { filePath } = options;
 
+  /**
+   * Loads the settings file and overlays its valid entries on the defaults. A missing, corrupt
+   * or unreadable file yields the defaults instead of throwing, so it can never block startup.
+   */
   function readSettings(): AppSettings {
     if (!existsSync(filePath)) {
       return { ...DEFAULT_APP_SETTINGS };
@@ -52,6 +59,10 @@ export function createSettingsStore(options: SettingsStoreOptions): SettingsStor
     }
   }
 
+  /**
+   * Saves `settings` as the file's entire contents, via an owner-only temp file renamed into
+   * place so a crash mid-write cannot leave a truncated settings file behind.
+   */
   function writeSettings(settings: AppSettings): void {
     mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
     // Written to a temp file in the same directory first, then renamed over the real

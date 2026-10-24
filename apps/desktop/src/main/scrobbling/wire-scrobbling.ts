@@ -40,7 +40,14 @@ export interface ScrobblingServiceConnection {
    * in `main/index.ts` already relies on). */
   readonly getClient: () => Promise<ScrobblingClient | undefined>;
 }
+
+/**
+ * Everything `wireScrobbling` needs: the persistent scrobble queue, the connected services to
+ * submit to (Last.fm via `accountStore`/`createSessionClient`, plus `additionalServices`), and
+ * the timing and notification hooks around the drain loop.
+ */
 export interface WireScrobblingOptions {
+  /** Persistent queue that eligible plays are written to and drained from. */
   readonly queue: ScrobbleQueue;
   /** Reports connectivity outcomes and pending-queue changes for the offline-mode
    * status chip/tray tooltip — see `reportNetworkOutcome`'s docstring for the general
@@ -66,6 +73,7 @@ export interface WireScrobblingOptions {
    * behavior below to exactly this module's original single-service (Last.fm-only)
    * semantics. */
   readonly additionalServices?: readonly ScrobblingServiceConnection[];
+  /** How often the queue is drained, in milliseconds. Defaults to 60 seconds. */
   readonly drainIntervalMs?: number;
   /** Called once per drain batch that at least one connected service accepted at
    * least one scrobble from — e.g. to show a native "Scrobbled: …" notification (see
@@ -83,6 +91,11 @@ export interface WireScrobblingOptions {
    * defaults to a no-op. */
   readonly onScrobbleFailed?: (reason: string) => void;
 }
+
+/**
+ * What `wireScrobbling` hands back: the two callbacks to give the tracker, a manual drain
+ * trigger, and a way to stop the periodic drain.
+ */
 export interface ScrobblingHandle {
   /** Pass as `Tracker`'s `events.onScrobbleEligible` — enqueues the eligible play. */
   onScrobbleEligible: (event: ScrobbleEligibleEvent) => void;
@@ -102,8 +115,10 @@ export interface ScrobblingHandle {
   onTrackChanged: (event: TrackChangedEvent) => Promise<void>;
   /** Exposed for tests/manual triggering; also runs automatically on `drainIntervalMs`. */
   drainOnce: () => Promise<void>;
+  /** Stops the periodic drain timer. Anything still queued stays in the persistent queue. */
   stop: () => void;
 }
+
 /** A `ScrobblingServiceConnection` plus whichever client `getClient()` resolved to
  * this cycle, once it's known to be connected — narrows away the `undefined` case so
  * downstream code doesn't need to re-check it. */
@@ -166,6 +181,10 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     return resolved.filter((s): s is ConnectedService => s.client !== undefined);
   }
 
+  /**
+   * Persists a play that crossed the scrobble threshold by enqueuing it, then tells the network
+   * status monitor the pending count changed. Submission happens later, on the next drain.
+   */
   function onScrobbleEligible(event: ScrobbleEligibleEvent): void {
     queue.enqueue({
       artist: event.track.artist,
@@ -176,6 +195,11 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     networkStatus?.reportQueueChanged();
   }
 
+  /**
+   * Sends one "now playing" update to every connected service in parallel. Never throws: a
+   * failure to resolve the connected services is logged, and a failed request to one service is
+   * ignored so it cannot hold back the others.
+   */
   async function sendNowPlaying(event: TrackChangedEvent): Promise<void> {
     let connected: readonly ConnectedService[];
     try {
@@ -214,12 +238,18 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
   // skipped rather than queued up behind a slow request.
   let nowPlayingRunning = false;
   let queuedNowPlaying: TrackChangedEvent | undefined;
+  /** Returns the event waiting in the single queued slot, if any, and empties the slot. */
   const takeQueuedNowPlaying = (): TrackChangedEvent | undefined => {
     const queued = queuedNowPlaying;
     queuedNowPlaying = undefined;
     return queued;
   };
 
+  /**
+   * Pushes a real-time "now playing" update for a new track, serializing requests: if one is
+   * already in flight the event is parked in the single queued slot (replacing any older
+   * parked event) and the running loop sends it next.
+   */
   async function onTrackChanged(event: TrackChangedEvent): Promise<void> {
     if (nowPlayingRunning) {
       queuedNowPlaying = event;
@@ -237,6 +267,12 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
     }
   }
 
+  /**
+   * One drain cycle: takes a batch off the queue, submits it to every connected service in
+   * parallel, then removes each item that is finished (accepted, or permanently rejected
+   * everywhere) and records a retryable failure for the rest. Also feeds the consecutive-failure
+   * counter that triggers `onScrobbleFailed` and calls `onScrobbled` for accepted tracks.
+   */
   async function runDrain(): Promise<void> {
     let connected: readonly ConnectedService[];
     try {
@@ -376,6 +412,7 @@ export function wireScrobbling(options: WireScrobblingOptions): ScrobblingHandle
   // started in that window would read the very same rows and submit every one of them
   // again — duplicate scrobbles. While one drain runs, callers share its result instead.
   let drainInFlight: Promise<void> | undefined;
+  /** Runs a drain cycle, or returns the in-flight one's promise if a drain is already running. */
   function drainOnce(): Promise<void> {
     drainInFlight ??= runDrain().finally(() => {
       drainInFlight = undefined;

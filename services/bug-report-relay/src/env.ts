@@ -1,3 +1,7 @@
+/**
+ * Bindings the Cloudflare Worker receives at runtime; `index.ts` takes it as the `env`
+ * argument of its `fetch` handler. Currently that is the GitHub token used to file issues.
+ */
 export interface Env {
   /** Classic PAT with the `public_repo` scope (this repo's own explicit choice — see
    * docs/adr/0004-anonymous-bug-report-relay.md; a fine-grained PAT scoped to just this

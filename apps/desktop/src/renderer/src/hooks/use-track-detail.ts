@@ -1,6 +1,10 @@
 import type { TrackDetail } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/**
+ * What `useTrackDetail` returns: the track's detail (or `undefined`), a manual-refresh flag
+ * and a `refetch`. There is no loading or error field, as failures resolve to `undefined`.
+ */
 export interface TrackDetailState {
   /** `undefined` while loading, when `artist`/`track` are undefined (nothing
    * playing), when `window.lastfm` isn't present, or when the lookup fails; callers

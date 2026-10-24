@@ -3,16 +3,21 @@ import { createInterface } from "node:readline";
 import { parseStreamLine } from "./parse-stream-line.js";
 import type { NowPlayingPayload } from "./now-playing-payload.js";
 
+/** Control handle for a running SMTC helper process, returned by `spawnSmtcHelper`. */
 export interface SmtcHelperHandle {
   /** Terminates the helper process. */
   stop(): void;
 }
 
+/** Options for `spawnSmtcHelper`: which executable to run and callbacks for what it reports. */
 export interface SpawnSmtcHelperOptions {
+  /** Absolute path to `SmtcHelper.exe`. */
   readonly helperPath: string;
   /** Called with the parsed payload, or `null` when the helper reports nothing playing. */
   readonly onEvent: (payload: NowPlayingPayload | null) => void;
+  /** Called when the helper process exits, with its exit code or the signal that ended it. */
   readonly onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
+  /** Receives each line the helper writes to stderr; stderr is not read when omitted. */
   readonly onStderr?: (line: string) => void;
   /** Called when the process itself fails to spawn (missing/misplaced exe, wrong
    * architecture, blocked by AV, etc). Without a listener here, Node's `ChildProcess`

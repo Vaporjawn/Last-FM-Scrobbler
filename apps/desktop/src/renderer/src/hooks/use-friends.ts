@@ -1,6 +1,7 @@
 import type { Friend } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/** What `useFriends` returns: the friend list plus loading, refreshing and error state and a `refetch`. */
 export interface FriendsState {
   readonly friends: readonly Friend[];
   readonly loading: boolean;

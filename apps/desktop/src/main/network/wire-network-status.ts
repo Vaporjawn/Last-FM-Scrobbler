@@ -8,6 +8,8 @@ import { formatTooltip } from "./format-tooltip.js";
 // See main/index.ts for why this is a default import destructured at runtime rather
 // than `import { ipcMain } from "electron"`.
 const { ipcMain } = electron;
+
+/** Options for `wireNetworkStatus`: the status monitor and live accessors for the window and tray. */
 export interface WireNetworkStatusOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;
@@ -20,12 +22,16 @@ export interface WireNetworkStatusOptions {
    * `syncTrayTooltip()` once right after the tray actually exists to catch up. */
   readonly getTray: () => Tray | undefined;
 }
+
+/** Controls returned by `wireNetworkStatus` for its caller to drive the tray and tear down. */
 export interface NetworkStatusHandle {
   /** Re-applies whatever the monitor's current status is to `getTray()`'s current
    * return value — call once right after the tray is created. */
   syncTrayTooltip: () => void;
+  /** Unsubscribes from the monitor and removes the status IPC handler. */
   stop: () => void;
 }
+
 /**
  * Pushes `monitor`'s status to the renderer over `IPC_CHANNELS.networkStatusChanged`
  * (mirrors `wire-updates.ts`'s push pattern exactly) and keeps the tray icon's tooltip
@@ -36,6 +42,7 @@ export function wireNetworkStatus(options: WireNetworkStatusOptions): NetworkSta
   const { monitor, getMainWindow, getTray, expectedOrigin } = options;
   const ipc = createTrustedIpc(ipcMain, expectedOrigin);
 
+  /** Pushes one status change to the renderer window and the tray tooltip, skipping either if gone. */
   function apply(status: NetworkStatus): void {
     const mainWindow = getMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {

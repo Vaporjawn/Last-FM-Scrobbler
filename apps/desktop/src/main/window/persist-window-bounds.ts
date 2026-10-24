@@ -20,8 +20,11 @@ export interface BoundsTrackedWindow {
   readonly isDestroyed: () => boolean;
 }
 
+/** Options for `persistWindowBounds`: the window to watch and the store the bounds are saved to. */
 export interface PersistWindowBoundsOptions {
+  /** The window whose resize and move events trigger a save. */
   readonly window: BoundsTrackedWindow;
+  /** Receives the new `windowBounds` through `set` each time a debounced save fires. */
   readonly settingsStore: Pick<SettingsStore, "set">;
   /** Delay in ms between the last resize/move event and the actual write — avoids a
    * disk write on every intermediate frame of a drag-resize. Defaults to 500. */
@@ -40,6 +43,7 @@ export function persistWindowBounds(options: PersistWindowBoundsOptions): () => 
   const { window, settingsStore, debounceMs = 500 } = options;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  /** Debounces saving: restarts the timer on each resize or move, then writes the final bounds. */
   function scheduleSave(): void {
     if (timer !== undefined) {
       clearTimeout(timer);

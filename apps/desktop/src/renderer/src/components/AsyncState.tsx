@@ -18,6 +18,7 @@ const SKELETON_ROW_AVATAR_SIZE = 48;
  * for content nobody will see before the real data replaces it. */
 const DEFAULT_SKELETON_COUNT = 5;
 
+/** The `"loading"` variant of `AsyncState`: a spinner or shape-matched skeleton placeholders. */
 interface AsyncStateLoadingProps {
   readonly kind: "loading";
   /** Visually-hidden-ish text for screen readers — `CircularProgress` alone has no
@@ -37,6 +38,7 @@ interface AsyncStateLoadingProps {
   readonly count?: number;
 }
 
+/** The `"empty"` variant of `AsyncState`: a muted icon with a "nothing here" message. */
 interface AsyncStateEmptyProps {
   readonly kind: "empty";
   /** A sized icon element, e.g. `<LibraryMusicIcon sx={{ fontSize: 48 }} />` — pass
@@ -47,6 +49,7 @@ interface AsyncStateEmptyProps {
   readonly message: string;
 }
 
+/** The `"error"` variant of `AsyncState`: an error message with an optional retry button. */
 interface AsyncStateErrorProps {
   readonly kind: "error";
   readonly message: string;
@@ -57,6 +60,10 @@ interface AsyncStateErrorProps {
   readonly onRetry?: () => void;
 }
 
+/**
+ * Props for `AsyncState`, a union discriminated on `kind` so each state only accepts the
+ * props that make sense for it (a retry callback on `"error"`, an icon on `"empty"`).
+ */
 export type AsyncStateProps = AsyncStateLoadingProps | AsyncStateEmptyProps | AsyncStateErrorProps;
 
 /**

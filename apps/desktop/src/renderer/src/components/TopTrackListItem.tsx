@@ -14,6 +14,7 @@ const AVATAR_SIZE = 48;
  * between them). */
 const BAR_INDENT_PX = 20 + 12 + AVATAR_SIZE + 12;
 
+/** Props for `TopTrackListItem`: the track, its rank, and the list's max play count for the bar scale. */
 export interface TopTrackListItemProps {
   readonly track: TopTrack;
   /** 1-based position in the list — shown as a plain rank number, not an index. */

@@ -9,6 +9,7 @@ const spin = keyframes`
   to { transform: rotate(360deg); }
 `;
 
+/** Props for `RefreshButton`: the refetch callback, the in-flight flag, and an optional accessible label. */
 export interface RefreshButtonProps {
   readonly onRefresh: () => void;
   /** Spins the icon and disables the button while `true` — a page's own `refreshing`

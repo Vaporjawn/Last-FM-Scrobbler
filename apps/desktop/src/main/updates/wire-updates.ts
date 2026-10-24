@@ -18,9 +18,14 @@ const DEFAULT_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
  * making a network call, rather than racing it in immediately at wire-up. */
 const INITIAL_CHECK_DELAY_MS = 10_000;
 
+/**
+ * Options for `wireUpdates`: the updater client, live accessors for the window and the
+ * auto-check setting, the restart prompt, the check timing, and the notification hooks.
+ */
 export interface WireUpdatesOptions {
   /** The renderer page whose IPC calls are accepted — see `resolveExpectedRendererOrigin`. */
   readonly expectedOrigin: string;
+  /** The updater (electron-updater's, or a fake in tests) that checks, downloads and installs. */
   readonly client: UpdaterClient;
   /** A live accessor for the current main window, not a captured value — this window
    * can be destroyed and replaced (main window closed with "close to tray" off, then
@@ -86,6 +91,7 @@ export function wireUpdates(options: WireUpdatesOptions): () => void {
 
   let status: UpdateStatus = { phase: "idle" };
 
+  /** Records the new update status and pushes it to the current window if it still exists. */
   function setStatus(next: UpdateStatus): void {
     status = next;
     const mainWindow = getMainWindow();
@@ -94,19 +100,27 @@ export function wireUpdates(options: WireUpdatesOptions): () => void {
     }
   }
 
+  /** Reports the "checking" phase when the updater starts a check. */
   const onCheckingForUpdate = (): void => {
     setStatus({ phase: "checking" });
   };
+  /** Reports the "available" phase and fires `onUpdateAvailable`; the download starts automatically. */
   const handleUpdateAvailable = (info: { version: string }): void => {
     setStatus({ phase: "available", version: info.version });
     onUpdateAvailable?.(info.version);
   };
+  /** Reports the "not-available" phase when a check finds nothing newer. */
   const onUpdateNotAvailable = (): void => {
     setStatus({ phase: "not-available" });
   };
+  /** Reports the "downloading" phase with the updater's current percentage. */
   const onDownloadProgress = (progress: { percent: number }): void => {
     setStatus({ phase: "downloading", percent: progress.percent });
   };
+  /**
+   * Reports the "downloaded" phase, then asks the user whether to restart now; quits and
+   * installs the update only if they agree. A failing prompt is logged, not thrown.
+   */
   const onUpdateDownloaded = (info: { version: string }): void => {
     setStatus({ phase: "downloaded", version: info.version });
     promptToRestart(info.version)
@@ -119,6 +133,7 @@ export function wireUpdates(options: WireUpdatesOptions): () => void {
         console.error("updates: restart prompt failed:", error);
       });
   };
+  /** Reports the "error" phase with the message and fires `onUpdateCheckFailed`. */
   const handleError = (error: Error): void => {
     setStatus({ phase: "error", message: error.message });
     onUpdateCheckFailed?.(error.message);
@@ -136,6 +151,7 @@ export function wireUpdates(options: WireUpdatesOptions): () => void {
     await client.checkForUpdates();
   });
 
+  /** Timer callback: starts an update check unless automatic checks are currently switched off. */
   function maybeAutoCheck(): void {
     if (!isAutoCheckEnabled()) {
       return;

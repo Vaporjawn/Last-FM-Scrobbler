@@ -1,6 +1,7 @@
 import type { TrackDetail } from "@lastfm-scrobbler/core";
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/** What `useTrackInfo` returns: the track's detail plus loading, refreshing and error state and a `refetch`. */
 export interface TrackInfoState {
   readonly track: TrackDetail | undefined;
   readonly loading: boolean;

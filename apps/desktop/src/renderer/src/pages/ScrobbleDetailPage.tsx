@@ -23,6 +23,10 @@ import { useTrackInfo } from "../hooks/use-track-info.js";
 
 const ART_SIZE = 200;
 
+/**
+ * Props for `ScrobbleDetailPage`: the scrobble to show, the active account used for
+ * personal play counts, and the back-navigation callback with its optional label.
+ */
 export interface ScrobbleDetailPageProps {
   /** The row that was clicked on ScrobblesPage — used to render the hero section
    * immediately (title/artist/album/art/loved, all already known from that list) while
@@ -83,6 +87,7 @@ export function ScrobbleDetailPage({
   // docstring for why), but from the user's point of view this page shows one
   // track's worth of Last.fm data, refreshed together.
   const refreshing = trackInfoRefreshing || artistInfoRefreshing || topTagsRefreshing;
+  /** Re-fetches the track info, artist info and popular tags, for the header's refresh button. */
   const refetchAll = (): void => {
     refetchTrackInfo();
     refetchArtistInfo();

@@ -4,6 +4,11 @@ import type { ActionResult } from "./action-result.js";
 import { fail } from "./fail.js";
 import { ok } from "./ok.js";
 
+/**
+ * What `useSettingsState` and `useSettings` return: the current `AppSettings`, a loading
+ * flag for the initial read, the latest error, and the `updateSettings` and `resetSettings`
+ * actions that persist changes.
+ */
 export interface UseSettingsResult {
   readonly settings: AppSettings;
   /** `true` until the initial `window.settings.get()` resolves — lets the UI avoid a

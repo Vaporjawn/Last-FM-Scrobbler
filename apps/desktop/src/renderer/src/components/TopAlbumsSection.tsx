@@ -11,8 +11,14 @@ import { AsyncState } from "./AsyncState.js";
 import { TopAlbumListItem } from "./TopAlbumListItem.js";
 import { TopAlbumTile } from "./TopAlbumTile.js";
 
+/** How the Top Albums section lays out its albums: ranked rows with bars, or a cover-art grid. */
 export type TopAlbumsViewMode = "list" | "tiles";
 
+/**
+ * Props for `TopAlbumsSection`: its heading, the albums and their loading/error state,
+ * the current view mode with its change callback (the section owns the selector but not
+ * the state), and the message shown when there are no albums.
+ */
 export interface TopAlbumsSectionProps {
   readonly title: string;
   readonly albums: readonly TopAlbum[];
@@ -48,6 +54,7 @@ export function TopAlbumsSection({
 }: TopAlbumsSectionProps): JSX.Element {
   const maxPlayCount = Math.max(1, ...albums.map((album) => album.playCount));
 
+  /** Forwards the view mode picked in the `Select` to the parent that owns the state. */
   const handleViewModeChange = (event: SelectChangeEvent<TopAlbumsViewMode>): void => {
     onViewModeChange(event.target.value);
   };

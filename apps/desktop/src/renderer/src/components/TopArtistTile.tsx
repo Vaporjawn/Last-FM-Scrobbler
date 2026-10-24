@@ -4,6 +4,7 @@ import type { TopArtist } from "@lastfm-scrobbler/core";
 import { useArtistImage } from "../hooks/use-artist-image.js";
 import { ArtworkTile } from "./shared/ArtworkTile.js";
 
+/** Props for `TopArtistTile`: the artist whose photo, name and play count the tile shows. */
 export interface TopArtistTileProps {
   readonly artist: TopArtist;
 }

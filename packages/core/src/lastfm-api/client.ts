@@ -36,6 +36,12 @@ const MAX_SCROBBLE_BATCH_SIZE = 50;
  * writeup and citation). Used by `getArtistImageUrl` to filter it out rather than
  * returning it as if it were a real photo. */
 const LASTFM_ARTIST_IMAGE_PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
+/**
+ * Construction options for `LastfmClient`. `apiKey` / `apiSecret` identify the
+ * application; `sessionKey` (from `getSession`) is only needed for the write calls
+ * (now playing, scrobble, love, tags). `fetchImpl` lets tests and the host app inject
+ * their own `fetch`.
+ */
 export interface LastfmClientOptions {
   readonly apiKey: string;
   readonly apiSecret: string;
@@ -56,6 +62,11 @@ export interface LastfmClientOptions {
   /** Per-request ceiling in milliseconds; defaults to 30 seconds. */
   readonly timeoutMs?: number;
 }
+/**
+ * How `LastfmClient.request` sends one API call: the HTTP verb (reads use GET with the
+ * parameters in the query string, writes use POST with a form-encoded body) and whether
+ * an `api_sig` signature is added (needed for auth and all write methods).
+ */
 interface RequestOptions {
   readonly httpMethod: "GET" | "POST";
   readonly signed: boolean;
@@ -77,6 +88,7 @@ export class LastfmClient {
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
 
+  /** Applies defaults: Last.fm's API and auth URLs, the global `fetch`, and the shared default request timeout. */
   constructor(options: LastfmClientOptions) {
     this.apiKey = options.apiKey;
     this.apiSecret = options.apiSecret;
@@ -87,6 +99,21 @@ export class LastfmClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
+  /**
+   * Performs one call against the Audioscrobbler 2.0 endpoint and returns the parsed
+   * JSON body. Adds `method` and `api_key`; when `options.signed` it computes `api_sig`
+   * over those parameters before `format=json` is appended (the signature must not
+   * cover `format`). Every request carries a timeout signal.
+   *
+   * Last.fm reports failures as a JSON body of the form `{ error, message }`, so the
+   * body is always parsed and checked for that shape rather than relying on the HTTP
+   * status code.
+   *
+   * @typeParam T - The response shape the caller expects; it is asserted, not validated.
+   * @throws LastfmApiError - When the response body is an error payload.
+   * @throws Error - Network failure, timeout, or a non-JSON body (from `fetch` /
+   * `response.json()`), propagated unchanged.
+   */
   private async request<T>(
     method: string,
     extraParams: Readonly<Record<string, string>>,
@@ -128,6 +155,12 @@ export class LastfmClient {
     return payload as T;
   }
 
+  /**
+   * Returns `extra` plus this client's session key (`sk`), for methods that act on
+   * behalf of a user.
+   *
+   * @throws Error - When the client was constructed without a `sessionKey`.
+   */
   private signedParams(extra: Readonly<Record<string, string>> = {}): Record<string, string> {
     if (!this.sessionKey) {
       throw new Error("LastfmClient: this operation requires a session key");
@@ -137,6 +170,12 @@ export class LastfmClient {
 
   // --- auth -----------------------------------------------------------------
 
+  /**
+   * Calls signed `auth.getToken` for a fresh, unauthorized request token. The user
+   * approves it in a browser (see `buildAuthUrl`) before `getSession` can exchange it.
+   *
+   * @throws LastfmApiError - If Last.fm rejects the call.
+   */
   async getAuthToken(): Promise<string> {
     const result = await this.request<{ token: string }>(
       "auth.getToken",
@@ -155,6 +194,14 @@ export class LastfmClient {
     return url.toString();
   }
 
+  /**
+   * Calls signed `auth.getSession` to exchange an approved token for the user's session
+   * key. Last.fm reports `subscriber` as a number or a string, so it is normalised to a
+   * boolean here.
+   *
+   * @throws LastfmApiError - Code 14 while the user has not yet approved the token
+   * (`AuthFlow` polls on that code); any other code is a genuine rejection.
+   */
   async getSession(token: string): Promise<LastfmSession> {
     const result = await this.request<{
       session: { name: string; key: string; subscriber: number | string };
@@ -169,6 +216,13 @@ export class LastfmClient {
 
   // --- track (write) ----------------------------------------------------------
 
+  /**
+   * Calls signed `track.updateNowPlaying` (POST) to show the track as currently playing.
+   * Optional fields that are `undefined` are left out of the request entirely.
+   *
+   * @throws Error - If the client has no session key.
+   * @throws LastfmApiError - If Last.fm rejects the update.
+   */
   async updateNowPlaying(submission: NowPlayingSubmission): Promise<void> {
     const params: Record<string, string> = {
       artist: submission.artist,
@@ -187,6 +241,17 @@ export class LastfmClient {
     });
   }
 
+  /**
+   * Calls signed `track.scrobble` (POST) with up to 50 scrobbles as indexed parameters
+   * (`artist[0]`, `track[0]`, ...). Last.fm can accept a batch yet ignore individual
+   * items, so each item's ignore code is mapped to a `retryable` flag (see
+   * `isRetryableScrobbleIgnoreCode`) for the offline queue to act on. An empty batch
+   * returns an empty result without touching the network.
+   *
+   * @throws Error - If the batch exceeds 50 items or the client has no session key.
+   * @throws LastfmApiError - If Last.fm rejects the whole request (as opposed to
+   * ignoring individual items, which is reported in the result).
+   */
   async scrobble(submissions: readonly ScrobbleSubmission[]): Promise<ScrobbleBatchResult> {
     // Mirrors `ListenBrainzClient.scrobble`'s equivalent guard. Without it, an empty
     // batch still hit the network: Last.fm's `track.scrobble` response shape for zero
@@ -251,6 +316,11 @@ export class LastfmClient {
     };
   }
 
+  /**
+   * Calls signed `track.love` (POST) to mark the track as loved for the session's user.
+   *
+   * @throws LastfmApiError - If Last.fm rejects the call.
+   */
   async love(track: TrackRef): Promise<void> {
     await this.request(
       "track.love",
@@ -259,6 +329,11 @@ export class LastfmClient {
     );
   }
 
+  /**
+   * Calls signed `track.unlove` (POST) to remove the loved mark from the track.
+   *
+   * @throws LastfmApiError - If Last.fm rejects the call.
+   */
   async unlove(track: TrackRef): Promise<void> {
     await this.request(
       "track.unlove",
@@ -267,6 +342,12 @@ export class LastfmClient {
     );
   }
 
+  /**
+   * Calls signed `track.addTags` (POST), sending the tags as one comma-separated
+   * `tags` parameter.
+   *
+   * @throws LastfmApiError - If Last.fm rejects the call.
+   */
   async addTags(track: TrackRef & { readonly tags: readonly string[] }): Promise<void> {
     await this.request(
       "track.addTags",
@@ -323,6 +404,14 @@ export class LastfmClient {
     });
   }
 
+  /**
+   * Calls unsigned `user.getTopArtists` for a user's most-played artists. `period` and
+   * `limit` are omitted from the request when not given, so Last.fm applies its own
+   * defaults (period `overall`). Only name and play count are returned, not an image:
+   * Last.fm serves one shared placeholder for every artist (see `ArtistInfo`).
+   *
+   * @throws LastfmApiError - If Last.fm rejects the call.
+   */
   async getTopArtists(options: {
     readonly user: string;
     readonly period?: TopArtistsPeriod;
@@ -410,6 +499,13 @@ export class LastfmClient {
     });
   }
 
+  /**
+   * Calls unsigned `user.getFriends` for a user's friends list, mapping each entry to a
+   * `Friend`. Empty-string fields (real name, location, avatar) are treated as absent.
+   * Only Last.fm's default first page is requested; no paging parameters are sent.
+   *
+   * @throws LastfmApiError - If Last.fm rejects the call.
+   */
   async getFriends(options: { readonly user: string }): Promise<Friend[]> {
     const result = await this.request<{
       friends: { user: FriendJson | readonly FriendJson[] };
@@ -494,6 +590,10 @@ export class LastfmClient {
   }
 
   /**
+   * Calls unsigned `artist.getInfo` for an artist's bio summary, global listener and
+   * play counts and, when a `username` is given, that user's own play count. Numeric
+   * fields arrive as strings from Last.fm and are converted with `Number`.
+   *
    * @param options.username Adds `stats.userplaycount` to the response, surfaced here
    * as `ArtistInfo.userPlayCount` — verified live (see that field's docstring). Public,
    * unsigned endpoint even with a `username` passed — no session key needed, same as
@@ -556,6 +656,13 @@ export class LastfmClient {
       : undefined;
   }
 
+  /**
+   * Calls unsigned `artist.getSimilar`, returning artists Last.fm considers similar,
+   * each with Last.fm's `match` similarity score converted to a number. `limit` is
+   * omitted from the request when not given.
+   *
+   * @throws LastfmApiError - If Last.fm rejects the call.
+   */
   async getSimilarArtists(options: {
     readonly artist: string;
     readonly limit?: number;
@@ -588,6 +695,10 @@ export class LastfmClient {
   }
 
   /**
+   * Calls unsigned `track.getInfo` for a track's page URL, listener and play counts,
+   * album title and cover art (the album's largest image) and, when a `username` is
+   * given, that user's play count and loved status.
+   *
    * @param options.username Adds `userplaycount`/`userloved` to the response, surfaced
    * as `TrackDetail.userPlayCount`/`loved` — same pattern and same live-verified
    * guarantee as `getArtistInfo`'s `username` option.
@@ -631,6 +742,10 @@ export class LastfmClient {
     };
   }
 }
+/**
+ * One entry of `user.getRecentTracks` (requested with `extended=1`) as Last.fm sends
+ * it; `getRecentTracks` maps it to `RecentTrack`.
+ */
 interface RecentTrackJson {
   /** `extended=1` (always requested by `getRecentTracks` — see there) reshapes this
    * from the bare `{ "#text": ... }` used everywhere else in this client into an
@@ -645,25 +760,33 @@ interface RecentTrackJson {
    * track, `"0"` otherwise. */
   readonly loved?: string;
 }
+/**
+ * One per-track result inside a `track.scrobble` response. `ignoredMessage.code` is
+ * `"0"` when the scrobble was accepted, otherwise Last.fm's reason code for ignoring it.
+ */
 interface ScrobbleResponseItemJson {
   readonly track: { readonly "#text": string };
   readonly ignoredMessage: { readonly code: string };
 }
+/** One artist entry of a `user.getTopArtists` response; `playcount` is a string on the wire. */
 interface TopArtistJson {
   readonly name: string;
   readonly playcount: string;
 }
+/** One track entry of a `user.getTopTracks` response; `playcount` is a string on the wire. */
 interface TopTrackJson {
   readonly name: string;
   readonly artist: { readonly name: string };
   readonly playcount: string;
 }
+/** One album entry of a `user.getTopAlbums` response, including its cover-art image list. */
 interface TopAlbumJson {
   readonly name: string;
   readonly artist: { readonly name: string };
   readonly playcount: string;
   readonly image?: readonly LastfmImageJson[];
 }
+/** One user entry of a `user.getFriends` response; `getFriends` maps it to `Friend`. */
 interface FriendJson {
   readonly name: string;
   readonly realname?: string;
@@ -675,10 +798,12 @@ interface FriendJson {
    * (same convention as every other optional Last.fm user field this client parses). */
   readonly country?: string;
 }
+/** One artist entry of an `artist.getSimilar` response; `match` is a numeric string. */
 interface SimilarArtistJson {
   readonly name: string;
   readonly match: string;
 }
+/** One tag entry of an `artist.getTopTags` response; only the tag name is read. */
 interface TopTagJson {
   readonly name: string;
 }

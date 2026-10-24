@@ -12,6 +12,7 @@ const DEEZER_SEARCH_URL = "https://api.deezer.com/search/artist";
  * second in both cases tested. 5 gives real margin past that without over-fetching.
  */
 const SEARCH_RESULT_LIMIT = 5;
+/** The slice of Deezer's `search/artist` JSON body that `fetchArtistImageUrl` reads; `data` is optional so a body without it is treated as "no results". */
 interface DeezerSearchResponse {
   readonly data?: readonly DeezerArtistJson[];
 }

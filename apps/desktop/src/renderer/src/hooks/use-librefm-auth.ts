@@ -3,6 +3,11 @@ import type { ActionResult } from "./action-result.js";
 import { type LibrefmAuthState } from "./librefm-auth-state.js";
 import { runLibrefmAction } from "./run-librefm-action.js";
 
+/**
+ * What `useLibrefmAuth` returns: the current `LibrefmAuthState` plus the actions that
+ * change it (log in or out, save or clear an API key/secret pair), each resolving to an
+ * `ActionResult` rather than rejecting.
+ */
 export interface UseLibrefmAuthResult extends LibrefmAuthState {
   readonly login: () => Promise<ActionResult>;
   readonly logout: () => Promise<ActionResult>;

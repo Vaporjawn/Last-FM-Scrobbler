@@ -2,6 +2,7 @@ const MIN_TRACK_DURATION_SEC = 30;
 /** Exported for reuse — {@link Tracker} falls back to this alone when duration is unknown. */
 export const MAX_ELIGIBILITY_THRESHOLD_SEC = 240;
 
+/** What `isEligibleForScrobble` needs to know about a play: the track's length (if known) and how many seconds of it were actually played. */
 export interface EligibilityInput {
   /** Omit for sources with no fixed duration (e.g. a live radio stream). */
   readonly durationSec?: number;

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { AdapterWindowsPackageRootNotFoundError } from "./adapter-windows-package-root-not-found-error.js";
 import { findPackageRoot } from "./find-package-root.js";
 
+/** Where the SMTC helper executable is expected and whether it has actually been built, as returned by `resolveHelperPath`. */
 export interface ResolvedHelperPath {
   /** Absolute path to the (possibly not-yet-built) SmtcHelper.exe. */
   readonly helperPath: string;

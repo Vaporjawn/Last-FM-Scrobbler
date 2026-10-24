@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 
+/**
+ * What `useBugReport` returns: whether reporting is configured, the submission's
+ * in-flight, error and resulting issue-URL state, and the `submit` and `reset` actions.
+ */
 export interface UseBugReportResult {
   /** `undefined` while still checking, then whether this build can actually submit reports. */
   readonly isConfigured: boolean | undefined;

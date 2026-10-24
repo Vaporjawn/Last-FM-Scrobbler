@@ -6,6 +6,10 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 
+/**
+ * Props for `ConfirmDialog`: visibility, the title and description text, the confirm
+ * button's label and busy state, and the confirm/cancel callbacks.
+ */
 export interface ConfirmDialogProps {
   readonly open: boolean;
   readonly title: string;

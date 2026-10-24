@@ -63,6 +63,7 @@ export function NowPlayingPage(): JSX.Element {
   // there; this refreshes the three things that genuinely are point-in-time fetches
   // (track stats/link, artist bio/similar artists, popular tags).
   const refreshing = trackDetailRefreshing || artistInfoRefreshing || topTagsRefreshing;
+  /** Re-fetches the track detail, artist info and popular tags, for the header's refresh button. */
   const refetchAll = (): void => {
     refetchTrackDetail();
     refetchArtistInfo();

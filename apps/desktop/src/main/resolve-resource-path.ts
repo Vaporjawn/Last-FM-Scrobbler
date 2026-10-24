@@ -1,5 +1,6 @@
 import { join } from "node:path";
 
+/** The Electron app-path facts `resolveResourcePath` needs to locate the `resources/` directory. */
 export interface ResolveResourcePathOptions {
   /** `app.getAppPath()` — the app root in dev (`apps/desktop`), where `resources/` is
    * a real subdirectory of the source tree. **Not** used when `isPackaged` is true —

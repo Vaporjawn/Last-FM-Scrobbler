@@ -1,6 +1,6 @@
 import electron from "electron";
 import { IPC_CHANNELS } from "../../shared/ipc-channels.js";
-import { assertTrustedSender } from "../assert-trusted-sender.js";
+import { assertTrustedSender } from "../security/assert-trusted-sender.js";
 import { isAcceptableRelayUrl } from "./is-acceptable-relay-url.js";
 import { type RelayResponse } from "./relay-response.js";
 import { parseRelayResponse } from "./parse-relay-response.js";
@@ -14,9 +14,11 @@ const RELAY_TIMEOUT_MS = 30_000;
 const NOT_CONFIGURED_MESSAGE =
   "Bug reporting is not configured for this build (BUG_REPORT_RELAY_URL) — see " +
   "docs/modules/desktop.md.";
+
+/** Options for `wireBugReport`: the trusted origin, the relay endpoint and optional diagnostics. */
 export interface WireBugReportOptions {
   /** Checked on `bugReportSubmit` specifically (not `bugReportIsConfigured`, a plain
-   * read with no side effect) — see `validate-ipc-sender.ts`. Unlike the other
+   * read with no side effect) — see `security/assert-trusted-sender.ts`. Unlike the other
    * unguarded read-only handlers in this app, submitting a bug report has a real
    * external side effect (files a genuine GitHub issue via the relay), making it the
    * one worth the same defense-in-depth every other side-effecting handler already

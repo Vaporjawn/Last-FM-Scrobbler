@@ -1,5 +1,9 @@
 import { useLastfmFetch } from "./use-lastfm-fetch.js";
 
+/**
+ * What `useLovedTracksCount` returns: the total loved-track count (`undefined` until known)
+ * plus loading, refreshing and error state and a `refetch`.
+ */
 export interface LovedTracksCountState {
   readonly count: number | undefined;
   readonly loading: boolean;

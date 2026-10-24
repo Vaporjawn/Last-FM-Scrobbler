@@ -1,4 +1,5 @@
 import { isMeaningful } from "./is-meaningful.js";
+/** The minimal shape `formatRealNameAndLocation` reads: an optional real name and location. */
 export interface RealNameAndLocationSource {
   readonly realName?: string;
   readonly location?: string;

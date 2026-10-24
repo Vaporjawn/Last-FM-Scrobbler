@@ -45,6 +45,12 @@ export interface LibrefmApi {
   getActiveAccount(): Promise<string | undefined>;
 }
 
+/**
+ * The renderer-facing ListenBrainz account API exposed by the preload script as
+ * `window.listenbrainz`. ListenBrainz has no browser authorization step, so connecting means
+ * handing over a user token pasted from the ListenBrainz profile settings page; as with
+ * `LibrefmApi`, only usernames ever come back across IPC, never the token.
+ */
 export interface ListenBrainzApi {
   /** Validates `token` against ListenBrainz's `/1/validate-token` and, if it's valid,
    * stores it as the connected account. Resolves with the account it belongs to.
