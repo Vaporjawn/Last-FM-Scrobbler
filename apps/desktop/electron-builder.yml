@@ -79,6 +79,9 @@ nsis:
   allowToChangeInstallationDirectory: true
 
 linux:
+  # Without this electron-builder derives the executable name from the scoped package
+  # name (@lastfm-scrobbler/desktop) and refuses it as unsafe in file paths.
+  executableName: lastfm-scrobbler
   icon: build/icon.png
   target:
     - AppImage

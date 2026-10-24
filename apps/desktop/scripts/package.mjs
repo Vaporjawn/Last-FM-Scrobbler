@@ -16,14 +16,19 @@
 // real, Developer-ID-signed + notarized builds don't need the ad-hoc fallback.
 import { spawnSync } from "node:child_process";
 import { resolvePackageArgs } from "./resolve-package-args.mjs";
+import { resolvePackageEnv } from "./resolve-package-env.mjs";
 
-const hasRealCertificate = Boolean(process.env.CSC_LINK);
+// Empty-string secrets (an unconfigured GitHub secret) are removed up front so that
+// both this check and electron-builder see "not set" rather than "set to nothing".
+const env = resolvePackageEnv(process.env);
+const hasRealCertificate = Boolean(env.CSC_LINK);
 const extraArgs = hasRealCertificate ? [] : ["--config.mac.identity=-"];
 
 const result = spawnSync(
   "electron-builder",
   [...extraArgs, ...resolvePackageArgs(process.argv.slice(2))],
   {
+    env,
     stdio: "inherit",
     shell: process.platform === "win32",
   },
