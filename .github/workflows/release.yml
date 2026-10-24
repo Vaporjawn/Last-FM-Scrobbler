@@ -123,6 +123,21 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gnome-keyring libsecret-1-0 dbus-x11
 
+      - name: Diagnose a crash under a D-Bus session (Linux, temporary)
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        working-directory: apps/desktop
+        run: |
+          APP="$PWD/release/linux-unpacked/lastfm-scrobbler"
+          U="$PWD/release/linux-unpacked/resources/app.asar.unpacked/node_modules/usocket"
+          ls -la "$U" "$U/build/Release" 2>&1 | head -20
+          ELECTRON_RUN_AS_NODE=1 "$APP" -e "console.log('node', process.versions.node, 'abi', process.versions.modules, 'electron', process.versions.electron); try { require('$U'); console.log('usocket loaded') } catch (e) { console.log('usocket load error:', e.message) }" 2>&1 | head -20
+          echo "--- app with a session bus, no keyring ---"
+          set +e
+          dbus-run-session -- xvfb-run -a timeout 25 "$APP" --no-sandbox --enable-logging=stderr > /tmp/app.log 2>&1
+          echo "exit=$?"
+          tail -60 /tmp/app.log
+
       - name: Smoke test the packaged app (Linux)
         if: matrix.os == 'ubuntu-latest'
         working-directory: apps/desktop
