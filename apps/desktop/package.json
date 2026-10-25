@@ -37,7 +37,7 @@
     "@lastfm-scrobbler/shared-types": "0.0.0",
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.5.0",
-    "electron-updater": "^6.8.9",
+    "electron-updater": "^6.8.11",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
